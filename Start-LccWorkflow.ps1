@@ -36,6 +36,21 @@ function Resolve-ToolkitPath {
     return Join-Path $ToolkitRoot $Path
 }
 
+function Get-ToolkitScriptPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ScriptName
+    )
+
+    $scriptPath = Join-Path $script:ToolkitRoot "scripts\$ScriptName"
+
+    if (-not (Test-Path $scriptPath)) {
+        throw "Toolkit script not found: $scriptPath"
+    }
+
+    return $scriptPath
+}
+
 function Read-ToolkitInput {
     param(
         [Parameter(Mandatory = $true)]
@@ -95,30 +110,11 @@ function Pause-Toolkit {
     Read-Host "Press Enter to continue" | Out-Null
 }
 
-function Invoke-ToolkitScript {
+function Get-DefaultImportPath {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ScriptName,
-
-        [string[]]$Arguments = @()
+        [string]$BatchSlug
     )
-
-    $scriptPath = Join-Path $script:ToolkitRoot "scripts\$ScriptName"
-
-    if (-not (Test-Path $scriptPath)) {
-        throw "Toolkit script not found: $scriptPath"
-    }
-
-    Write-Host ""
-    Write-Host "Running: $ScriptName" -ForegroundColor Cyan
-    Write-Host ""
-
-    # Run in the current PowerShell session so search strings containing # are preserved.
-    & $scriptPath @Arguments
-}
-
-function Get-DefaultImportPath {
-    param([string]$BatchSlug)
 
     $canonicalPath = ".\input\lcc-import-$BatchSlug-canonical.tsv"
     $standardPath = ".\input\lcc-import-$BatchSlug.tsv"
@@ -183,11 +179,7 @@ function Start-HealthCheck {
         -Path $defaultReport `
         -ToolkitRoot $script:ToolkitRoot
 
-    $healthScriptPath = Join-Path $script:ToolkitRoot "scripts\Test-LccToolkitHealth.ps1"
-
-    if (-not (Test-Path $healthScriptPath)) {
-        throw "Health check script not found: $healthScriptPath"
-    }
+    $healthScriptPath = Get-ToolkitScriptPath -ScriptName "Test-LccToolkitHealth.ps1"
 
     Write-Host ""
     Write-Host "Running toolkit health check..." -ForegroundColor Cyan
@@ -234,11 +226,7 @@ function Start-ExportSourceBatch {
         -Prompt "Optional Calibre library path, blank for default" `
         -Default ""
 
-    $exportScriptPath = Join-Path $script:ToolkitRoot "scripts\Export-CalibreBatchForLcc.ps1"
-
-    if (-not (Test-Path $exportScriptPath)) {
-        throw "Export script not found: $exportScriptPath"
-    }
+    $exportScriptPath = Get-ToolkitScriptPath -ScriptName "Export-CalibreBatchForLcc.ps1"
 
     Write-Host ""
     Write-Host "Running: Export-CalibreBatchForLcc.ps1" -ForegroundColor Cyan
@@ -284,11 +272,7 @@ function Start-CanonicalizeImport {
         -Prompt "Overwrite existing output/report? Type YES to overwrite" `
         -Default "NO"
 
-    $canonicalizeScriptPath = Join-Path $script:ToolkitRoot "scripts\Convert-LccImportToCanonical.ps1"
-
-    if (-not (Test-Path $canonicalizeScriptPath)) {
-        throw "Canonicalization script not found: $canonicalizeScriptPath"
-    }
+    $canonicalizeScriptPath = Get-ToolkitScriptPath -ScriptName "Convert-LccImportToCanonical.ps1"
 
     Write-Host ""
     Write-Host "Running: Convert-LccImportToCanonical.ps1" -ForegroundColor Cyan
@@ -325,12 +309,15 @@ function Start-DryRunImport {
         -Prompt "Dry-run report CSV" `
         -Default $defaultReport
 
-    Invoke-ToolkitScript `
-        -ScriptName "Test-LccImportDryRun.ps1" `
-        -Arguments @(
-            "-InputTsv", $inputTsv,
-            "-ReportCsv", $reportCsv
-        )
+    $dryRunScriptPath = Get-ToolkitScriptPath -ScriptName "Test-LccImportDryRun.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Test-LccImportDryRun.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $dryRunScriptPath `
+        -InputTsv $inputTsv `
+        -ReportCsv $reportCsv
 
     Pause-Toolkit
 }
@@ -364,13 +351,16 @@ function Start-ApplyImport {
         return
     }
 
-    Invoke-ToolkitScript `
-        -ScriptName "Invoke-LccImportApply.ps1" `
-        -Arguments @(
-            "-DryRunReportCsv", $dryRunReportCsv,
-            "-ApplyReportCsv", $applyReportCsv,
-            "-Apply"
-        )
+    $applyScriptPath = Get-ToolkitScriptPath -ScriptName "Invoke-LccImportApply.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Invoke-LccImportApply.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $applyScriptPath `
+        -DryRunReportCsv $dryRunReportCsv `
+        -ApplyReportCsv $applyReportCsv `
+        -Apply
 
     Pause-Toolkit
 }
@@ -389,12 +379,15 @@ function Start-VerifyFinalState {
         -Prompt "Verify report CSV" `
         -Default $defaultReport
 
-    Invoke-ToolkitScript `
-        -ScriptName "Test-LccImportDryRun.ps1" `
-        -Arguments @(
-            "-InputTsv", $inputTsv,
-            "-ReportCsv", $reportCsv
-        )
+    $verifyScriptPath = Get-ToolkitScriptPath -ScriptName "Test-LccImportDryRun.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Test-LccImportDryRun.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $verifyScriptPath `
+        -InputTsv $inputTsv `
+        -ReportCsv $reportCsv
 
     Pause-Toolkit
 }
@@ -424,13 +417,16 @@ function Start-WriteBatchSummary {
         -Prompt "Summary TXT output" `
         -Default $defaultSummary
 
-    Invoke-ToolkitScript `
-        -ScriptName "Write-LccBatchSummary.ps1" `
-        -Arguments @(
-            "-ReportCsv", $reportCsv,
-            "-SummaryTxt", $summaryTxt,
-            "-BatchName", $batchSlug
-        )
+    $summaryScriptPath = Get-ToolkitScriptPath -ScriptName "Write-LccBatchSummary.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Write-LccBatchSummary.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $summaryScriptPath `
+        -ReportCsv $reportCsv `
+        -SummaryTxt $summaryTxt `
+        -BatchName $batchSlug
 
     Pause-Toolkit
 }
@@ -479,44 +475,51 @@ function Show-GitStatus {
 $script:ToolkitRoot = Get-ToolkitRoot
 $script:CurrentBatchSlug = ""
 
-$configFullPath = Resolve-ToolkitPath -Path $ConfigPath -ToolkitRoot $script:ToolkitRoot
+Push-Location $script:ToolkitRoot
 
-if (-not (Test-Path $configFullPath)) {
-    throw "Config file not found: $configFullPath"
-}
+try {
+    $configFullPath = Resolve-ToolkitPath -Path $ConfigPath -ToolkitRoot $script:ToolkitRoot
 
-$config = Get-Content $configFullPath -Raw | ConvertFrom-Json
+    if (-not (Test-Path $configFullPath)) {
+        throw "Config file not found: $configFullPath"
+    }
 
-do {
-    Show-Menu
-    $choice = Read-Host "Select an option"
+    $config = Get-Content $configFullPath -Raw | ConvertFrom-Json
 
-    try {
-        switch ($choice) {
-            "1"  { Start-HealthCheck }
-            "2"  { Start-ExportSourceBatch }
-            "3"  { Start-CanonicalizeImport }
-            "4"  { Start-DryRunImport }
-            "5"  { Start-ApplyImport }
-            "6"  { Start-VerifyFinalState }
-            "7"  { Start-WriteBatchSummary }
-            "8"  { Open-ToolkitFolder -FolderPath ".\input" }
-            "9"  { Open-ToolkitFolder -FolderPath ".\reports" }
-            "10" { Open-WorkflowDocumentation }
-            "11" { Show-GitStatus }
-            "0"  {
-                Write-Host "Exiting Calibre LCC Toolkit."
-                break
-            }
-            default {
-                Write-Host "Unknown option: $choice" -ForegroundColor Yellow
-                Pause-Toolkit
+    do {
+        Show-Menu
+        $choice = Read-Host "Select an option"
+
+        try {
+            switch ($choice) {
+                "1"  { Start-HealthCheck }
+                "2"  { Start-ExportSourceBatch }
+                "3"  { Start-CanonicalizeImport }
+                "4"  { Start-DryRunImport }
+                "5"  { Start-ApplyImport }
+                "6"  { Start-VerifyFinalState }
+                "7"  { Start-WriteBatchSummary }
+                "8"  { Open-ToolkitFolder -FolderPath ".\input" }
+                "9"  { Open-ToolkitFolder -FolderPath ".\reports" }
+                "10" { Open-WorkflowDocumentation }
+                "11" { Show-GitStatus }
+                "0"  {
+                    Write-Host "Exiting Calibre LCC Toolkit."
+                    break
+                }
+                default {
+                    Write-Host "Unknown option: $choice" -ForegroundColor Yellow
+                    Pause-Toolkit
+                }
             }
         }
-    }
-    catch {
-        Write-Host ""
-        Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
-        Pause-Toolkit
-    }
-} while ($choice -ne "0")
+        catch {
+            Write-Host ""
+            Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+            Pause-Toolkit
+        }
+    } while ($choice -ne "0")
+}
+finally {
+    Pop-Location
+}
