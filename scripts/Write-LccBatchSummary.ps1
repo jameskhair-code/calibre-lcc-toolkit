@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Writes a concise summary report for a Calibre LCC dry-run or verification CSV.
 
@@ -63,7 +63,6 @@ function Count-Where {
 
 function Add-Line {
     param(
-        [Parameter(Mandatory = $true)]
         [System.Collections.Generic.List[string]]$Lines,
 
         [string]$Text = ""
