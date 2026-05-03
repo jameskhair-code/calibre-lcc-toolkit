@@ -133,6 +133,54 @@ if ($applyFolder -and -not (Test-Path $applyFolder)) {
 }
 
 $rows = Import-Csv -Path $DryRunReportCsv
+$matchedRows = @($rows | Where-Object { $_.MatchStatus -eq "Matched" })
+
+$pendingLccUpdates = @($matchedRows | Where-Object { $_.WouldUpdateLCC -eq "Yes" }).Count
+$pendingPrimaryUpdates = @($matchedRows | Where-Object { $_.WouldUpdateLCCPrimaryClass -eq "Yes" }).Count
+$pendingSecondaryUpdates = @($matchedRows | Where-Object { $_.WouldUpdateLCCSecondaryClass -eq "Yes" }).Count
+$pendingPathUpdates = @($matchedRows | Where-Object { $_.WouldUpdateLCCPath -eq "Yes" }).Count
+
+$pendingFieldUpdates =
+    $pendingLccUpdates +
+    $pendingPrimaryUpdates +
+    $pendingSecondaryUpdates +
+    $pendingPathUpdates
+
+$skippedRowCount = @($rows | Where-Object { $_.MatchStatus -ne "Matched" }).Count
+
+Write-Host ""
+Write-Host "Apply Preflight Summary"
+Write-Host "======================="
+Write-Host "Dry-run report: $DryRunReportCsv"
+Write-Host "Apply report:   $ApplyReportCsv"
+Write-Host ""
+Write-Host "Rows in report:        $($rows.Count)"
+Write-Host "Matched rows:          $($matchedRows.Count)"
+Write-Host "Non-matched rows:      $skippedRowCount"
+Write-Host ""
+Write-Host "Pending field updates:"
+Write-Host "  LCC:                 $pendingLccUpdates"
+Write-Host "  Primary Class:       $pendingPrimaryUpdates"
+Write-Host "  Secondary Class:     $pendingSecondaryUpdates"
+Write-Host "  Classification Path: $pendingPathUpdates"
+Write-Host "  Total:               $pendingFieldUpdates"
+Write-Host ""
+
+if ($pendingFieldUpdates -gt 0) {
+    Write-Host "This operation will modify Calibre metadata."
+    Write-Host "Type APPLY to continue, or anything else to cancel."
+    $confirmation = Read-Host "Confirmation"
+
+    if ($confirmation -ne "APPLY") {
+        throw "Apply cancelled. Confirmation text did not match APPLY."
+    }
+
+    Write-Host ""
+    Write-Host "Confirmation accepted. Applying updates..."
+}
+else {
+    Write-Host "No pending field updates found. No Calibre metadata changes will be attempted."
+}
 
 $results = foreach ($row in $rows) {
     if ($row.MatchStatus -ne "Matched") {
