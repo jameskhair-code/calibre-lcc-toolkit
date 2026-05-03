@@ -5,10 +5,18 @@ Interactive launcher for the Calibre LCC Toolkit.
 .DESCRIPTION
 Provides a menu-driven workflow for the Calibre LCC Toolkit.
 
-This launcher does not directly modify Calibre metadata. It calls the underlying
-toolkit scripts. Metadata changes only occur through Invoke-LccImportApply.ps1,
-which requires the -Apply switch and an explicit APPLY confirmation when updates
-are pending.
+The launcher organizes the LCC workflow into clear operational phases:
+
+1. Preflight
+2. Export
+3. Prepare
+4. Validate
+5. Apply
+6. Verify
+
+This launcher does not directly modify Calibre metadata. Metadata changes only
+occur through Invoke-LccImportApply.ps1, which requires the -Apply switch and an
+explicit APPLY confirmation when updates are pending.
 #>
 
 [CmdletBinding()]
@@ -130,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.2" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.3" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -145,6 +153,7 @@ function Show-Header {
     }
 
     Write-Host ""
+    Write-Host "Workflow: Preflight -> Export -> Enrich -> Prepare -> Validate -> Apply -> Verify" -ForegroundColor DarkGray
     Write-Host "Tip: The batch file slug is only used for default filenames." -ForegroundColor DarkGray
     Write-Host "Tip: Press Enter at prompts to accept the default value shown in brackets." -ForegroundColor DarkGray
     Write-Host ""
@@ -153,17 +162,16 @@ function Show-Header {
 function Show-Menu {
     Show-Header
 
-    Write-Host "1. Run toolkit health check"
-    Write-Host "2. Export source batch from Calibre"
-    Write-Host "3. Canonicalize completed import TSV"
-    Write-Host "4. Run dry-run import"
-    Write-Host "5. Apply verified import"
-    Write-Host "6. Verify final state"
-    Write-Host "7. Write batch summary"
-    Write-Host "8. Open input folder"
-    Write-Host "9. Open reports folder"
-    Write-Host "10. Open workflow documentation"
-    Write-Host "11. Show Git status"
+    Write-Host "1. Preflight: Run toolkit health check"
+    Write-Host "2. Export: Create source TSV from Calibre"
+    Write-Host "3. Prepare: Canonicalize completed LCC import TSV"
+    Write-Host "4. Validate: Dry run import and write summary"
+    Write-Host "5. Apply: Write approved LCC metadata to Calibre"
+    Write-Host "6. Verify: Confirm final state and write summary"
+    Write-Host "7. Open input folder"
+    Write-Host "8. Open reports folder"
+    Write-Host "9. Open workflow documentation"
+    Write-Host "10. Show Git status"
     Write-Host "0. Exit"
     Write-Host ""
 }
@@ -182,7 +190,7 @@ function Start-HealthCheck {
     $healthScriptPath = Get-ToolkitScriptPath -ScriptName "Test-LccToolkitHealth.ps1"
 
     Write-Host ""
-    Write-Host "Running toolkit health check..." -ForegroundColor Cyan
+    Write-Host "Preflight: toolkit health check" -ForegroundColor Cyan
     Write-Host "Config path:        $configFullPath"
     Write-Host "Health report path: $reportFullPath"
     Write-Host ""
@@ -197,6 +205,11 @@ function Start-HealthCheck {
 function Start-ExportSourceBatch {
     $batchSlug = Read-BatchSlug
 
+    Write-Host ""
+    Write-Host "Export: create source TSV from Calibre" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step reads Calibre and creates a source TSV for LCC enrichment." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "Paste the Calibre search string exactly as used in Calibre." -ForegroundColor DarkGray
     Write-Host "For award batches, the loose award search usually works best here." -ForegroundColor DarkGray
@@ -246,22 +259,34 @@ function Start-ExportSourceBatch {
             -LibraryPath $libraryPath
     }
 
+    Write-Host ""
+    Write-Host "Next step:" -ForegroundColor Cyan
+    Write-Host "Send the source TSV for LCC enrichment, then save the completed import TSV as:"
+    Write-Host ".\input\lcc-import-$batchSlug.tsv"
+
     Pause-Toolkit
 }
 
-function Start-CanonicalizeImport {
+function Start-PrepareImport {
     $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Prepare: canonicalize completed LCC import TSV" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step normalizes LCC Primary and Secondary Class values against the approved dropdown lists." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
 
     $defaultInput = ".\input\lcc-import-$batchSlug.tsv"
     $defaultOutput = ".\input\lcc-import-$batchSlug-canonical.tsv"
     $defaultReport = ".\reports\lcc-canonicalize-$batchSlug.csv"
 
     $inputTsv = Read-ToolkitInput `
-        -Prompt "Input import TSV" `
+        -Prompt "Input completed import TSV" `
         -Default $defaultInput
 
     $outputTsv = Read-ToolkitInput `
-        -Prompt "Output canonical TSV" `
+        -Prompt "Output canonical import TSV" `
         -Default $defaultOutput
 
     $reportCsv = Read-ToolkitInput `
@@ -295,19 +320,14 @@ function Start-CanonicalizeImport {
     Pause-Toolkit
 }
 
-function Start-DryRunImport {
-    $batchSlug = Read-BatchSlug
+function Invoke-DryRunReport {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InputTsv,
 
-    $defaultInput = Get-DefaultImportPath -BatchSlug $batchSlug
-    $defaultReport = ".\reports\lcc-dryrun-$batchSlug.csv"
-
-    $inputTsv = Read-ToolkitInput `
-        -Prompt "Input import TSV" `
-        -Default $defaultInput
-
-    $reportCsv = Read-ToolkitInput `
-        -Prompt "Dry-run report CSV" `
-        -Default $defaultReport
+        [Parameter(Mandatory = $true)]
+        [string]$ReportCsv
+    )
 
     $dryRunScriptPath = Get-ToolkitScriptPath -ScriptName "Test-LccImportDryRun.ps1"
 
@@ -316,14 +336,85 @@ function Start-DryRunImport {
     Write-Host ""
 
     & $dryRunScriptPath `
+        -InputTsv $InputTsv `
+        -ReportCsv $ReportCsv
+}
+
+function Invoke-SummaryReport {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ReportCsv,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SummaryTxt,
+
+        [Parameter(Mandatory = $true)]
+        [string]$BatchSlug
+    )
+
+    $summaryScriptPath = Get-ToolkitScriptPath -ScriptName "Write-LccBatchSummary.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Write-LccBatchSummary.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $summaryScriptPath `
+        -ReportCsv $ReportCsv `
+        -SummaryTxt $SummaryTxt `
+        -BatchName $BatchSlug
+}
+
+function Start-ValidateImport {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Validate: dry run import and write summary" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step shows what would change before Calibre metadata is modified." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $defaultInput = Get-DefaultImportPath -BatchSlug $batchSlug
+    $defaultReport = ".\reports\lcc-dryrun-$batchSlug.csv"
+    $defaultSummary = ".\reports\lcc-summary-$batchSlug-dryrun.txt"
+
+    $inputTsv = Read-ToolkitInput `
+        -Prompt "Input canonical import TSV" `
+        -Default $defaultInput
+
+    $reportCsv = Read-ToolkitInput `
+        -Prompt "Dry-run report CSV" `
+        -Default $defaultReport
+
+    $summaryTxt = Read-ToolkitInput `
+        -Prompt "Dry-run summary TXT" `
+        -Default $defaultSummary
+
+    Invoke-DryRunReport `
         -InputTsv $inputTsv `
         -ReportCsv $reportCsv
+
+    Invoke-SummaryReport `
+        -ReportCsv $reportCsv `
+        -SummaryTxt $summaryTxt `
+        -BatchSlug $batchSlug
+
+    Write-Host ""
+    Write-Host "Validation complete." -ForegroundColor Cyan
+    Write-Host "Review the dry-run summary before applying metadata."
 
     Pause-Toolkit
 }
 
 function Start-ApplyImport {
     $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Apply: write approved LCC metadata to Calibre" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "This is the only normal workflow step that modifies Calibre metadata." -ForegroundColor Yellow
+    Write-Host "Make sure Calibre is closed and the dry-run summary says READY TO APPLY." -ForegroundColor Yellow
+    Write-Host ""
 
     $defaultDryRunReport = ".\reports\lcc-dryrun-$batchSlug.csv"
     $defaultApplyReport = ".\reports\lcc-apply-$batchSlug.csv"
@@ -337,8 +428,7 @@ function Start-ApplyImport {
         -Default $defaultApplyReport
 
     Write-Host ""
-    Write-Host "The apply script can modify Calibre metadata." -ForegroundColor Yellow
-    Write-Host "It will run its own preflight and require APPLY confirmation if updates are pending."
+    Write-Host "The apply script will run its own preflight and require APPLY confirmation if updates are pending."
     Write-Host ""
 
     $continueAnswer = Read-ToolkitInput `
@@ -368,65 +458,41 @@ function Start-ApplyImport {
 function Start-VerifyFinalState {
     $batchSlug = Read-BatchSlug
 
+    Write-Host ""
+    Write-Host "Verify: confirm final state and write summary" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step checks that Calibre now matches the canonical import file." -ForegroundColor DarkGray
+    Write-Host "A clean verification should show zero pending field updates." -ForegroundColor DarkGray
+    Write-Host ""
+
     $defaultInput = Get-DefaultImportPath -BatchSlug $batchSlug
     $defaultReport = ".\reports\lcc-verify-$batchSlug.csv"
+    $defaultSummary = ".\reports\lcc-summary-$batchSlug-verify.txt"
 
     $inputTsv = Read-ToolkitInput `
-        -Prompt "Input import TSV" `
+        -Prompt "Input canonical import TSV" `
         -Default $defaultInput
 
     $reportCsv = Read-ToolkitInput `
         -Prompt "Verify report CSV" `
         -Default $defaultReport
 
-    $verifyScriptPath = Get-ToolkitScriptPath -ScriptName "Test-LccImportDryRun.ps1"
+    $summaryTxt = Read-ToolkitInput `
+        -Prompt "Verify summary TXT" `
+        -Default $defaultSummary
 
-    Write-Host ""
-    Write-Host "Running: Test-LccImportDryRun.ps1" -ForegroundColor Cyan
-    Write-Host ""
-
-    & $verifyScriptPath `
+    Invoke-DryRunReport `
         -InputTsv $inputTsv `
         -ReportCsv $reportCsv
 
-    Pause-Toolkit
-}
-
-function Start-WriteBatchSummary {
-    $batchSlug = Read-BatchSlug
-
-    $verifyReport = ".\reports\lcc-verify-$batchSlug.csv"
-    $dryRunReport = ".\reports\lcc-dryrun-$batchSlug.csv"
-
-    $verifyFullPath = Resolve-ToolkitPath -Path $verifyReport -ToolkitRoot $script:ToolkitRoot
-
-    if (Test-Path $verifyFullPath) {
-        $defaultReport = $verifyReport
-    }
-    else {
-        $defaultReport = $dryRunReport
-    }
-
-    $defaultSummary = ".\reports\lcc-summary-$batchSlug.txt"
-
-    $reportCsv = Read-ToolkitInput `
-        -Prompt "Report CSV to summarize" `
-        -Default $defaultReport
-
-    $summaryTxt = Read-ToolkitInput `
-        -Prompt "Summary TXT output" `
-        -Default $defaultSummary
-
-    $summaryScriptPath = Get-ToolkitScriptPath -ScriptName "Write-LccBatchSummary.ps1"
-
-    Write-Host ""
-    Write-Host "Running: Write-LccBatchSummary.ps1" -ForegroundColor Cyan
-    Write-Host ""
-
-    & $summaryScriptPath `
+    Invoke-SummaryReport `
         -ReportCsv $reportCsv `
         -SummaryTxt $summaryTxt `
-        -BatchName $batchSlug
+        -BatchSlug $batchSlug
+
+    Write-Host ""
+    Write-Host "Verification complete." -ForegroundColor Cyan
+    Write-Host "Final win condition: VERIFIED CLEAN."
 
     Pause-Toolkit
 }
@@ -494,15 +560,14 @@ try {
             switch ($choice) {
                 "1"  { Start-HealthCheck }
                 "2"  { Start-ExportSourceBatch }
-                "3"  { Start-CanonicalizeImport }
-                "4"  { Start-DryRunImport }
+                "3"  { Start-PrepareImport }
+                "4"  { Start-ValidateImport }
                 "5"  { Start-ApplyImport }
                 "6"  { Start-VerifyFinalState }
-                "7"  { Start-WriteBatchSummary }
-                "8"  { Open-ToolkitFolder -FolderPath ".\input" }
-                "9"  { Open-ToolkitFolder -FolderPath ".\reports" }
-                "10" { Open-WorkflowDocumentation }
-                "11" { Show-GitStatus }
+                "7"  { Open-ToolkitFolder -FolderPath ".\input" }
+                "8"  { Open-ToolkitFolder -FolderPath ".\reports" }
+                "9"  { Open-WorkflowDocumentation }
+                "10" { Show-GitStatus }
                 "0"  {
                     Write-Host "Exiting Calibre LCC Toolkit."
                     break
