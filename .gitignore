@@ -1,0 +1,23 @@
+﻿# Generated workflow files
+input/*.tsv
+input/*.csv
+reports/*.csv
+reports/*.txt
+
+# Keep folders present
+!input/.gitkeep
+!reports/.gitkeep
+
+# Calibre database / backups
+metadata.db
+metadata_db_prefs_backup.json
+*.db
+*.sqlite
+*.sqlite3
+
+# Local temp / editor stuff
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+.vscode/
