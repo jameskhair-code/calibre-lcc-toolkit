@@ -234,22 +234,29 @@ function Start-ExportSourceBatch {
         -Prompt "Optional Calibre library path, blank for default" `
         -Default ""
 
-    $args = @(
-        "-Search", $search,
-        "-OutputTsv", $outputTsv
-    )
+    $exportScriptPath = Join-Path $script:ToolkitRoot "scripts\Export-CalibreBatchForLcc.ps1"
 
-    if (-not [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
-        $args += @("-ExactAwardProgram", $exactAwardProgram)
+    if (-not (Test-Path $exportScriptPath)) {
+        throw "Export script not found: $exportScriptPath"
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
-        $args += @("-LibraryPath", $libraryPath)
-    }
+    Write-Host ""
+    Write-Host "Running: Export-CalibreBatchForLcc.ps1" -ForegroundColor Cyan
+    Write-Host ""
 
-    Invoke-ToolkitScript `
-        -ScriptName "Export-CalibreBatchForLcc.ps1" `
-        -Arguments $args
+    if ([string]::IsNullOrWhiteSpace($libraryPath)) {
+        & $exportScriptPath `
+            -Search $search `
+            -ExactAwardProgram $exactAwardProgram `
+            -OutputTsv $outputTsv
+    }
+    else {
+        & $exportScriptPath `
+            -Search $search `
+            -ExactAwardProgram $exactAwardProgram `
+            -OutputTsv $outputTsv `
+            -LibraryPath $libraryPath
+    }
 
     Pause-Toolkit
 }
