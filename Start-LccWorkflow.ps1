@@ -74,20 +74,20 @@ function Read-RequiredInput {
     } while ($true)
 }
 
-function Read-BatchName {
-    $defaultBatchName = $script:CurrentBatchName
+function Read-BatchSlug {
+    $defaultBatchSlug = $script:CurrentBatchSlug
 
-    if ([string]::IsNullOrWhiteSpace($defaultBatchName)) {
-        $batchName = Read-RequiredInput "Batch name, example herbert-baxter-adams"
+    if ([string]::IsNullOrWhiteSpace($defaultBatchSlug)) {
+        $batchSlug = Read-RequiredInput "Batch file slug, example j-russell-major-prize"
     }
     else {
-        $batchName = Read-ToolkitInput `
-            -Prompt "Batch name" `
-            -Default $defaultBatchName
+        $batchSlug = Read-ToolkitInput `
+            -Prompt "Batch file slug" `
+            -Default $defaultBatchSlug
     }
 
-    $script:CurrentBatchName = $batchName
-    return $batchName
+    $script:CurrentBatchSlug = $batchSlug
+    return $batchSlug
 }
 
 function Pause-Toolkit {
@@ -113,14 +113,15 @@ function Invoke-ToolkitScript {
     Write-Host "Running: $ScriptName" -ForegroundColor Cyan
     Write-Host ""
 
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $scriptPath @Arguments
+    # Run in the current PowerShell session so search strings containing # are preserved.
+    & $scriptPath @Arguments
 }
 
 function Get-DefaultImportPath {
-    param([string]$BatchName)
+    param([string]$BatchSlug)
 
-    $canonicalPath = ".\input\lcc-import-$BatchName-canonical.tsv"
-    $standardPath = ".\input\lcc-import-$BatchName.tsv"
+    $canonicalPath = ".\input\lcc-import-$BatchSlug-canonical.tsv"
+    $standardPath = ".\input\lcc-import-$BatchSlug.tsv"
 
     $canonicalFullPath = Resolve-ToolkitPath -Path $canonicalPath -ToolkitRoot $script:ToolkitRoot
 
@@ -140,18 +141,18 @@ function Show-Header {
     Write-Host $script:ToolkitRoot
     Write-Host ""
 
-    if ([string]::IsNullOrWhiteSpace($script:CurrentBatchName)) {
-        Write-Host "Current batch: <not set>" -ForegroundColor DarkGray
+    if ([string]::IsNullOrWhiteSpace($script:CurrentBatchSlug)) {
+        Write-Host "Current batch file slug: <not set>" -ForegroundColor DarkGray
     }
     else {
-        Write-Host "Current batch: $script:CurrentBatchName" -ForegroundColor Green
+        Write-Host "Current batch file slug: $script:CurrentBatchSlug" -ForegroundColor Green
     }
 
     Write-Host ""
+    Write-Host "Tip: The batch file slug is only used for default filenames." -ForegroundColor DarkGray
     Write-Host "Tip: Press Enter at prompts to accept the default value shown in brackets." -ForegroundColor DarkGray
     Write-Host ""
 }
-
 
 function Show-Menu {
     Show-Header
@@ -174,25 +175,56 @@ function Show-Menu {
 function Start-HealthCheck {
     $defaultReport = ".\reports\lcc-toolkit-health.txt"
 
+    $configFullPath = Resolve-ToolkitPath `
+        -Path ".\config\lcc-toolkit.config.json" `
+        -ToolkitRoot $script:ToolkitRoot
+
+    $reportFullPath = Resolve-ToolkitPath `
+        -Path $defaultReport `
+        -ToolkitRoot $script:ToolkitRoot
+
+    $healthScriptPath = Join-Path $script:ToolkitRoot "scripts\Test-LccToolkitHealth.ps1"
+
+    if (-not (Test-Path $healthScriptPath)) {
+        throw "Health check script not found: $healthScriptPath"
+    }
+
     Write-Host ""
     Write-Host "Running toolkit health check..." -ForegroundColor Cyan
-    Write-Host "Health report path: $defaultReport"
+    Write-Host "Config path:        $configFullPath"
+    Write-Host "Health report path: $reportFullPath"
     Write-Host ""
 
-    Invoke-ToolkitScript `
-        -ScriptName "Test-LccToolkitHealth.ps1" `
-        -Arguments @(
-            "-ReportTxt", $defaultReport
-        )
+    & $healthScriptPath `
+        -ConfigPath $configFullPath `
+        -ReportTxt $reportFullPath
 
     Pause-Toolkit
 }
 
 function Start-ExportSourceBatch {
-    $batchName = Read-BatchName
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Paste the Calibre search string exactly as used in Calibre." -ForegroundColor DarkGray
+    Write-Host "For award batches, the loose award search usually works best here." -ForegroundColor DarkGray
+    Write-Host "Example: #award_programs:`"AHA - J. Russell Major Prize`" and #mqg_lcc:false" -ForegroundColor DarkGray
+    Write-Host ""
+
     $search = Read-RequiredInput "Calibre search string"
 
-    $defaultOutput = ".\input\lcc-source-$batchName.tsv"
+    Write-Host ""
+    Write-Host "Optional exact Award Programs filter:" -ForegroundColor DarkGray
+    Write-Host "- Leave blank for normal exports." -ForegroundColor DarkGray
+    Write-Host "- Use this for award batches when Calibre search overmatches." -ForegroundColor DarkGray
+    Write-Host "Example: AHA - J. Russell Major Prize" -ForegroundColor DarkGray
+    Write-Host ""
+
+    $exactAwardProgram = Read-ToolkitInput `
+        -Prompt "Exact Award Programs filter, blank to skip" `
+        -Default ""
+
+    $defaultOutput = ".\input\lcc-source-$batchSlug.tsv"
 
     $outputTsv = Read-ToolkitInput `
         -Prompt "Output source TSV" `
@@ -207,6 +239,10 @@ function Start-ExportSourceBatch {
         "-OutputTsv", $outputTsv
     )
 
+    if (-not [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
+        $args += @("-ExactAwardProgram", $exactAwardProgram)
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
         $args += @("-LibraryPath", $libraryPath)
     }
@@ -219,11 +255,11 @@ function Start-ExportSourceBatch {
 }
 
 function Start-CanonicalizeImport {
-    $batchName = Read-BatchName
+    $batchSlug = Read-BatchSlug
 
-    $defaultInput = ".\input\lcc-import-$batchName.tsv"
-    $defaultOutput = ".\input\lcc-import-$batchName-canonical.tsv"
-    $defaultReport = ".\reports\lcc-canonicalize-$batchName.csv"
+    $defaultInput = ".\input\lcc-import-$batchSlug.tsv"
+    $defaultOutput = ".\input\lcc-import-$batchSlug-canonical.tsv"
+    $defaultReport = ".\reports\lcc-canonicalize-$batchSlug.csv"
 
     $inputTsv = Read-ToolkitInput `
         -Prompt "Input import TSV" `
@@ -259,10 +295,10 @@ function Start-CanonicalizeImport {
 }
 
 function Start-DryRunImport {
-    $batchName = Read-BatchName
+    $batchSlug = Read-BatchSlug
 
-    $defaultInput = Get-DefaultImportPath -BatchName $batchName
-    $defaultReport = ".\reports\lcc-dryrun-$batchName.csv"
+    $defaultInput = Get-DefaultImportPath -BatchSlug $batchSlug
+    $defaultReport = ".\reports\lcc-dryrun-$batchSlug.csv"
 
     $inputTsv = Read-ToolkitInput `
         -Prompt "Input import TSV" `
@@ -283,10 +319,10 @@ function Start-DryRunImport {
 }
 
 function Start-ApplyImport {
-    $batchName = Read-BatchName
+    $batchSlug = Read-BatchSlug
 
-    $defaultDryRunReport = ".\reports\lcc-dryrun-$batchName.csv"
-    $defaultApplyReport = ".\reports\lcc-apply-$batchName.csv"
+    $defaultDryRunReport = ".\reports\lcc-dryrun-$batchSlug.csv"
+    $defaultApplyReport = ".\reports\lcc-apply-$batchSlug.csv"
 
     $dryRunReportCsv = Read-ToolkitInput `
         -Prompt "Dry-run report CSV" `
@@ -323,10 +359,10 @@ function Start-ApplyImport {
 }
 
 function Start-VerifyFinalState {
-    $batchName = Read-BatchName
+    $batchSlug = Read-BatchSlug
 
-    $defaultInput = Get-DefaultImportPath -BatchName $batchName
-    $defaultReport = ".\reports\lcc-verify-$batchName.csv"
+    $defaultInput = Get-DefaultImportPath -BatchSlug $batchSlug
+    $defaultReport = ".\reports\lcc-verify-$batchSlug.csv"
 
     $inputTsv = Read-ToolkitInput `
         -Prompt "Input import TSV" `
@@ -347,10 +383,10 @@ function Start-VerifyFinalState {
 }
 
 function Start-WriteBatchSummary {
-    $batchName = Read-BatchName
+    $batchSlug = Read-BatchSlug
 
-    $verifyReport = ".\reports\lcc-verify-$batchName.csv"
-    $dryRunReport = ".\reports\lcc-dryrun-$batchName.csv"
+    $verifyReport = ".\reports\lcc-verify-$batchSlug.csv"
+    $dryRunReport = ".\reports\lcc-dryrun-$batchSlug.csv"
 
     $verifyFullPath = Resolve-ToolkitPath -Path $verifyReport -ToolkitRoot $script:ToolkitRoot
 
@@ -361,7 +397,7 @@ function Start-WriteBatchSummary {
         $defaultReport = $dryRunReport
     }
 
-    $defaultSummary = ".\reports\lcc-summary-$batchName.txt"
+    $defaultSummary = ".\reports\lcc-summary-$batchSlug.txt"
 
     $reportCsv = Read-ToolkitInput `
         -Prompt "Report CSV to summarize" `
@@ -376,7 +412,7 @@ function Start-WriteBatchSummary {
         -Arguments @(
             "-ReportCsv", $reportCsv,
             "-SummaryTxt", $summaryTxt,
-            "-BatchName", $batchName
+            "-BatchName", $batchSlug
         )
 
     Pause-Toolkit
@@ -424,7 +460,7 @@ function Show-GitStatus {
 }
 
 $script:ToolkitRoot = Get-ToolkitRoot
-$script:CurrentBatchName = ""
+$script:CurrentBatchSlug = ""
 
 $configFullPath = Resolve-ToolkitPath -Path $ConfigPath -ToolkitRoot $script:ToolkitRoot
 
