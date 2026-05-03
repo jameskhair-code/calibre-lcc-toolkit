@@ -316,7 +316,43 @@ $results = foreach ($row in $rows) {
 }
 
 $results | Export-Csv -Path $ApplyReportCsv -NoTypeInformation -Encoding UTF8
-$results | Format-Table -AutoSize
+
+$statusSummary = $results |
+    Group-Object Status |
+    Sort-Object Name |
+    Select-Object Name, Count
+
+$updatedRows = @($results | Where-Object { $_.Status -eq "Updated" })
+$errorRows = @($results | Where-Object { $_.Status -eq "Error" })
+$skippedRows = @($results | Where-Object { $_.Status -eq "Skipped" })
+
+Write-Host ""
+Write-Host "Apply Result Summary"
+Write-Host "===================="
+Write-Host ""
+
+$statusSummary | Format-Table -AutoSize
+
+Write-Host ""
+Write-Host "Updated fields: $($updatedRows.Count)"
+Write-Host "Skipped fields: $($skippedRows.Count)"
+Write-Host "Error fields:   $($errorRows.Count)"
+
+if ($updatedRows.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Updated field details:"
+    $updatedRows |
+        Select-Object InputTitle, ISBN, CalibreId, FieldName, ProposedValue |
+        Format-Table -AutoSize
+}
+
+if ($errorRows.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Errors:"
+    $errorRows |
+        Select-Object InputTitle, ISBN, CalibreId, FieldName, Message |
+        Format-Table -AutoSize
+}
 
 Write-Host ""
 Write-Host "Apply complete. Report written to: $ApplyReportCsv"
