@@ -284,19 +284,29 @@ function Start-CanonicalizeImport {
         -Prompt "Overwrite existing output/report? Type YES to overwrite" `
         -Default "NO"
 
-    $args = @(
-        "-InputTsv", $inputTsv,
-        "-OutputTsv", $outputTsv,
-        "-ReportCsv", $reportCsv
-    )
+    $canonicalizeScriptPath = Join-Path $script:ToolkitRoot "scripts\Convert-LccImportToCanonical.ps1"
 
-    if ($overwriteAnswer -eq "YES") {
-        $args += "-Overwrite"
+    if (-not (Test-Path $canonicalizeScriptPath)) {
+        throw "Canonicalization script not found: $canonicalizeScriptPath"
     }
 
-    Invoke-ToolkitScript `
-        -ScriptName "Convert-LccImportToCanonical.ps1" `
-        -Arguments $args
+    Write-Host ""
+    Write-Host "Running: Convert-LccImportToCanonical.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    if ($overwriteAnswer -eq "YES") {
+        & $canonicalizeScriptPath `
+            -InputTsv $inputTsv `
+            -OutputTsv $outputTsv `
+            -ReportCsv $reportCsv `
+            -Overwrite
+    }
+    else {
+        & $canonicalizeScriptPath `
+            -InputTsv $inputTsv `
+            -OutputTsv $outputTsv `
+            -ReportCsv $reportCsv
+    }
 
     Pause-Toolkit
 }
