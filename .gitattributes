@@ -1,0 +1,10 @@
+﻿# Normalize common text files
+*.ps1 text eol=crlf
+*.md text eol=crlf
+*.json text eol=crlf
+*.csv text eol=crlf
+*.txt text eol=crlf
+*.gitignore text eol=crlf
+
+# Generated/import files
+*.tsv text eol=crlf
