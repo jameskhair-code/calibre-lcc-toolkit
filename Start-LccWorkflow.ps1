@@ -74,6 +74,22 @@ function Read-RequiredInput {
     } while ($true)
 }
 
+function Read-BatchName {
+    $defaultBatchName = $script:CurrentBatchName
+
+    if ([string]::IsNullOrWhiteSpace($defaultBatchName)) {
+        $batchName = Read-RequiredInput "Batch name, example herbert-baxter-adams"
+    }
+    else {
+        $batchName = Read-ToolkitInput `
+            -Prompt "Batch name" `
+            -Default $defaultBatchName
+    }
+
+    $script:CurrentBatchName = $batchName
+    return $batchName
+}
+
 function Pause-Toolkit {
     Write-Host ""
     Read-Host "Press Enter to continue" | Out-Null
@@ -123,7 +139,19 @@ function Show-Header {
     Write-Host "Toolkit root:"
     Write-Host $script:ToolkitRoot
     Write-Host ""
+
+    if ([string]::IsNullOrWhiteSpace($script:CurrentBatchName)) {
+        Write-Host "Current batch: <not set>" -ForegroundColor DarkGray
+    }
+    else {
+        Write-Host "Current batch: $script:CurrentBatchName" -ForegroundColor Green
+    }
+
+    Write-Host ""
+    Write-Host "Tip: Press Enter at prompts to accept the default value shown in brackets." -ForegroundColor DarkGray
+    Write-Host ""
 }
+
 
 function Show-Menu {
     Show-Header
@@ -146,21 +174,22 @@ function Show-Menu {
 function Start-HealthCheck {
     $defaultReport = ".\reports\lcc-toolkit-health.txt"
 
-    $reportTxt = Read-ToolkitInput `
-        -Prompt "Health report path" `
-        -Default $defaultReport
+    Write-Host ""
+    Write-Host "Running toolkit health check..." -ForegroundColor Cyan
+    Write-Host "Health report path: $defaultReport"
+    Write-Host ""
 
     Invoke-ToolkitScript `
         -ScriptName "Test-LccToolkitHealth.ps1" `
         -Arguments @(
-            "-ReportTxt", $reportTxt
+            "-ReportTxt", $defaultReport
         )
 
     Pause-Toolkit
 }
 
 function Start-ExportSourceBatch {
-    $batchName = Read-RequiredInput "Batch name, example herbert-baxter-adams"
+    $batchName = Read-BatchName
     $search = Read-RequiredInput "Calibre search string"
 
     $defaultOutput = ".\input\lcc-source-$batchName.tsv"
@@ -190,7 +219,7 @@ function Start-ExportSourceBatch {
 }
 
 function Start-CanonicalizeImport {
-    $batchName = Read-RequiredInput "Batch name, example herbert-baxter-adams"
+    $batchName = Read-BatchName
 
     $defaultInput = ".\input\lcc-import-$batchName.tsv"
     $defaultOutput = ".\input\lcc-import-$batchName-canonical.tsv"
@@ -230,7 +259,7 @@ function Start-CanonicalizeImport {
 }
 
 function Start-DryRunImport {
-    $batchName = Read-RequiredInput "Batch name, example herbert-baxter-adams"
+    $batchName = Read-BatchName
 
     $defaultInput = Get-DefaultImportPath -BatchName $batchName
     $defaultReport = ".\reports\lcc-dryrun-$batchName.csv"
@@ -254,7 +283,7 @@ function Start-DryRunImport {
 }
 
 function Start-ApplyImport {
-    $batchName = Read-RequiredInput "Batch name, example herbert-baxter-adams"
+    $batchName = Read-BatchName
 
     $defaultDryRunReport = ".\reports\lcc-dryrun-$batchName.csv"
     $defaultApplyReport = ".\reports\lcc-apply-$batchName.csv"
@@ -294,7 +323,7 @@ function Start-ApplyImport {
 }
 
 function Start-VerifyFinalState {
-    $batchName = Read-RequiredInput "Batch name, example herbert-baxter-adams"
+    $batchName = Read-BatchName
 
     $defaultInput = Get-DefaultImportPath -BatchName $batchName
     $defaultReport = ".\reports\lcc-verify-$batchName.csv"
@@ -318,7 +347,7 @@ function Start-VerifyFinalState {
 }
 
 function Start-WriteBatchSummary {
-    $batchName = Read-RequiredInput "Batch name, example herbert-baxter-adams"
+    $batchName = Read-BatchName
 
     $verifyReport = ".\reports\lcc-verify-$batchName.csv"
     $dryRunReport = ".\reports\lcc-dryrun-$batchName.csv"
@@ -395,6 +424,7 @@ function Show-GitStatus {
 }
 
 $script:ToolkitRoot = Get-ToolkitRoot
+$script:CurrentBatchName = ""
 
 $configFullPath = Resolve-ToolkitPath -Path $ConfigPath -ToolkitRoot $script:ToolkitRoot
 
