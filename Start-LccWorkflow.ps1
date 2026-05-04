@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.3" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.4" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -171,7 +171,8 @@ function Show-Menu {
     Write-Host "7. Open input folder"
     Write-Host "8. Open reports folder"
     Write-Host "9. Open workflow documentation"
-    Write-Host "10. Show Git status"
+    Write-Host "10. Reports: Show latest report files"
+    Write-Host "11. Show Git status"
     Write-Host "0. Exit"
     Write-Host ""
 }
@@ -524,6 +525,20 @@ function Open-WorkflowDocumentation {
     Invoke-Item $docPath
 }
 
+function Start-ShowLatestReports {
+    $reportsScriptPath = Get-ToolkitScriptPath -ScriptName "Show-LccLatestReports.ps1"
+
+    Write-Host ""
+    Write-Host "Reports: show latest report files" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $reportsScriptPath `
+        -ReportsFolder ".\reports" `
+        -MaxResults 12
+
+    Pause-Toolkit
+}
+
 function Show-GitStatus {
     Write-Host ""
     Write-Host "Git status" -ForegroundColor Cyan
@@ -567,7 +582,8 @@ try {
                 "7"  { Open-ToolkitFolder -FolderPath ".\input" }
                 "8"  { Open-ToolkitFolder -FolderPath ".\reports" }
                 "9"  { Open-WorkflowDocumentation }
-                "10" { Show-GitStatus }
+                "10" { Start-ShowLatestReports }
+                "11" { Show-GitStatus }
                 "0"  {
                     Write-Host "Exiting Calibre LCC Toolkit."
                     break

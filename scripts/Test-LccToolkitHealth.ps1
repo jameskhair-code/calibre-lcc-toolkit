@@ -3,16 +3,18 @@
 Runs a health check for the Calibre LCC Toolkit.
 
 .DESCRIPTION
-Validates the toolkit folder structure, config file, canonical mapping files,
-required scripts, calibredb.exe path, and whether Calibre appears to be running.
+Validates that the toolkit folder structure, configuration file, canonical mapping
+files, required scripts, and calibredb.exe are available.
 
-This script does not modify Calibre metadata.
+This script is read-only. It does not modify Calibre metadata or toolkit files,
+except for optionally writing a health report text file.
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File .\scripts\Test-LccToolkitHealth.ps1
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File .\scripts\Test-LccToolkitHealth.ps1 `
+  -ConfigPath ".\config\lcc-toolkit.config.json" `
   -ReportTxt ".\reports\lcc-toolkit-health.txt"
 #>
 
@@ -20,12 +22,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Test-LccToolkitHealth.ps1 `
 param(
     [string]$ConfigPath = ".\config\lcc-toolkit.config.json",
 
-    [string]$ReportTxt = ""
+    [string]$ReportTxt = ".\reports\lcc-toolkit-health.txt",
+
+    [string]$CalibreDb = "C:\Program Files\Calibre2\calibredb.exe"
 )
 
 function Get-ToolkitRoot {
-    $scriptFolder = Split-Path -Parent $PSCommandPath
-    return Split-Path -Parent $scriptFolder
+    if ($PSScriptRoot) {
+        return Split-Path -Parent $PSScriptRoot
+    }
+
+    return (Get-Location).Path
 }
 
 function Resolve-ToolkitPath {
@@ -44,237 +51,211 @@ function Resolve-ToolkitPath {
     return Join-Path $ToolkitRoot $Path
 }
 
-function Add-HealthCheck {
+function Add-HealthResult {
     param(
+        [Parameter(Mandatory = $true)]
         [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("PASS", "WARN", "FAIL")]
         [string]$Status,
-        [string]$Message = "",
-        [string]$Path = ""
+
+        [Parameter(Mandatory = $true)]
+        [string]$Message
     )
 
-    $script:healthChecks += [pscustomobject]@{
+    $script:HealthResults += [pscustomobject]@{
         Name    = $Name
         Status  = $Status
         Message = $Message
-        Path    = $Path
     }
 }
 
-function Test-CsvColumns {
+function Test-Folder {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$CsvPath,
+        [string]$Name,
 
         [Parameter(Mandatory = $true)]
-        [string[]]$RequiredColumns
+        [string]$Path
     )
 
-    if (-not (Test-Path $CsvPath)) {
-        return [pscustomobject]@{
-            Success = $false
-            Message = "File not found"
-        }
+    if (Test-Path $Path) {
+        Add-HealthResult -Name $Name -Status "PASS" -Message "Folder found"
     }
-
-    try {
-        $rows = @(Import-Csv $CsvPath)
-
-        if ($rows.Count -eq 0) {
-            return [pscustomobject]@{
-                Success = $false
-                Message = "CSV contains no rows"
-            }
-        }
-
-        $actualColumns = @($rows[0].PSObject.Properties.Name)
-        $missingColumns = @()
-
-        foreach ($requiredColumn in $RequiredColumns) {
-            if ($actualColumns -notcontains $requiredColumn) {
-                $missingColumns += $requiredColumn
-            }
-        }
-
-        if ($missingColumns.Count -gt 0) {
-            return [pscustomobject]@{
-                Success = $false
-                Message = "Missing column(s): $($missingColumns -join ', ')"
-            }
-        }
-
-        $blankCanonicalRows = @(
-            $rows | Where-Object {
-                [string]::IsNullOrWhiteSpace($_.Code) -or
-                [string]::IsNullOrWhiteSpace($_.CanonicalValue)
-            }
-        )
-
-        if ($blankCanonicalRows.Count -gt 0) {
-            return [pscustomobject]@{
-                Success = $false
-                Message = "Rows with blank Code or CanonicalValue: $($blankCanonicalRows.Count)"
-            }
-        }
-
-        $duplicateCodes = @(
-            $rows |
-                Group-Object Code |
-                Where-Object { $_.Count -gt 1 }
-        )
-
-        if ($duplicateCodes.Count -gt 0) {
-            return [pscustomobject]@{
-                Success = $false
-                Message = "Duplicate Code value(s): $($duplicateCodes.Name -join ', ')"
-            }
-        }
-
-        return [pscustomobject]@{
-            Success = $true
-            Message = "Rows: $($rows.Count)"
-        }
-    }
-    catch {
-        return [pscustomobject]@{
-            Success = $false
-            Message = $_.Exception.Message
-        }
+    else {
+        Add-HealthResult -Name $Name -Status "FAIL" -Message "Folder not found: $Path"
     }
 }
 
-$toolkitRoot = Get-ToolkitRoot
-$healthChecks = @()
+function Test-Script {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath,
 
-Add-HealthCheck `
-    -Name "Toolkit root" `
-    -Status "PASS" `
-    -Message "Toolkit root detected" `
-    -Path $toolkitRoot
+        [Parameter(Mandatory = $true)]
+        [string]$ToolkitRoot
+    )
+
+    $scriptPath = Resolve-ToolkitPath -Path $RelativePath -ToolkitRoot $ToolkitRoot
+    $scriptName = Split-Path -Leaf $RelativePath
+
+    if (Test-Path $scriptPath) {
+        Add-HealthResult -Name "Script: $scriptName" -Status "PASS" -Message "Script found"
+    }
+    else {
+        Add-HealthResult -Name "Script: $scriptName" -Status "FAIL" -Message "Script not found: $scriptPath"
+    }
+}
+
+function Get-CsvRowCount {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    try {
+        $rows = @(Import-Csv -Path $Path)
+        return $rows.Count
+    }
+    catch {
+        return $null
+    }
+}
+
+function Write-HealthReport {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [object[]]$Results,
+
+        [Parameter(Mandatory = $true)]
+        [int]$PassCount,
+
+        [Parameter(Mandatory = $true)]
+        [int]$WarnCount,
+
+        [Parameter(Mandatory = $true)]
+        [int]$FailCount,
+
+        [Parameter(Mandatory = $true)]
+        [string]$OverallStatus
+    )
+
+    $reportFolder = Split-Path -Path $Path -Parent
+
+    if ($reportFolder -and -not (Test-Path $reportFolder)) {
+        New-Item -ItemType Directory -Force -Path $reportFolder | Out-Null
+    }
+
+    $lines = New-Object System.Collections.Generic.List[string]
+
+    $lines.Add("Calibre LCC Toolkit Health Check")
+    $lines.Add("================================")
+    $lines.Add("")
+    $lines.Add("Generated: $(Get-Date)")
+    $lines.Add("")
+    $lines.Add("Results")
+    $lines.Add("-------")
+
+    foreach ($result in $Results) {
+        $resultLine = "{0} [{1}] {2}" -f $result.Name, $result.Status, $result.Message
+		$lines.Add($resultLine)
+    }
+
+    $lines.Add("")
+    $lines.Add("Summary")
+    $lines.Add("-------")
+    $lines.Add("PASS: $PassCount")
+    $lines.Add("WARN: $WarnCount")
+    $lines.Add("FAIL: $FailCount")
+    $lines.Add("Status: $OverallStatus")
+
+    $lines | Set-Content -Path $Path -Encoding UTF8
+}
+
+$script:HealthResults = @()
+
+$toolkitRoot = Get-ToolkitRoot
 
 $configFullPath = Resolve-ToolkitPath -Path $ConfigPath -ToolkitRoot $toolkitRoot
+$reportFullPath = Resolve-ToolkitPath -Path $ReportTxt -ToolkitRoot $toolkitRoot
+
+$inputFolder = Resolve-ToolkitPath -Path ".\input" -ToolkitRoot $toolkitRoot
+$reportsFolder = Resolve-ToolkitPath -Path ".\reports" -ToolkitRoot $toolkitRoot
+$scriptsFolder = Resolve-ToolkitPath -Path ".\scripts" -ToolkitRoot $toolkitRoot
+$docsFolder = Resolve-ToolkitPath -Path ".\docs" -ToolkitRoot $toolkitRoot
+
+$primaryCanonicalCsv = Resolve-ToolkitPath -Path ".\config\lcc-primary-canonical.csv" -ToolkitRoot $toolkitRoot
+$secondaryCanonicalCsv = Resolve-ToolkitPath -Path ".\config\lcc-secondary-canonical.csv" -ToolkitRoot $toolkitRoot
+
+Write-Host ""
+Write-Host "Calibre LCC Toolkit Health Check"
+Write-Host "================================"
+Write-Host ""
+
+if (Test-Path $toolkitRoot) {
+    Add-HealthResult -Name "Toolkit root" -Status "PASS" -Message "Toolkit root detected"
+}
+else {
+    Add-HealthResult -Name "Toolkit root" -Status "FAIL" -Message "Toolkit root not found: $toolkitRoot"
+}
 
 if (Test-Path $configFullPath) {
-    Add-HealthCheck `
-        -Name "Config file" `
-        -Status "PASS" `
-        -Message "Config file found" `
-        -Path $configFullPath
+    Add-HealthResult -Name "Config file" -Status "PASS" -Message "Config file found"
 
     try {
         $config = Get-Content $configFullPath -Raw | ConvertFrom-Json
-        Add-HealthCheck `
-            -Name "Config parse" `
-            -Status "PASS" `
-            -Message "Config JSON parsed successfully" `
-            -Path $configFullPath
+        Add-HealthResult -Name "Config parse" -Status "PASS" -Message "Config JSON parsed successfully"
     }
     catch {
-        Add-HealthCheck `
-            -Name "Config parse" `
-            -Status "FAIL" `
-            -Message $_.Exception.Message `
-            -Path $configFullPath
-
-        $config = $null
+        Add-HealthResult -Name "Config parse" -Status "FAIL" -Message "Config JSON failed to parse: $($_.Exception.Message)"
     }
 }
 else {
-    Add-HealthCheck `
-        -Name "Config file" `
-        -Status "FAIL" `
-        -Message "Config file not found" `
-        -Path $configFullPath
-
-    $config = $null
+    Add-HealthResult -Name "Config file" -Status "FAIL" -Message "Config file not found"
 }
 
-if ($null -ne $config) {
-    $folderProperties = @(
-        "InputFolder",
-        "ReportsFolder",
-        "ScriptsFolder",
-        "DocsFolder"
-    )
+Test-Folder -Name "InputFolder" -Path $inputFolder
+Test-Folder -Name "ReportsFolder" -Path $reportsFolder
+Test-Folder -Name "ScriptsFolder" -Path $scriptsFolder
+Test-Folder -Name "DocsFolder" -Path $docsFolder
 
-    foreach ($folderProperty in $folderProperties) {
-        $folderValue = [string]$config.$folderProperty
-        $folderPath = Resolve-ToolkitPath -Path $folderValue -ToolkitRoot $toolkitRoot
+if (Test-Path $CalibreDb) {
+    Add-HealthResult -Name "calibredb.exe" -Status "PASS" -Message "calibredb.exe found"
+}
+else {
+    Add-HealthResult -Name "calibredb.exe" -Status "FAIL" -Message "calibredb.exe not found: $CalibreDb"
+}
 
-        if (Test-Path $folderPath) {
-            Add-HealthCheck `
-                -Name $folderProperty `
-                -Status "PASS" `
-                -Message "Folder found" `
-                -Path $folderPath
-        }
-        else {
-            Add-HealthCheck `
-                -Name $folderProperty `
-                -Status "FAIL" `
-                -Message "Folder not found" `
-                -Path $folderPath
-        }
-    }
+if (Test-Path $primaryCanonicalCsv) {
+    $primaryCount = Get-CsvRowCount -Path $primaryCanonicalCsv
 
-    $calibreDbPath = [string]$config.CalibreDbPath
-
-    if (Test-Path $calibreDbPath) {
-        Add-HealthCheck `
-            -Name "calibredb.exe" `
-            -Status "PASS" `
-            -Message "calibredb.exe found" `
-            -Path $calibreDbPath
+    if ($null -eq $primaryCount) {
+        Add-HealthResult -Name "Primary canonical CSV" -Status "FAIL" -Message "Could not read CSV"
     }
     else {
-        Add-HealthCheck `
-            -Name "calibredb.exe" `
-            -Status "FAIL" `
-            -Message "calibredb.exe not found" `
-            -Path $calibreDbPath
+        Add-HealthResult -Name "Primary canonical CSV" -Status "PASS" -Message "Rows: $primaryCount"
     }
+}
+else {
+    Add-HealthResult -Name "Primary canonical CSV" -Status "FAIL" -Message "File not found: $primaryCanonicalCsv"
+}
 
-    $primaryCanonicalPath = Resolve-ToolkitPath -Path ([string]$config.PrimaryClassCanonicalFile) -ToolkitRoot $toolkitRoot
-    $secondaryCanonicalPath = Resolve-ToolkitPath -Path ([string]$config.SecondaryClassCanonicalFile) -ToolkitRoot $toolkitRoot
+if (Test-Path $secondaryCanonicalCsv) {
+    $secondaryCount = Get-CsvRowCount -Path $secondaryCanonicalCsv
 
-    $requiredCanonicalColumns = @("Code", "CanonicalValue", "LegacyValues")
-
-    $primaryCsvCheck = Test-CsvColumns `
-        -CsvPath $primaryCanonicalPath `
-        -RequiredColumns $requiredCanonicalColumns
-
-    if ($primaryCsvCheck.Success) {
-        Add-HealthCheck `
-            -Name "Primary canonical CSV" `
-            -Status "PASS" `
-            -Message $primaryCsvCheck.Message `
-            -Path $primaryCanonicalPath
+    if ($null -eq $secondaryCount) {
+        Add-HealthResult -Name "Secondary canonical CSV" -Status "FAIL" -Message "Could not read CSV"
     }
     else {
-        Add-HealthCheck `
-            -Name "Primary canonical CSV" `
-            -Status "FAIL" `
-            -Message $primaryCsvCheck.Message `
-            -Path $primaryCanonicalPath
+        Add-HealthResult -Name "Secondary canonical CSV" -Status "PASS" -Message "Rows: $secondaryCount"
     }
-
-    $secondaryCsvCheck = Test-CsvColumns `
-        -CsvPath $secondaryCanonicalPath `
-        -RequiredColumns $requiredCanonicalColumns
-
-    if ($secondaryCsvCheck.Success) {
-        Add-HealthCheck `
-            -Name "Secondary canonical CSV" `
-            -Status "PASS" `
-            -Message $secondaryCsvCheck.Message `
-            -Path $secondaryCanonicalPath
-    }
-    else {
-        Add-HealthCheck `
-            -Name "Secondary canonical CSV" `
-            -Status "FAIL" `
-            -Message $secondaryCsvCheck.Message `
-            -Path $secondaryCanonicalPath
-    }
+}
+else {
+    Add-HealthResult -Name "Secondary canonical CSV" -Status "FAIL" -Message "File not found: $secondaryCanonicalCsv"
 }
 
 $requiredScripts = @(
@@ -283,123 +264,56 @@ $requiredScripts = @(
     ".\scripts\Invoke-LccImportApply.ps1",
     ".\scripts\Convert-LccImportToCanonical.ps1",
     ".\scripts\Write-LccBatchSummary.ps1",
+    ".\scripts\Show-LccLatestReports.ps1",
     ".\scripts\Test-LccToolkitHealth.ps1"
 )
 
 foreach ($requiredScript in $requiredScripts) {
-    $scriptPath = Resolve-ToolkitPath -Path $requiredScript -ToolkitRoot $toolkitRoot
-
-    if (Test-Path $scriptPath) {
-        Add-HealthCheck `
-            -Name "Script: $(Split-Path -Leaf $scriptPath)" `
-            -Status "PASS" `
-            -Message "Script found" `
-            -Path $scriptPath
-    }
-    else {
-        Add-HealthCheck `
-            -Name "Script: $(Split-Path -Leaf $scriptPath)" `
-            -Status "FAIL" `
-            -Message "Script not found" `
-            -Path $scriptPath
-    }
+    Test-Script -RelativePath $requiredScript -ToolkitRoot $toolkitRoot
 }
 
-$calibreProcesses = @(
-    Get-Process calibre* -ErrorAction SilentlyContinue
-)
+$calibreProcesses = @(Get-Process calibre* -ErrorAction SilentlyContinue)
 
-if ($calibreProcesses.Count -gt 0) {
-    Add-HealthCheck `
-        -Name "Calibre process check" `
-        -Status "WARN" `
-        -Message "Calibre-related process(es) running: $($calibreProcesses.ProcessName -join ', ')" `
-        -Path ""
+if ($calibreProcesses.Count -eq 0) {
+    Add-HealthResult -Name "Calibre process check" -Status "PASS" -Message "No Calibre-related processes detected"
 }
 else {
-    Add-HealthCheck `
-        -Name "Calibre process check" `
-        -Status "PASS" `
-        -Message "No Calibre-related processes detected" `
-        -Path ""
+    $processNames = ($calibreProcesses | Select-Object -ExpandProperty ProcessName -Unique) -join ", "
+    Add-HealthResult -Name "Calibre process check" -Status "WARN" -Message "Calibre-related process detected: $processNames"
 }
 
-$failCount = @($healthChecks | Where-Object { $_.Status -eq "FAIL" }).Count
-$warnCount = @($healthChecks | Where-Object { $_.Status -eq "WARN" }).Count
-$passCount = @($healthChecks | Where-Object { $_.Status -eq "PASS" }).Count
+$script:HealthResults | Format-Table Name, Status, Message -AutoSize
+
+$passCount = @($script:HealthResults | Where-Object { $_.Status -eq "PASS" }).Count
+$warnCount = @($script:HealthResults | Where-Object { $_.Status -eq "WARN" }).Count
+$failCount = @($script:HealthResults | Where-Object { $_.Status -eq "FAIL" }).Count
+
+if ($failCount -gt 0) {
+    $overallStatus = "NEEDS ATTENTION"
+}
+elseif ($warnCount -gt 0) {
+    $overallStatus = "HEALTHY WITH WARNINGS"
+}
+else {
+    $overallStatus = "HEALTHY"
+}
 
 Write-Host ""
-Write-Host "Calibre LCC Toolkit Health Check"
-Write-Host "================================"
-Write-Host ""
-$healthChecks | Format-Table Name, Status, Message -AutoSize
 Write-Host ""
 Write-Host "Summary"
 Write-Host "-------"
 Write-Host "PASS: $passCount"
 Write-Host "WARN: $warnCount"
 Write-Host "FAIL: $failCount"
+Write-Host "Status: $overallStatus"
 
-if ($failCount -eq 0 -and $warnCount -eq 0) {
-    Write-Host "Status: HEALTHY"
-}
-elseif ($failCount -eq 0 -and $warnCount -gt 0) {
-    Write-Host "Status: HEALTHY WITH WARNINGS"
-}
-else {
-    Write-Host "Status: NEEDS ATTENTION"
-}
+Write-HealthReport `
+    -Path $reportFullPath `
+    -Results $script:HealthResults `
+    -PassCount $passCount `
+    -WarnCount $warnCount `
+    -FailCount $failCount `
+    -OverallStatus $overallStatus
 
-if (-not [string]::IsNullOrWhiteSpace($ReportTxt)) {
-    $reportFullPath = Resolve-ToolkitPath -Path $ReportTxt -ToolkitRoot $toolkitRoot
-    $reportFolder = Split-Path -Parent $reportFullPath
-
-    if ($reportFolder -and -not (Test-Path $reportFolder)) {
-        New-Item -ItemType Directory -Force -Path $reportFolder | Out-Null
-    }
-
-    $lines = @()
-    $lines += "Calibre LCC Toolkit Health Check"
-    $lines += "================================"
-    $lines += ""
-    $lines += "Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-    $lines += "Toolkit Root: $toolkitRoot"
-    $lines += ""
-    $lines += "Checks"
-    $lines += "------"
-
-    foreach ($check in $healthChecks) {
-        $lines += "$($check.Status) - $($check.Name) - $($check.Message)"
-        if (-not [string]::IsNullOrWhiteSpace($check.Path)) {
-            $lines += "  Path: $($check.Path)"
-        }
-    }
-
-    $lines += ""
-    $lines += "Summary"
-    $lines += "-------"
-    $lines += "PASS: $passCount"
-    $lines += "WARN: $warnCount"
-    $lines += "FAIL: $failCount"
-
-    if ($failCount -eq 0 -and $warnCount -eq 0) {
-        $lines += "Status: HEALTHY"
-    }
-    elseif ($failCount -eq 0 -and $warnCount -gt 0) {
-        $lines += "Status: HEALTHY WITH WARNINGS"
-    }
-    else {
-        $lines += "Status: NEEDS ATTENTION"
-    }
-
-    $lines | Set-Content -Path $reportFullPath -Encoding UTF8
-
-    Write-Host ""
-    Write-Host "Health report written to: $reportFullPath"
-}
-
-if ($failCount -gt 0) {
-    exit 1
-}
-
-exit 0
+Write-Host ""
+Write-Host "Health report written to: $reportFullPath"
