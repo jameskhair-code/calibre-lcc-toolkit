@@ -6,6 +6,11 @@ Dry-run checker for importing LCC metadata into Calibre.
 Reads a TSV containing Title, Author/Author(s), ISBN, LCC, LCC Primary Class,
 LCC Secondary Class, and LCC Classification Path.
 
+Also supports optional LCC enrichment audit fields:
+
+- LCC Confidence
+- LCC Source Notes
+
 Searches the Calibre library by ISBN.
 Reports what would be updated.
 Performs NO metadata writes.
@@ -40,6 +45,19 @@ function Normalize-Isbn {
     }
 
     return (($Value -replace '[^\dXx]', '').Trim()).ToUpper()
+}
+
+function Normalize-Key {
+    param(
+        [AllowNull()]
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ""
+    }
+
+    return (($Value.Trim()) -replace '\s+', ' ')
 }
 
 function Get-RowValue {
@@ -156,6 +174,110 @@ function Test-WouldUpdate {
     return "No"
 }
 
+function New-ConfidenceMap {
+    $allowedConfidenceValues = @(
+        "High - Catalog Confirmed",
+        "Medium - Evidence Based",
+        "Low - Manual Review Recommended"
+    )
+
+    $map = New-Object 'System.Collections.Hashtable' ([System.StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($confidenceValue in $allowedConfidenceValues) {
+        $map[$confidenceValue] = $confidenceValue
+    }
+
+    return $map
+}
+
+function Convert-ToCanonicalConfidence {
+    param(
+        [AllowNull()]
+        [string]$Value,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$AllowedConfidence
+    )
+
+    $normalizedValue = Normalize-Key $Value
+
+    if ([string]::IsNullOrWhiteSpace($normalizedValue)) {
+        return [pscustomobject]@{
+            OriginalValue        = ""
+            CanonicalValue       = ""
+            Status               = "Unspecified"
+            ManualReviewRequired = "No"
+            Warning              = ""
+        }
+    }
+
+    if ($AllowedConfidence.ContainsKey($normalizedValue)) {
+        $canonicalValue = $AllowedConfidence[$normalizedValue]
+
+        if ($canonicalValue -eq "Low - Manual Review Recommended") {
+            $manualReviewRequired = "Yes"
+        }
+        else {
+            $manualReviewRequired = "No"
+        }
+
+        return [pscustomobject]@{
+            OriginalValue        = $normalizedValue
+            CanonicalValue       = $canonicalValue
+            Status               = "Valid"
+            ManualReviewRequired = $manualReviewRequired
+            Warning              = ""
+        }
+    }
+
+    return [pscustomobject]@{
+        OriginalValue        = $normalizedValue
+        CanonicalValue       = $normalizedValue
+        Status               = "Unexpected"
+        ManualReviewRequired = "Yes"
+        Warning              = "Unexpected LCC Confidence value"
+    }
+}
+
+function Get-AuditFields {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Row,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$AllowedConfidence
+    )
+
+    $confidenceValue = Get-RowValue -Row $Row -Names @("LCC Confidence", "LCCConfidence", "lcc_confidence")
+    $sourceNotes = Normalize-Key (Get-RowValue -Row $Row -Names @("LCC Source Notes", "LCCSourceNotes", "lcc_source_notes"))
+
+    $confidenceResult = Convert-ToCanonicalConfidence `
+        -Value $confidenceValue `
+        -AllowedConfidence $AllowedConfidence
+
+    return [pscustomobject]@{
+        LCCConfidence       = $confidenceResult.CanonicalValue
+        LCCConfidenceStatus = $confidenceResult.Status
+        LCCSourceNotes      = $sourceNotes
+        ManualReviewRequired = $confidenceResult.ManualReviewRequired
+        Warning             = $confidenceResult.Warning
+    }
+}
+
+function Join-Warnings {
+    param(
+        [AllowNull()]
+        [string[]]$Warnings
+    )
+
+    $cleanWarnings = @(
+        $Warnings |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+
+    return ($cleanWarnings -join "; ")
+}
+
 function Get-CalibreMatchesByIsbn {
     param(
         [Parameter(Mandatory = $true)]
@@ -218,7 +340,13 @@ if ($reportFolder -and -not (Test-Path $reportFolder)) {
     New-Item -ItemType Directory -Force -Path $reportFolder | Out-Null
 }
 
-$rows = Import-Csv -Path $InputTsv -Delimiter "`t"
+$rows = @(Import-Csv -Path $InputTsv -Delimiter "`t")
+
+if ($rows.Count -eq 0) {
+    throw "Input TSV contains no rows: $InputTsv"
+}
+
+$confidenceMap = New-ConfidenceMap
 
 $report = foreach ($row in $rows) {
     $inputTitle = Get-RowValue -Row $row -Names @("Title")
@@ -229,6 +357,8 @@ $report = foreach ($row in $rows) {
     $proposedPrimaryClass = Get-RowValue -Row $row -Names @("LCC Primary Class", "LCC Primary", "lcc_primary_class")
     $proposedSecondaryClass = Get-RowValue -Row $row -Names @("LCC Secondary Class", "LCC Secondary", "lcc_secondary_class")
     $proposedPath = Get-RowValue -Row $row -Names @("LCC Classification Path", "LCC Path", "lcc_class_path")
+
+    $audit = Get-AuditFields -Row $row -AllowedConfidence $confidenceMap
 
     if ([string]::IsNullOrWhiteSpace($isbn)) {
         [pscustomobject]@{
@@ -257,7 +387,12 @@ $report = foreach ($row in $rows) {
             ProposedLCCPath               = $proposedPath
             WouldUpdateLCCPath            = "No"
 
-            Warning                       = "No ISBN provided"
+            LCCConfidence                 = $audit.LCCConfidence
+            LCCConfidenceStatus           = $audit.LCCConfidenceStatus
+            LCCSourceNotes                = $audit.LCCSourceNotes
+            ManualReviewRequired          = $audit.ManualReviewRequired
+
+            Warning                       = Join-Warnings @("No ISBN provided", $audit.Warning)
         }
         continue
     }
@@ -292,7 +427,12 @@ $report = foreach ($row in $rows) {
             ProposedLCCPath               = $proposedPath
             WouldUpdateLCCPath            = "No"
 
-            Warning                       = "No Calibre book matched this ISBN"
+            LCCConfidence                 = $audit.LCCConfidence
+            LCCConfidenceStatus           = $audit.LCCConfidenceStatus
+            LCCSourceNotes                = $audit.LCCSourceNotes
+            ManualReviewRequired          = $audit.ManualReviewRequired
+
+            Warning                       = Join-Warnings @("No Calibre book matched this ISBN", $audit.Warning)
         }
         continue
     }
@@ -324,7 +464,12 @@ $report = foreach ($row in $rows) {
             ProposedLCCPath               = $proposedPath
             WouldUpdateLCCPath            = "No"
 
-            Warning                       = "Multiple Calibre books matched this ISBN; manual review needed"
+            LCCConfidence                 = $audit.LCCConfidence
+            LCCConfidenceStatus           = $audit.LCCConfidenceStatus
+            LCCSourceNotes                = $audit.LCCSourceNotes
+            ManualReviewRequired          = $audit.ManualReviewRequired
+
+            Warning                       = Join-Warnings @("Multiple Calibre books matched this ISBN; manual review needed", $audit.Warning)
         }
         continue
     }
@@ -362,7 +507,12 @@ $report = foreach ($row in $rows) {
         ProposedLCCPath               = $proposedPath
         WouldUpdateLCCPath            = Test-WouldUpdate -ExistingValue $existingPath -ProposedValue $proposedPath
 
-        Warning                       = ""
+        LCCConfidence                 = $audit.LCCConfidence
+        LCCConfidenceStatus           = $audit.LCCConfidenceStatus
+        LCCSourceNotes                = $audit.LCCSourceNotes
+        ManualReviewRequired          = $audit.ManualReviewRequired
+
+        Warning                       = Join-Warnings @($audit.Warning)
     }
 }
 
