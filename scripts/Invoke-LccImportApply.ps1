@@ -12,6 +12,8 @@ SAFETY:
 - Requires the -Apply switch.
 - Skips unmatched and multiple-match rows.
 - Skips blank proposed values.
+- Blocks apply when v0.4 audit fields indicate manual review is required.
+- Blocks apply when LCCConfidenceStatus is Unexpected.
 - Writes an apply report showing what happened.
 #>
 
@@ -65,20 +67,46 @@ function Set-CalibreCustomValue {
         [string]$Value
     )
 
-    $output = & $CalibreDb @(
-        $(if (-not [string]::IsNullOrWhiteSpace($LibraryPath)) { "--with-library"; $LibraryPath }),
+    $arguments = @()
+
+    if (-not [string]::IsNullOrWhiteSpace($LibraryPath)) {
+        $arguments += @("--with-library", $LibraryPath)
+    }
+
+    $arguments += @(
         "set_custom",
         $ColumnLabel,
         $BookId,
         $Value
-    ) 2>&1
+    )
 
+    $output = & $CalibreDb @arguments 2>&1
     $exitCode = $LASTEXITCODE
 
     return [pscustomobject]@{
         ExitCode = $exitCode
         Output   = ($output -join "`n")
     }
+}
+
+function Get-RowValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Row,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Names
+    )
+
+    foreach ($name in $Names) {
+        $property = $Row.PSObject.Properties[$name]
+
+        if ($null -ne $property) {
+            return [string]$property.Value
+        }
+    }
+
+    return ""
 }
 
 function New-ApplyResult {
@@ -93,21 +121,43 @@ function New-ApplyResult {
         [string]$ProposedValue,
         [string]$WouldUpdate,
         [string]$Status,
-        [string]$Message
+        [string]$Message,
+        [string]$LCCConfidence = "",
+        [string]$LCCConfidenceStatus = "",
+        [string]$LCCSourceNotes = "",
+        [string]$ManualReviewRequired = ""
     )
 
     [pscustomobject]@{
-        InputTitle    = $InputTitle
-        ISBN          = $ISBN
-        CalibreId     = $CalibreId
-        CalibreTitle  = $CalibreTitle
-        FieldName     = $FieldName
-        ColumnLabel   = $ColumnLabel
-        ExistingValue = $ExistingValue
-        ProposedValue = $ProposedValue
-        WouldUpdate   = $WouldUpdate
-        Status        = $Status
-        Message       = $Message
+        InputTitle             = $InputTitle
+        ISBN                   = $ISBN
+        CalibreId              = $CalibreId
+        CalibreTitle           = $CalibreTitle
+        FieldName              = $FieldName
+        ColumnLabel            = $ColumnLabel
+        ExistingValue          = $ExistingValue
+        ProposedValue          = $ProposedValue
+        WouldUpdate            = $WouldUpdate
+        Status                 = $Status
+        Message                = $Message
+        LCCConfidence          = $LCCConfidence
+        LCCConfidenceStatus    = $LCCConfidenceStatus
+        LCCSourceNotes         = $LCCSourceNotes
+        ManualReviewRequired   = $ManualReviewRequired
+    }
+}
+
+function Get-AuditValues {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Row
+    )
+
+    return [pscustomobject]@{
+        LCCConfidence        = Get-RowValue -Row $Row -Names @("LCCConfidence", "LCC Confidence")
+        LCCConfidenceStatus  = Get-RowValue -Row $Row -Names @("LCCConfidenceStatus")
+        LCCSourceNotes       = Get-RowValue -Row $Row -Names @("LCCSourceNotes", "LCC Source Notes")
+        ManualReviewRequired = Get-RowValue -Row $Row -Names @("ManualReviewRequired")
     }
 }
 
@@ -132,7 +182,12 @@ if ($applyFolder -and -not (Test-Path $applyFolder)) {
     New-Item -ItemType Directory -Force -Path $applyFolder | Out-Null
 }
 
-$rows = Import-Csv -Path $DryRunReportCsv
+$rows = @(Import-Csv -Path $DryRunReportCsv)
+
+if ($rows.Count -eq 0) {
+    throw "Dry-run report contains no rows: $DryRunReportCsv"
+}
+
 $matchedRows = @($rows | Where-Object { $_.MatchStatus -eq "Matched" })
 
 $pendingLccUpdates = @($matchedRows | Where-Object { $_.WouldUpdateLCC -eq "Yes" }).Count
@@ -147,6 +202,21 @@ $pendingFieldUpdates =
     $pendingPathUpdates
 
 $skippedRowCount = @($rows | Where-Object { $_.MatchStatus -ne "Matched" }).Count
+
+$manualReviewRows = @(
+    $rows | Where-Object {
+        (Get-RowValue -Row $_ -Names @("ManualReviewRequired")) -eq "Yes"
+    }
+)
+
+$unexpectedConfidenceRows = @(
+    $rows | Where-Object {
+        (Get-RowValue -Row $_ -Names @("LCCConfidenceStatus")) -eq "Unexpected"
+    }
+)
+
+$manualReviewCount = $manualReviewRows.Count
+$unexpectedConfidenceCount = $unexpectedConfidenceRows.Count
 
 Write-Host ""
 Write-Host "Apply Preflight Summary"
@@ -165,6 +235,32 @@ Write-Host "  Secondary Class:     $pendingSecondaryUpdates"
 Write-Host "  Classification Path: $pendingPathUpdates"
 Write-Host "  Total:               $pendingFieldUpdates"
 Write-Host ""
+Write-Host "LCC enrichment audit:"
+Write-Host "  Manual review required rows: $manualReviewCount"
+Write-Host "  Unexpected confidence rows:  $unexpectedConfidenceCount"
+Write-Host ""
+
+if ($manualReviewCount -gt 0 -or $unexpectedConfidenceCount -gt 0) {
+    Write-Host "Apply blocked by LCC enrichment audit safety gate." -ForegroundColor Yellow
+    Write-Host ""
+
+    if ($manualReviewCount -gt 0) {
+        Write-Host "Manual review required rows:"
+        $manualReviewRows |
+            Select-Object InputTitle, ISBN, LCCConfidence, LCCConfidenceStatus, ManualReviewRequired, Warning |
+            Format-Table -AutoSize
+    }
+
+    if ($unexpectedConfidenceCount -gt 0) {
+        Write-Host ""
+        Write-Host "Unexpected confidence rows:"
+        $unexpectedConfidenceRows |
+            Select-Object InputTitle, ISBN, LCCConfidence, LCCConfidenceStatus, ManualReviewRequired, Warning |
+            Format-Table -AutoSize
+    }
+
+    throw "Apply blocked. Resolve manual-review or unexpected-confidence rows, then rerun dry run and apply."
+}
 
 if ($pendingFieldUpdates -gt 0) {
     Write-Host "This operation will modify Calibre metadata."
@@ -183,6 +279,8 @@ else {
 }
 
 $results = foreach ($row in $rows) {
+    $audit = Get-AuditValues -Row $row
+
     if ($row.MatchStatus -ne "Matched") {
         New-ApplyResult `
             -InputTitle $row.InputTitle `
@@ -195,7 +293,11 @@ $results = foreach ($row in $rows) {
             -ProposedValue "" `
             -WouldUpdate "No" `
             -Status "Skipped" `
-            -Message "MatchStatus was '$($row.MatchStatus)'"
+            -Message "MatchStatus was '$($row.MatchStatus)'" `
+            -LCCConfidence $audit.LCCConfidence `
+            -LCCConfidenceStatus $audit.LCCConfidenceStatus `
+            -LCCSourceNotes $audit.LCCSourceNotes `
+            -ManualReviewRequired $audit.ManualReviewRequired
         continue
     }
 
@@ -243,7 +345,11 @@ $results = foreach ($row in $rows) {
                 -ProposedValue $field.ProposedValue `
                 -WouldUpdate $field.WouldUpdate `
                 -Status "Skipped" `
-                -Message "Dry-run said no update needed"
+                -Message "Dry-run said no update needed" `
+                -LCCConfidence $audit.LCCConfidence `
+                -LCCConfidenceStatus $audit.LCCConfidenceStatus `
+                -LCCSourceNotes $audit.LCCSourceNotes `
+                -ManualReviewRequired $audit.ManualReviewRequired
             continue
         }
 
@@ -259,7 +365,11 @@ $results = foreach ($row in $rows) {
                 -ProposedValue $field.ProposedValue `
                 -WouldUpdate $field.WouldUpdate `
                 -Status "Skipped" `
-                -Message "Proposed value was blank"
+                -Message "Proposed value was blank" `
+                -LCCConfidence $audit.LCCConfidence `
+                -LCCConfidenceStatus $audit.LCCConfidenceStatus `
+                -LCCSourceNotes $audit.LCCSourceNotes `
+                -ManualReviewRequired $audit.ManualReviewRequired
             continue
         }
 
@@ -281,7 +391,11 @@ $results = foreach ($row in $rows) {
                     -ProposedValue $field.ProposedValue `
                     -WouldUpdate $field.WouldUpdate `
                     -Status "Updated" `
-                    -Message $setResult.Output
+                    -Message $setResult.Output `
+                    -LCCConfidence $audit.LCCConfidence `
+                    -LCCConfidenceStatus $audit.LCCConfidenceStatus `
+                    -LCCSourceNotes $audit.LCCSourceNotes `
+                    -ManualReviewRequired $audit.ManualReviewRequired
             }
             else {
                 New-ApplyResult `
@@ -295,7 +409,11 @@ $results = foreach ($row in $rows) {
                     -ProposedValue $field.ProposedValue `
                     -WouldUpdate $field.WouldUpdate `
                     -Status "Error" `
-                    -Message "calibredb exit code $($setResult.ExitCode): $($setResult.Output)"
+                    -Message "calibredb exit code $($setResult.ExitCode): $($setResult.Output)" `
+                    -LCCConfidence $audit.LCCConfidence `
+                    -LCCConfidenceStatus $audit.LCCConfidenceStatus `
+                    -LCCSourceNotes $audit.LCCSourceNotes `
+                    -ManualReviewRequired $audit.ManualReviewRequired
             }
         }
         catch {
@@ -310,7 +428,11 @@ $results = foreach ($row in $rows) {
                 -ProposedValue $field.ProposedValue `
                 -WouldUpdate $field.WouldUpdate `
                 -Status "Error" `
-                -Message $_.Exception.Message
+                -Message $_.Exception.Message `
+                -LCCConfidence $audit.LCCConfidence `
+                -LCCConfidenceStatus $audit.LCCConfidenceStatus `
+                -LCCSourceNotes $audit.LCCSourceNotes `
+                -ManualReviewRequired $audit.ManualReviewRequired
         }
     }
 }
@@ -342,7 +464,7 @@ if ($updatedRows.Count -gt 0) {
     Write-Host ""
     Write-Host "Updated field details:"
     $updatedRows |
-        Select-Object InputTitle, ISBN, CalibreId, FieldName, ProposedValue |
+        Select-Object InputTitle, ISBN, CalibreId, FieldName, ProposedValue, LCCConfidence |
         Format-Table -AutoSize
 }
 
