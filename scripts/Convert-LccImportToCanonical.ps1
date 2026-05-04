@@ -7,6 +7,15 @@ Reads an import TSV containing LCC metadata and maps legacy/non-canonical
 LCC Primary Class and LCC Secondary Class values to the approved canonical values
 defined in config/lcc-primary-canonical.csv and config/lcc-secondary-canonical.csv.
 
+This script also supports optional LCC enrichment audit fields:
+
+- LCC Confidence
+- LCC Source Notes
+
+These audit fields are preserved in the canonical output TSV and included in the
+canonicalization report, but they are not required and are not written to Calibre
+by this script.
+
 This script does not modify Calibre metadata. It only creates a new canonicalized TSV
 and a validation/canonicalization report.
 
@@ -185,6 +194,59 @@ function Convert-ToCanonicalValue {
     }
 }
 
+function New-ConfidenceMap {
+    $allowedConfidenceValues = @(
+        "High - Catalog Confirmed",
+        "Medium - Evidence Based",
+        "Low - Manual Review Recommended"
+    )
+
+    $map = New-Object 'System.Collections.Hashtable' ([System.StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($confidenceValue in $allowedConfidenceValues) {
+        $map[$confidenceValue] = $confidenceValue
+    }
+
+    return $map
+}
+
+function Convert-ToCanonicalConfidence {
+    param(
+        [AllowNull()]
+        [string]$Value,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$AllowedConfidence
+    )
+
+    $normalizedValue = Normalize-Key $Value
+
+    if ([string]::IsNullOrWhiteSpace($normalizedValue)) {
+        return [pscustomobject]@{
+            OriginalValue  = ""
+            CanonicalValue = ""
+            Status         = "Unspecified"
+            Warning        = ""
+        }
+    }
+
+    if ($AllowedConfidence.ContainsKey($normalizedValue)) {
+        return [pscustomobject]@{
+            OriginalValue  = $normalizedValue
+            CanonicalValue = $AllowedConfidence[$normalizedValue]
+            Status         = "Valid"
+            Warning        = ""
+        }
+    }
+
+    return [pscustomobject]@{
+        OriginalValue  = $normalizedValue
+        CanonicalValue = $normalizedValue
+        Status         = "Unexpected"
+        Warning        = "Unexpected LCC Confidence value"
+    }
+}
+
 function Assert-RequiredColumns {
     param(
         [Parameter(Mandatory = $true)]
@@ -210,6 +272,36 @@ function Assert-RequiredColumns {
     if ($missingColumns.Count -gt 0) {
         throw "Input TSV is missing required column(s): $($missingColumns -join ', ')"
     }
+}
+
+function Test-ColumnExists {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Row,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ColumnName
+    )
+
+    return ($Row.PSObject.Properties.Name -contains $ColumnName)
+}
+
+function Get-OptionalColumnValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Row,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ColumnName
+    )
+
+    $property = $Row.PSObject.Properties[$ColumnName]
+
+    if ($null -eq $property) {
+        return ""
+    }
+
+    return [string]$property.Value
 }
 
 $toolkitRoot = Get-ToolkitRoot
@@ -267,10 +359,14 @@ $secondaryCanonicalPath = Resolve-ToolkitPath -Path $config.SecondaryClassCanoni
 
 $primaryMap = New-CanonicalMap -CsvPath $primaryCanonicalPath
 $secondaryMap = New-CanonicalMap -CsvPath $secondaryCanonicalPath
+$confidenceMap = New-ConfidenceMap
 
 $rows = @(Import-Csv $inputFullPath -Delimiter "`t")
 
 Assert-RequiredColumns -Rows $rows -RequiredColumns $config.RequiredImportColumns
+
+$hasConfidenceColumn = Test-ColumnExists -Row $rows[0] -ColumnName "LCC Confidence"
+$hasSourceNotesColumn = Test-ColumnExists -Row $rows[0] -ColumnName "LCC Source Notes"
 
 $reportRows = @()
 
@@ -288,6 +384,32 @@ foreach ($row in $rows) {
     $row.'LCC Primary Class' = $primaryResult.CanonicalValue
     $row.'LCC Secondary Class' = $secondaryResult.CanonicalValue
 
+    $confidenceOriginal = ""
+    $confidenceCanonical = ""
+    $confidenceStatus = "NotProvided"
+    $confidenceWarning = ""
+    $sourceNotes = ""
+
+    if ($hasConfidenceColumn) {
+        $confidenceValue = Get-OptionalColumnValue -Row $row -ColumnName "LCC Confidence"
+
+        $confidenceResult = Convert-ToCanonicalConfidence `
+            -Value $confidenceValue `
+            -AllowedConfidence $confidenceMap
+
+        $confidenceOriginal = $confidenceResult.OriginalValue
+        $confidenceCanonical = $confidenceResult.CanonicalValue
+        $confidenceStatus = $confidenceResult.Status
+        $confidenceWarning = $confidenceResult.Warning
+
+        $row.'LCC Confidence' = $confidenceCanonical
+    }
+
+    if ($hasSourceNotesColumn) {
+        $sourceNotes = Normalize-Key (Get-OptionalColumnValue -Row $row -ColumnName "LCC Source Notes")
+        $row.'LCC Source Notes' = $sourceNotes
+    }
+
     $warnings = @()
 
     if (-not [string]::IsNullOrWhiteSpace($primaryResult.Warning)) {
@@ -298,17 +420,25 @@ foreach ($row in $rows) {
         $warnings += "Secondary: $($secondaryResult.Warning)"
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($confidenceWarning)) {
+        $warnings += "Confidence: $confidenceWarning"
+    }
+
     $reportRows += [pscustomobject]@{
-        Title                     = $row.Title
-        Author                    = $row.Author
-        ISBN                      = $row.ISBN
-        OriginalLCCPrimaryClass   = $primaryResult.OriginalValue
-        CanonicalLCCPrimaryClass  = $primaryResult.CanonicalValue
-        PrimaryStatus             = $primaryResult.Status
-        OriginalLCCSecondaryClass = $secondaryResult.OriginalValue
+        Title                      = $row.Title
+        Author                     = $row.Author
+        ISBN                       = $row.ISBN
+        OriginalLCCPrimaryClass    = $primaryResult.OriginalValue
+        CanonicalLCCPrimaryClass   = $primaryResult.CanonicalValue
+        PrimaryStatus              = $primaryResult.Status
+        OriginalLCCSecondaryClass  = $secondaryResult.OriginalValue
         CanonicalLCCSecondaryClass = $secondaryResult.CanonicalValue
-        SecondaryStatus           = $secondaryResult.Status
-        Warning                   = ($warnings -join "; ")
+        SecondaryStatus            = $secondaryResult.Status
+        LCCConfidenceOriginal      = $confidenceOriginal
+        LCCConfidenceCanonical     = $confidenceCanonical
+        LCCConfidenceStatus        = $confidenceStatus
+        LCCSourceNotes             = $sourceNotes
+        Warning                    = ($warnings -join "; ")
     }
 }
 
@@ -317,6 +447,7 @@ $reportRows | Export-Csv -Path $reportFullPath -NoTypeInformation -Encoding UTF8
 
 $primaryGroups = $reportRows | Group-Object PrimaryStatus | Sort-Object Name
 $secondaryGroups = $reportRows | Group-Object SecondaryStatus | Sort-Object Name
+$confidenceGroups = $reportRows | Group-Object LCCConfidenceStatus | Sort-Object Name
 $warningsCount = @($reportRows | Where-Object { -not [string]::IsNullOrWhiteSpace($_.Warning) }).Count
 
 Write-Host ""
@@ -331,6 +462,16 @@ Write-Host "Primary class status:"
 $primaryGroups | Select-Object Name, Count | Format-Table -AutoSize
 Write-Host "Secondary class status:"
 $secondaryGroups | Select-Object Name, Count | Format-Table -AutoSize
+
+if ($hasConfidenceColumn) {
+    Write-Host "LCC confidence status:"
+    $confidenceGroups | Select-Object Name, Count | Format-Table -AutoSize
+}
+else {
+    Write-Host "LCC confidence status:"
+    Write-Host "Not provided"
+}
+
 Write-Host "Warnings: $warningsCount"
 
 if ($warningsCount -gt 0) {
