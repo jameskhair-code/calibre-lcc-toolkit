@@ -22,7 +22,8 @@ The launcher menu directly reflects these phases:
 7. Open input folder
 8. Open reports folder
 9. Open workflow documentation
-10. Show Git status
+10. Reports: Show latest report files
+11. Show Git status
 0. Exit
 ```
 
@@ -38,6 +39,15 @@ The Calibre LCC Toolkit helps populate and verify these Calibre fields:
 | `LCC Primary Class` | Top-level LCC class |
 | `LCC Secondary Class` | Controlled subclass dropdown value |
 | `LCC Classification Path` | Human-readable browsing path |
+
+The toolkit also supports optional audit fields during enrichment and reporting:
+
+| Field | Purpose |
+|---|---|
+| `LCC Confidence` | Indicates how confident the enrichment process is in the proposed LCC metadata |
+| `LCC Source Notes` | Short explanation of the evidence/source basis for the proposed LCC metadata |
+
+The audit fields are not currently written to Calibre. They are carried through input and report files to make the enrichment process more reviewable.
 
 The toolkit separates research, validation, and application so metadata changes can be reviewed before they are written to Calibre.
 
@@ -65,6 +75,29 @@ Apply requires two confirmations:
 2. The apply script asks for `APPLY` when pending updates exist.
 
 This is intentional.
+
+### v0.4 LCC Audit Safety Gate
+
+The Apply phase also checks optional LCC enrichment audit fields when they are present.
+
+Apply is blocked by default when either condition is found in the dry-run report:
+
+```text
+ManualReviewRequired = Yes
+LCCConfidenceStatus = Unexpected
+```
+
+This means low-confidence or malformed-confidence rows must be reviewed and corrected before metadata is written to Calibre.
+
+Rows marked:
+
+```text
+Low - Manual Review Recommended
+```
+
+are treated as requiring manual review.
+
+This block happens before the final `APPLY` confirmation prompt, so metadata is not written.
 
 ---
 
@@ -113,6 +146,8 @@ Calibre-related process detected
 ```
 
 If Calibre is running, close it before exporting or applying metadata.
+
+A warning that Calibre is running does not mean the toolkit is broken. It means the toolkit is protecting the workflow.
 
 ---
 
@@ -215,7 +250,7 @@ Output:
 input/lcc-import-{batch}.tsv
 ```
 
-The completed import TSV should contain:
+The completed import TSV should contain these required fields:
 
 ```text
 Title
@@ -227,6 +262,31 @@ LCC Secondary Class
 LCC Classification Path
 ```
 
+The completed import TSV may also include optional audit fields:
+
+```text
+LCC Confidence
+LCC Source Notes
+```
+
+Allowed `LCC Confidence` values are:
+
+```text
+High - Catalog Confirmed
+Medium - Evidence Based
+Low - Manual Review Recommended
+```
+
+Use the values as follows:
+
+| Confidence | Meaning |
+|---|---|
+| `High - Catalog Confirmed` | Strong catalog evidence supports the proposed LCC metadata |
+| `Medium - Evidence Based` | The proposed LCC is supported by evidence, but not as strongly as a direct catalog match |
+| `Low - Manual Review Recommended` | Evidence is weak, conflicting, uncertain, or mostly schedule-derived |
+
+Rows marked `Low - Manual Review Recommended` are treated as requiring manual review.
+
 Example:
 
 ```text
@@ -237,6 +297,7 @@ The enrichment phase should follow the methodology described in:
 
 ```text
 docs/LCC-Methodology.md
+docs/LCC-Enrichment-Audit-Fields.md
 ```
 
 ---
@@ -288,6 +349,15 @@ config/lcc-primary-canonical.csv
 config/lcc-secondary-canonical.csv
 ```
 
+The Prepare step also preserves optional audit fields when present:
+
+```text
+LCC Confidence
+LCC Source Notes
+```
+
+Unexpected `LCC Confidence` values are reported as warnings.
+
 A clean result should show:
 
 ```text
@@ -337,8 +407,26 @@ Rows: 24
 Matched: 24
 Pending field updates: 94
 Warnings: 0
+Manual review required: 0
+Unexpected confidence: 0
 Status: READY TO APPLY
 ```
+
+The summary also reports LCC audit information when present:
+
+- LCC confidence counts
+- LCC confidence status counts
+- rows with source notes
+- manual-review-required rows
+- unexpected-confidence rows
+
+If any row requires manual review, the summary status becomes:
+
+```text
+REVIEW REQUIRED
+```
+
+Do not apply a batch while the summary says `REVIEW REQUIRED`.
 
 Before applying, review:
 
@@ -346,6 +434,8 @@ Before applying, review:
 - Matched count
 - Warning count
 - Pending field updates
+- Manual-review-required count
+- Unexpected-confidence count
 - Any unexpected LCC values
 - Any records known to have weaker catalog evidence
 
@@ -355,6 +445,8 @@ Do not apply if:
 - Any warnings require review.
 - The row count is not what you expected.
 - The source/import batch appears mixed or overmatched.
+- `ManualReviewRequired = Yes` appears in the dry-run report.
+- `LCCConfidenceStatus = Unexpected` appears in the dry-run report.
 
 ---
 
@@ -378,7 +470,9 @@ Before applying:
 2. Confirm the dry-run summary says `READY TO APPLY`.
 3. Confirm matched row count is expected.
 4. Confirm warnings are zero.
-5. Confirm you are using the correct dry-run report.
+5. Confirm manual review required is zero.
+6. Confirm unexpected confidence is zero.
+7. Confirm you are using the correct dry-run report.
 
 The launcher asks:
 
@@ -409,6 +503,27 @@ The apply report is written to:
 ```text
 reports/lcc-apply-{batch}.csv
 ```
+
+### Apply Safety Block
+
+Apply is blocked when the dry-run report contains either of these conditions:
+
+```text
+ManualReviewRequired = Yes
+LCCConfidenceStatus = Unexpected
+```
+
+This block happens before the final `APPLY` confirmation prompt.
+
+That means metadata is not written when the audit safety gate blocks the run.
+
+If apply is blocked:
+
+1. Review the dry-run report.
+2. Correct the import TSV or audit values.
+3. Re-run Prepare.
+4. Re-run Validate.
+5. Apply only when the summary says `READY TO APPLY`.
 
 ---
 
@@ -451,10 +566,30 @@ Rows: 24
 Matched: 24
 Pending field updates: 0
 Warnings: 0
+Manual review required: 0
+Unexpected confidence: 0
 Status: VERIFIED CLEAN
 ```
 
 After this, manually inspect selected records in Calibre before marking MQG complete.
+
+---
+
+## Reports Viewer
+
+Menu option:
+
+```text
+10. Reports: Show latest report files
+```
+
+Purpose:
+
+Show the newest generated report files from the `reports` folder.
+
+This helps during processing runs when you need to quickly confirm which dry-run, apply, verify, summary, canonicalization, or health report was just created.
+
+This phase is read-only.
 
 ---
 
@@ -481,6 +616,43 @@ Expected files are:
 | Verify Summary | `reports/lcc-summary-j-russell-major-prize-verify.txt` |
 
 Generated `input` and `reports` files are ignored by Git by default.
+
+---
+
+## Audit Field Lifecycle
+
+Audit fields may appear in:
+
+```text
+input/lcc-import-{batch}.tsv
+input/lcc-import-{batch}-canonical.tsv
+reports/lcc-canonicalize-{batch}.csv
+reports/lcc-dryrun-{batch}.csv
+reports/lcc-apply-{batch}.csv
+reports/lcc-verify-{batch}.csv
+reports/lcc-summary-{batch}-dryrun.txt
+reports/lcc-summary-{batch}-verify.txt
+```
+
+Audit fields are not written to Calibre in the current design.
+
+Report/workflow fields:
+
+```text
+LCC Confidence
+LCC Source Notes
+ManualReviewRequired
+LCCConfidenceStatus
+```
+
+Write-to-Calibre fields:
+
+```text
+LCC
+LCC Primary Class
+LCC Secondary Class
+LCC Classification Path
+```
 
 ---
 
@@ -511,6 +683,7 @@ Get-Process calibre* -ErrorAction SilentlyContinue
 notepad++ ".\README.md"
 notepad++ ".\docs\LCC-Toolkit-Workflow.md"
 notepad++ ".\docs\LCC-Methodology.md"
+notepad++ ".\docs\LCC-Enrichment-Audit-Fields.md"
 ```
 
 ---
@@ -569,6 +742,36 @@ Do not apply.
 
 Check ISBNs, titles, source batch, and import TSV alignment.
 
+### Summary says REVIEW REQUIRED
+
+Do not apply.
+
+Review:
+
+```text
+reports/lcc-dryrun-{batch}.csv
+reports/lcc-summary-{batch}-dryrun.txt
+```
+
+Common causes:
+
+- unmatched rows
+- multiple matches
+- warnings
+- `ManualReviewRequired = Yes`
+- `LCCConfidenceStatus = Unexpected`
+
+### Apply is blocked by the audit safety gate
+
+This is expected when the dry-run report contains:
+
+```text
+ManualReviewRequired = Yes
+LCCConfidenceStatus = Unexpected
+```
+
+Review and correct the import TSV, rerun Prepare and Validate, then apply only when the summary says `READY TO APPLY`.
+
 ### Apply fails
 
 Stop and review:
@@ -622,6 +825,20 @@ Workflow and documentation polish:
 - methodology documentation added
 - workflow documentation updated
 
+### v0.4
+
+Operational polish and LCC audit safety:
+
+- latest reports viewer added
+- optional audit fields documented
+- `LCC Confidence` supported
+- `LCC Source Notes` supported
+- canonicalization preserves audit fields
+- dry run carries audit fields
+- summary reports audit counts
+- apply blocks manual-review-required rows
+- apply blocks unexpected confidence values
+
 ---
 
 ## Practical Rule
@@ -637,3 +854,27 @@ Only **Apply** writes to Calibre.
 Everything before Apply is preparation and validation.
 
 Everything after Apply is verification.
+
+If a batch says:
+
+```text
+REVIEW REQUIRED
+```
+
+do not apply it.
+
+If a batch says:
+
+```text
+READY TO APPLY
+```
+
+it can proceed to Apply after normal human review.
+
+If a batch says:
+
+```text
+VERIFIED CLEAN
+```
+
+the imported fields match Calibre’s current state.

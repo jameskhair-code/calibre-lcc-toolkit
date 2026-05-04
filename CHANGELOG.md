@@ -10,6 +10,49 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.4 - Operational Polish and LCC Audit Safety
+
+### Added
+
+- Added latest reports viewer script: `scripts/Show-LccLatestReports.ps1`.
+- Added launcher option to show latest generated report files.
+- Added health-check coverage for the latest reports viewer script.
+- Added `docs/LCC-Enrichment-Audit-Fields.md`.
+- Added optional LCC enrichment audit field support:
+  - `LCC Confidence`
+  - `LCC Source Notes`
+
+### Changed
+
+- Updated canonicalization workflow to preserve optional audit fields.
+- Updated dry-run reports to carry audit fields forward.
+- Updated summary reports to include:
+  - LCC confidence counts
+  - confidence status counts
+  - source-notes presence count
+  - manual-review-required count
+  - unexpected-confidence count
+- Updated apply safety behavior so metadata writes are blocked when audit review is required.
+
+### Safety Gate
+
+Apply is now blocked by default when either condition is present in the dry-run report:
+
+- `ManualReviewRequired = Yes`
+- `LCCConfidenceStatus = Unexpected`
+
+This prevents low-confidence or malformed-confidence LCC enrichment rows from being written to Calibre accidentally.
+
+### Notes
+
+- v0.4 does not add new Calibre custom columns.
+- Audit fields are currently report/workflow fields only.
+- The normal write-to-Calibre fields remain:
+  - `LCC`
+  - `LCC Primary Class`
+  - `LCC Secondary Class`
+  - `LCC Classification Path`
+
 ## v0.3 - Workflow and Documentation Polish
 
 ### Added
