@@ -1,20 +1,32 @@
-# Calibre LCC Toolkit
+# Calibre Metadata Toolkit
 
-A small PowerShell-based workflow toolkit for enriching Calibre book records with Library of Congress Classification (LCC) metadata.
+A small PowerShell-based workflow toolkit for improving Calibre book metadata through safe, reviewable, human-in-the-loop workflows.
 
-This toolkit was built for a personal Calibre metadata workflow. Its main purpose is to make LCC population repeatable, reviewable, and safe by separating the process into clear phases:
+This repository began as the **Calibre LCC Toolkit**, focused on Library of Congress Classification enrichment. Beginning with the v0.5 development cycle, it is expanding into the broader **Calibre Metadata Toolkit**.
+
+The existing LCC workflow remains the first stable module:
 
 ```text
 Preflight -> Export -> Enrich -> Prepare -> Validate -> Apply -> Verify
 ```
 
-The toolkit is intentionally conservative. Most steps are read-only. The only normal workflow step that modifies Calibre metadata is the **Apply** step, and that step requires explicit confirmation.
+The v0.5 development branch adds the first non-LCC module:
+
+```text
+Author / Title Cleanup
+```
+
+The toolkit is intentionally conservative. Most steps are read-only. Metadata-writing steps are isolated in explicit apply scripts, and those scripts require confirmation before changes are written to Calibre.
 
 ---
 
 ## What This Toolkit Does
 
-The Calibre LCC Toolkit helps populate these Calibre fields:
+The toolkit currently has two major areas.
+
+### LCC Module
+
+The stable LCC module helps populate these Calibre fields:
 
 | Field | Purpose |
 |---|---|
@@ -23,7 +35,7 @@ The Calibre LCC Toolkit helps populate these Calibre fields:
 | `LCC Secondary Class` | Controlled subclass dropdown value, such as `HD - Industries / Land Use / Labor` |
 | `LCC Classification Path` | Human-readable classification path for browsing and review |
 
-The toolkit also supports optional audit fields during enrichment and reporting:
+The LCC workflow also supports optional audit fields during enrichment and reporting:
 
 | Field | Purpose |
 |---|---|
@@ -32,7 +44,7 @@ The toolkit also supports optional audit fields during enrichment and reporting:
 
 These audit fields are not currently written to Calibre. They are carried through toolkit input and report files to support review.
 
-The toolkit supports:
+The LCC module supports:
 
 - Exporting a selected batch of Calibre records to TSV.
 - Preparing an LCC import TSV after enrichment.
@@ -45,19 +57,42 @@ The toolkit supports:
 - Verifying that Calibre matches the intended import after apply.
 - Showing the latest generated report files from the launcher.
 
+### Author / Title Cleanup Module
+
+The v0.5 Author / Title Cleanup module provides a safe workflow for reviewing and cleaning high-risk core bibliographic fields:
+
+| Field | Purpose |
+|---|---|
+| `title` | Calibre book title |
+| `authors` | Calibre author value |
+
+The module supports:
+
+- Exporting candidate records for title/author cleanup review.
+- Creating a proposed cleanup TSV.
+- Running a dry run before metadata is changed.
+- Writing a readable summary report.
+- Refusing apply when a dry-run batch contains blocked rows.
+- Requiring explicit confirmation before writing changes.
+- Verifying final Calibre values after apply.
+
+The Author / Title Cleanup workflow is intentionally conservative because title and author fields affect book identity and downstream metadata enrichment quality.
+
 ---
 
 ## What This Toolkit Does Not Do
 
 This toolkit does not automatically research LCC data by itself.
 
-The intended workflow currently includes an external enrichment step:
+The intended LCC workflow currently includes an external enrichment step:
 
 ```text
 Export source TSV -> use ChatGPT/library catalog research to fill LCC data -> save completed import TSV
 ```
 
 The toolkit then validates and applies that completed import TSV.
+
+The toolkit does not automatically research or correct author/title metadata by itself. The v0.5 Author / Title Cleanup workflow assumes proposed values are reviewed externally before dry run and apply.
 
 The toolkit also does not automatically mark the `MQG-08: LCC` field complete. Final MQG completion remains a manual review step inside Calibre.
 
@@ -95,20 +130,27 @@ lcc-toolkit/
 |   |-- lcc-primary-canonical.csv
 |   `-- lcc-secondary-canonical.csv
 |-- docs/
+|   |-- Author-Title-Cleanup-Workflow.md
 |   |-- LCC-Enrichment-Audit-Fields.md
 |   |-- LCC-Methodology.md
-|   `-- LCC-Toolkit-Workflow.md
+|   |-- LCC-Toolkit-Workflow.md
+|   `-- Project-Roadmap.md
 |-- input/
 |   `-- .gitkeep
 |-- reports/
 |   `-- .gitkeep
 |-- scripts/
 |   |-- Convert-LccImportToCanonical.ps1
+|   |-- Export-CalibreBatchForAuthorTitleCleanup.ps1
 |   |-- Export-CalibreBatchForLcc.ps1
+|   |-- Invoke-AuthorTitleCleanupApply.ps1
 |   |-- Invoke-LccImportApply.ps1
 |   |-- Show-LccLatestReports.ps1
+|   |-- Test-AuthorTitleCleanupDryRun.ps1
+|   |-- Test-AuthorTitleCleanupVerify.ps1
 |   |-- Test-LccImportDryRun.ps1
 |   |-- Test-LccToolkitHealth.ps1
+|   |-- Write-AuthorTitleCleanupSummary.ps1
 |   `-- Write-LccBatchSummary.ps1
 |-- Start-LccWorkflow.ps1
 |-- CHANGELOG.md
@@ -117,11 +159,13 @@ lcc-toolkit/
 `-- .gitignore
 ```
 
+The repository name and launcher are still LCC-oriented for now. A broader launcher can be introduced after multiple modules are stable.
+
 ---
 
 ## Important File Types
 
-### Source TSV
+### LCC Source TSV
 
 A source TSV is exported from Calibre and used for enrichment.
 
@@ -131,9 +175,9 @@ Example:
 input/lcc-source-j-russell-major-prize.tsv
 ```
 
-This file is created by the **Export** step.
+This file is created by the LCC **Export** step.
 
-### Import TSV
+### LCC Import TSV
 
 An import TSV contains completed LCC metadata.
 
@@ -164,7 +208,7 @@ LCC Confidence
 LCC Source Notes
 ```
 
-### Canonical Import TSV
+### LCC Canonical Import TSV
 
 A canonical import TSV is the normalized version of the completed import TSV.
 
@@ -174,13 +218,52 @@ Example:
 input/lcc-import-j-russell-major-prize-canonical.tsv
 ```
 
-This file is created by the **Prepare** step.
+This file is created by the LCC **Prepare** step.
+
+### Author / Title Cleanup Source TSV
+
+An author/title source TSV is exported from Calibre and used for cleanup review.
+
+Example:
+
+```text
+input/author-title-cleanup-source-j-russell-major-prize.tsv
+```
+
+This file is created by `Export-CalibreBatchForAuthorTitleCleanup.ps1`.
+
+### Author / Title Cleanup Import TSV
+
+An author/title cleanup import TSV contains proposed title and/or author changes.
+
+Example:
+
+```text
+input/author-title-cleanup-import-j-russell-major-prize.tsv
+```
+
+Required fields:
+
+```text
+CalibreId
+OriginalTitle
+ProposedTitle
+OriginalAuthors
+ProposedAuthors
+ChangeReason
+Confidence
+ManualReviewRequired
+```
+
+Blank `ProposedTitle` means no title change is proposed.
+
+Blank `ProposedAuthors` means no author change is proposed.
 
 ### Reports
 
 Reports are written to the `reports` folder.
 
-Common report files:
+Common LCC report files:
 
 ```text
 reports/lcc-canonicalize-j-russell-major-prize.csv
@@ -189,6 +272,15 @@ reports/lcc-summary-j-russell-major-prize-dryrun.txt
 reports/lcc-apply-j-russell-major-prize.csv
 reports/lcc-verify-j-russell-major-prize.csv
 reports/lcc-summary-j-russell-major-prize-verify.txt
+```
+
+Common Author / Title Cleanup report files:
+
+```text
+reports/author-title-cleanup-dryrun-j-russell-major-prize.csv
+reports/author-title-cleanup-summary-j-russell-major-prize.txt
+reports/author-title-cleanup-apply-j-russell-major-prize.csv
+reports/author-title-cleanup-verify-j-russell-major-prize.csv
 ```
 
 Generated `input` and `reports` files are ignored by Git.
@@ -213,22 +305,25 @@ For example, the slug:
 j-russell-major-prize
 ```
 
-creates default paths such as:
+creates default LCC paths such as:
 
 ```text
-input/lize
-```
-
-The batch file slug is only used for default filenames. It does not need to match a Calibre field.
-
-For example, the slug:
-
-```text
-j-russell-majorcc-source-j-russell-major-prize.tsv
+input/lcc-source-j-russell-major-prize.tsv
 input/lcc-import-j-russell-major-prize.tsv
 input/lcc-import-j-russell-major-prize-canonical.tsv
 reports/lcc-dryrun-j-russell-major-prize.csv
 reports/lcc-verify-j-russell-major-prize.csv
+```
+
+Author / Title Cleanup files may use similar slugs:
+
+```text
+input/author-title-cleanup-source-j-russell-major-prize.tsv
+input/author-title-cleanup-import-j-russell-major-prize.tsv
+reports/author-title-cleanup-dryrun-j-russell-major-prize.csv
+reports/author-title-cleanup-summary-j-russell-major-prize.txt
+reports/author-title-cleanup-apply-j-russell-major-prize.csv
+reports/author-title-cleanup-verify-j-russell-major-prize.csv
 ```
 
 Use short lowercase hyphenated names.
@@ -245,7 +340,7 @@ nbcc-biography
 
 ---
 
-## Start the Toolkit
+## Start the LCC Toolkit Launcher
 
 From the toolkit folder:
 
@@ -253,7 +348,7 @@ From the toolkit folder:
 powershell -ExecutionPolicy Bypass -File .\Start-LccWorkflow.ps1
 ```
 
-The launcher menu organizes the workflow into phases:
+The launcher menu organizes the LCC workflow into phases:
 
 ```text
 1. Preflight: Run toolkit health check
@@ -270,9 +365,11 @@ The launcher menu organizes the workflow into phases:
 0. Exit
 ```
 
+The Author / Title Cleanup module is currently run through individual scripts rather than the LCC launcher.
+
 ---
 
-## Standard Workflow
+## Standard LCC Workflow
 
 ### 1. Preflight
 
@@ -576,25 +673,138 @@ That is the end-state win condition.
 
 ---
 
+## Author / Title Cleanup Workflow
+
+The v0.5 Author / Title Cleanup module is currently run through individual scripts rather than the LCC launcher.
+
+Recommended workflow:
+
+```text
+Export -> Review/Edit Proposed TSV -> Dry Run -> Summary -> Apply -> Verify
+```
+
+### Export candidate records
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Export-CalibreBatchForAuthorTitleCleanup.ps1 `
+  -Search '#award_programs:"AHA - J. Russell Major Prize"' `
+  -ExactAwardProgram "AHA - J. Russell Major Prize" `
+  -OutputTsv ".\input\author-title-cleanup-source-j-russell-major-prize.tsv"
+```
+
+This is read-only.
+
+### Prepare proposed cleanup TSV
+
+Copy the exported source TSV to an import TSV and fill only the proposed values that should change:
+
+```text
+input/author-title-cleanup-import-{batch}.tsv
+```
+
+Required columns:
+
+```text
+CalibreId
+OriginalTitle
+ProposedTitle
+OriginalAuthors
+ProposedAuthors
+ChangeReason
+Confidence
+ManualReviewRequired
+```
+
+Blank `ProposedTitle` means no title change is proposed.
+
+Blank `ProposedAuthors` means no author change is proposed.
+
+Allowed confidence values:
+
+```text
+High - Mechanical Cleanup
+Medium - Evidence Based
+Low - Manual Review Recommended
+```
+
+Rows marked `ManualReviewRequired = Yes` are blocked from apply.
+
+### Dry run proposed cleanup
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-AuthorTitleCleanupDryRun.ps1 `
+  -InputTsv ".\input\author-title-cleanup-import-j-russell-major-prize.tsv" `
+  -ReportCsv ".\reports\author-title-cleanup-dryrun-j-russell-major-prize.csv"
+```
+
+This is read-only.
+
+### Write summary
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Write-AuthorTitleCleanupSummary.ps1 `
+  -DryRunCsv ".\reports\author-title-cleanup-dryrun-j-russell-major-prize.csv" `
+  -SummaryTxt ".\reports\author-title-cleanup-summary-j-russell-major-prize.txt"
+```
+
+This is read-only.
+
+### Apply approved changes
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Invoke-AuthorTitleCleanupApply.ps1 `
+  -DryRunCsv ".\reports\author-title-cleanup-dryrun-j-russell-major-prize.csv" `
+  -ApplyReportCsv ".\reports\author-title-cleanup-apply-j-russell-major-prize.csv"
+```
+
+This modifies Calibre metadata.
+
+The apply script refuses to run if:
+
+- any row in the dry-run CSV is blocked
+- zero rows are eligible
+- proposed values contain `DO NOT APPLY`
+- current Calibre values changed since the dry run
+- the confirmation phrase is not entered exactly
+
+### Verify final values
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-AuthorTitleCleanupVerify.ps1 `
+  -DryRunCsv ".\reports\author-title-cleanup-dryrun-j-russell-major-prize.csv" `
+  -VerifyReportCsv ".\reports\author-title-cleanup-verify-j-russell-major-prize.csv"
+```
+
+This is read-only.
+
+---
+
 ## Safety Model
 
-The toolkit is designed around a conservative safety model:
+The toolkit is designed around a conservative safety model.
 
-| Phase | Modifies Calibre? |
-|---|---|
-| Preflight | No |
-| Export | No |
-| Enrich | No |
-| Prepare | No |
-| Validate | No |
-| Apply | Yes |
-| Verify | No |
+| Area | Operation | Modifies Calibre? |
+|---|---|---|
+| LCC | Preflight | No |
+| LCC | Export | No |
+| LCC | Enrich | No |
+| LCC | Prepare | No |
+| LCC | Validate | No |
+| LCC | Apply | Yes |
+| LCC | Verify | No |
+| Author / Title | Export | No |
+| Author / Title | Dry Run | No |
+| Author / Title | Summary | No |
+| Author / Title | Apply | Yes |
+| Author / Title | Verify | No |
 
-The Apply phase is the only normal phase that writes to Calibre.
+Only explicit Apply scripts write to Calibre.
+
+Apply scripts must require confirmation and must be run only after dry-run reports and summaries are reviewed.
 
 ### Audit Fields and Calibre Writes
 
-The audit fields are not written to Calibre in the current design.
+The LCC audit fields are not written to Calibre in the current design.
 
 Report/workflow fields:
 
@@ -603,7 +813,7 @@ LCC Confidence
 LCC Source Notes
 ```
 
-Write-to-Calibre fields:
+LCC write-to-Calibre fields:
 
 ```text
 LCC
@@ -612,7 +822,14 @@ LCC Secondary Class
 LCC Classification Path
 ```
 
-This keeps the Calibre schema clean while still making the enrichment process more reviewable.
+Author / Title Cleanup write-to-Calibre fields:
+
+```text
+title
+authors
+```
+
+This keeps the Calibre schema clean while still making enrichment and cleanup processes reviewable.
 
 ---
 
@@ -729,6 +946,7 @@ v0.1 = original working baseline
 v0.2 = accepted toolkit with menu, health check, canonicalization, exact award filtering, apply safety, and verification
 v0.3 = workflow label cleanup and documentation polish
 v0.4 = operational polish and LCC audit safety gate
+v0.5 = author/title cleanup module
 ```
 
 Useful commands:
@@ -799,7 +1017,7 @@ Common causes:
 - `ManualReviewRequired = Yes`
 - `LCCConfidenceStatus = Unexpected`
 
-### Apply is blocked by the audit safety gate
+### Apply is blocked by the LCC audit safety gate
 
 This is expected when the dry-run report contains:
 
@@ -810,15 +1028,44 @@ LCCConfidenceStatus = Unexpected
 
 Review and correct the import TSV, rerun Prepare and Validate, then apply only when the summary says `READY TO APPLY`.
 
-### Verification is not clean
+### Author / Title Cleanup apply is blocked
 
-Do not mark MQG complete yet.
+This is expected when the dry-run report contains blocked rows or unsafe conditions.
+
+Common causes:
+
+- no proposed title/author change
+- `ManualReviewRequired = Yes`
+- missing or unexpected confidence value
+- original title no longer matches current title
+- original authors no longer match current authors
+- duplicate `CalibreId`
+- proposed values contain `DO NOT APPLY`
 
 Review:
 
 ```text
+reports/author-title-cleanup-dryrun-{batch}.csv
+reports/author-title-cleanup-summary-{batch}.txt
+```
+
+Fix the import TSV, rerun dry run, rerun summary, then apply only when the batch is clean.
+
+### Verification is not clean
+
+Do not mark the workflow complete yet.
+
+Review LCC verification reports:
+
+```text
 reports/lcc-verify-{batch}.csv
 reports/lcc-summary-{batch}-verify.txt
+```
+
+Review Author / Title Cleanup verification reports:
+
+```text
+reports/author-title-cleanup-verify-{batch}.csv
 ```
 
 ---
@@ -828,9 +1075,12 @@ reports/lcc-summary-{batch}-verify.txt
 The toolkit currently assumes this human-in-the-loop model:
 
 1. Export source TSV from Calibre.
-2. Use ChatGPT/library catalog research to populate LCC fields.
-3. Optionally include `LCC Confidence` and `LCC Source Notes`.
-4. Save the completed import TSV.
-5. Let the toolkit canonicalize, validate, apply, and verify.
+2. Use ChatGPT/library catalog research or human review to populate proposed metadata fields.
+3. Save the completed import TSV.
+4. Let the toolkit validate, summarize, apply, and verify.
 
-Future versions may add stronger provenance tracking, assisted catalog lookup logic, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+For LCC, the external enrichment step populates classification fields.
+
+For Author / Title Cleanup, the external review step populates only proposed title/author changes.
+
+Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
