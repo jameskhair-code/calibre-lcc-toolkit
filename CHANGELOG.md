@@ -1,12 +1,74 @@
 # Changelog
 
-All notable changes to the Calibre LCC Toolkit are documented here.
+All notable changes to the Calibre Metadata Toolkit are documented here.
 
 This project uses lightweight version milestones rather than formal semantic versioning. The current milestone pattern is:
 
     v0.1 = initial working baseline
     v0.2 = accepted functional toolkit
     v0.3 = workflow and documentation polish
+    v0.4 = operational polish and LCC audit safety gate
+    v0.5 = author/title cleanup module
+
+---
+
+## v0.5 - Author / Title Cleanup Module
+
+### Added
+
+- Added project roadmap documentation: `docs/Project-Roadmap.md`.
+- Added Author / Title Cleanup workflow documentation: `docs/Author-Title-Cleanup-Workflow.md`.
+- Added read-only author/title cleanup export script: `scripts/Export-CalibreBatchForAuthorTitleCleanup.ps1`.
+- Added read-only author/title cleanup dry-run script: `scripts/Test-AuthorTitleCleanupDryRun.ps1`.
+- Added read-only author/title cleanup summary script: `scripts/Write-AuthorTitleCleanupSummary.ps1`.
+- Added author/title cleanup apply script: `scripts/Invoke-AuthorTitleCleanupApply.ps1`.
+- Added read-only author/title cleanup verify script: `scripts/Test-AuthorTitleCleanupVerify.ps1`.
+
+### Changed
+
+- Broadened project identity from `Calibre LCC Toolkit` toward `Calibre Metadata Toolkit`.
+- Kept the existing LCC workflow as the first stable module.
+- Preserved the existing repository name and launcher for now.
+- Updated README documentation to describe both the LCC module and the Author / Title Cleanup module.
+
+### Safety Model
+
+The Author / Title Cleanup module follows the same conservative workflow philosophy as the LCC module:
+
+```text
+Export -> Dry Run -> Summary -> Apply -> Verify
+```
+
+The export, dry-run, summary, and verify scripts are read-only.
+
+The apply script modifies Calibre metadata, but only after safety checks pass and the exact confirmation phrase is entered.
+
+Apply is refused when:
+
+- any row in the dry-run CSV is blocked
+- zero rows are eligible for apply
+- proposed values contain `DO NOT APPLY`
+- current Calibre metadata changed after the dry run
+- the confirmation phrase is not entered exactly
+
+### Validated
+
+- Successfully exported a 24-record author/title cleanup source TSV from the AHA - J. Russell Major Prize batch.
+- Successfully ran a no-change dry run and summary.
+- Successfully ran a smoke-test dry run with:
+  - title-change detection
+  - author-change detection
+  - no-change blocking
+  - manual-review blocking
+- Successfully confirmed apply refusal on a dirty smoke-test batch.
+- Successfully ran verification against unapplied smoke-test changes and confirmed expected mismatches/skips.
+
+### Notes
+
+- v0.5 does not add new Calibre custom columns.
+- v0.5 does not automate author/title research.
+- Proposed title/author changes remain human-reviewed before apply.
+- The broader launcher is deferred until multiple modules are stable.
 
 ---
 
@@ -52,6 +114,8 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
   - `LCC Primary Class`
   - `LCC Secondary Class`
   - `LCC Classification Path`
+
+---
 
 ## v0.3 - Workflow and Documentation Polish
 
