@@ -1,4 +1,4 @@
-# Comments Field Workflow
+﻿# Comments Field Workflow
 
 ## 1. Purpose
 
@@ -101,9 +101,14 @@ Initial v0.6 scope should be:
 - produce a dry-run report
 - produce a human-readable summary
 - block unsafe rows
-- defer apply until dry-run and summary behavior are stable
 
-The initial implementation may stop at export, dry run, and summary before apply is introduced.
+For v0.6, the implementation target is intentionally limited to:
+
+    Export -> Dry Run -> Summary
+
+Apply and verify behavior should be deferred to a later milestone, such as v0.6.1 or v0.7, after the dry-run safety model has been tested against real batches.
+
+This is a deliberate safety choice because the Calibre comments field may contain substantial existing HTML, publisher descriptions, user notes, or prior curated metadata.
 
 ## 6. Out of Scope for Initial v0.6
 
@@ -275,7 +280,7 @@ SourceQuality
 ContainsReception
 ContainsCompanionReads
 ContainsAwards
-ContainsSpoilers
+
 ```
 
 ## 10. Field Definitions
@@ -1026,21 +1031,19 @@ CommentsMode = Replace
 
 Recommended sequence:
 
-```text
 1. Commit Comments Template Standard.
 2. Commit Comments Field Workflow.
-3. Build comments export script.
-4. Test export against a tiny batch.
-5. Build comments dry-run script.
-6. Test dry run with synthetic proposed comments TSV.
-7. Build comments summary script.
-8. Review summary quality.
-9. Decide whether v0.6 should include apply or stop at export/dry-run/summary.
-10. Only then build apply script if safe.
-11. Build verify script after apply.
+3. Clarify v0.6 scope as export/dry-run/summary only.
+4. Build comments export script.
+5. Test export against a tiny batch.
+6. Build comments dry-run script.
+7. Test dry run with synthetic proposed comments TSV.
+8. Build comments summary script.
+9. Review summary quality against real batches.
+10. Stop v0.6 at export/dry-run/summary unless there is a strong reason to continue.
+11. Defer apply and verify to v0.6.1 or v0.7 after real dry-run batches have been reviewed.
 12. Update README and CHANGELOG.
 13. Merge/tag v0.6.
-```
 
 ## 28. Operating Reminder
 
@@ -1058,3 +1061,4 @@ Dry run again.
 Review the summary.
 Only then apply.
 ```
+
