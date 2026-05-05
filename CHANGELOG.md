@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to the Calibre Metadata Toolkit are documented here.
 
@@ -9,8 +9,64 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.3 = workflow and documentation polish
     v0.4 = operational polish and LCC audit safety gate
     v0.5 = author/title cleanup module
+    v0.6 = comments export, dry run, and summary
 
 ---
+
+## v0.6 - Comments Export, Dry Run, and Summary
+
+### Added
+
+- Added Comments Template Standard documentation: docs/Comments-Template-Standard.md.
+- Added Comments Field Workflow documentation: docs/Comments-Field-Workflow.md.
+- Added read-only comments export script: scripts/Export-CalibreBatchForComments.ps1.
+- Added read-only comments dry-run script: scripts/Test-CommentsDryRun.ps1.
+- Added read-only comments summary script: scripts/Write-CommentsSummary.ps1.
+
+### Changed
+
+- Clarified that v0.6 is intentionally limited to comments export, dry run, and summary.
+- Deferred comments apply and verify behavior to a later milestone, such as v0.6.1 or v0.7.
+- Updated documentation to describe the comments module as a source-grounded, type-aware, HTML-simple workflow.
+- Defaulted comments export CommentsMode to blank so replace/append/prepend decisions must be intentional.
+
+### Safety Model
+
+v0.6 does not write comments to Calibre.
+
+The Comments module currently supports:
+
+    Export -> Dry Run -> Summary
+
+The dry-run script blocks unsafe or incomplete rows, including:
+
+- missing proposed comments
+- missing SourceNotes
+- missing or unexpected template profile
+- missing or unexpected comments mode
+- missing or unexpected confidence
+- manual review rows
+- comments hash mismatches
+- duplicate CalibreId values
+- unsupported HTML
+- placeholder or DO NOT APPLY text
+- high-risk existing comments with Replace mode
+
+### Validated
+
+- Successfully exported a 24-record comments source TSV from the AHA - J. Russell Major Prize batch.
+- Successfully ran a no-proposed-comments dry run and summary.
+- Confirmed all raw source rows were blocked as expected.
+- Confirmed all 24 source rows were identified as high-risk existing comments due to substantial existing comments.
+- Successfully ran a synthetic proposed-comments smoke test with eligible Append/Prepend rows.
+- Successfully confirmed blocking for high-risk Replace, missing SourceNotes, unsupported HTML, and placeholder text.
+
+### Notes
+
+- v0.6 does not add new Calibre custom columns.
+- v0.6 does not automate web research or comments generation.
+- v0.6 does not apply comments to Calibre.
+- Proposed comments remain human-reviewed before any future apply behavior is added.
 
 ## v0.5 - Author / Title Cleanup Module
 
