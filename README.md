@@ -1,4 +1,4 @@
-# Calibre Metadata Toolkit
+﻿# Calibre Metadata Toolkit
 
 A small PowerShell-based workflow toolkit for improving Calibre book metadata through safe, reviewable, human-in-the-loop workflows.
 
@@ -78,6 +78,24 @@ The module supports:
 
 The Author / Title Cleanup workflow is intentionally conservative because title and author fields affect book identity and downstream metadata enrichment quality.
 
+### Comments Module
+
+The v0.6 Comments module provides a safe review workflow for generating and validating structured HTML comments before anything is written to Calibre.
+
+The module supports:
+
+- Exporting candidate records with existing comments, comment hashes, LCC context, award context, tags, identifiers, and other useful metadata.
+- Preparing proposed comments HTML externally through a human-in-the-loop process.
+- Running a dry run against current Calibre metadata.
+- Detecting risky existing comments, hash mismatches, missing source notes, unsupported HTML, placeholder text, and unsafe workflow values.
+- Writing a readable summary report.
+
+For v0.6, the Comments module is intentionally limited to:
+
+    Export -> Dry Run -> Summary
+
+Apply and verify behavior are deferred to a later milestone after real dry-run batches have been reviewed.
+
 ---
 
 ## What This Toolkit Does Not Do
@@ -131,6 +149,8 @@ lcc-toolkit/
 |   `-- lcc-secondary-canonical.csv
 |-- docs/
 |   |-- Author-Title-Cleanup-Workflow.md
+|   |-- Comments-Field-Workflow.md
+|   |-- Comments-Template-Standard.md
 |   |-- LCC-Enrichment-Audit-Fields.md
 |   |-- LCC-Methodology.md
 |   |-- LCC-Toolkit-Workflow.md
@@ -142,15 +162,18 @@ lcc-toolkit/
 |-- scripts/
 |   |-- Convert-LccImportToCanonical.ps1
 |   |-- Export-CalibreBatchForAuthorTitleCleanup.ps1
+|   |-- Export-CalibreBatchForComments.ps1
 |   |-- Export-CalibreBatchForLcc.ps1
 |   |-- Invoke-AuthorTitleCleanupApply.ps1
 |   |-- Invoke-LccImportApply.ps1
 |   |-- Show-LccLatestReports.ps1
 |   |-- Test-AuthorTitleCleanupDryRun.ps1
+|   |-- Test-CommentsDryRun.ps1
 |   |-- Test-AuthorTitleCleanupVerify.ps1
 |   |-- Test-LccImportDryRun.ps1
 |   |-- Test-LccToolkitHealth.ps1
 |   |-- Write-AuthorTitleCleanupSummary.ps1
+|   |-- Write-CommentsSummary.ps1
 |   `-- Write-LccBatchSummary.ps1
 |-- Start-LccWorkflow.ps1
 |-- CHANGELOG.md
@@ -259,6 +282,41 @@ Blank `ProposedTitle` means no title change is proposed.
 
 Blank `ProposedAuthors` means no author change is proposed.
 
+### Comments Source TSV
+
+A comments source TSV is exported from Calibre and used to prepare proposed structured comments.
+
+Example:
+
+    input/comments-source-j-russell-major-prize.tsv
+
+This file is created by Export-CalibreBatchForComments.ps1.
+
+### Comments Import TSV
+
+A comments import TSV contains proposed comments HTML and review fields.
+
+Example:
+
+    input/comments-import-j-russell-major-prize.tsv
+
+Required fields:
+
+    CalibreId
+    Title
+    Authors
+    ExistingCommentsHash
+    ExistingCommentsLength
+    ProposedComments
+    CommentsTemplateProfile
+    CommentsMode
+    ChangeReason
+    Confidence
+    ManualReviewRequired
+    SourceNotes
+
+For v0.6, this TSV is used for dry-run and summary validation only. Comments apply behavior is deferred.
+
 ### Reports
 
 Reports are written to the `reports` folder.
@@ -282,6 +340,11 @@ reports/author-title-cleanup-summary-j-russell-major-prize.txt
 reports/author-title-cleanup-apply-j-russell-major-prize.csv
 reports/author-title-cleanup-verify-j-russell-major-prize.csv
 ```
+
+Common Comments report files:
+
+    reports/comments-dryrun-j-russell-major-prize.csv
+    reports/comments-summary-j-russell-major-prize.txt
 
 Generated `input` and `reports` files are ignored by Git.
 
@@ -325,6 +388,13 @@ reports/author-title-cleanup-summary-j-russell-major-prize.txt
 reports/author-title-cleanup-apply-j-russell-major-prize.csv
 reports/author-title-cleanup-verify-j-russell-major-prize.csv
 ```
+
+Comments files may use similar slugs:
+
+    input/comments-source-j-russell-major-prize.tsv
+    input/comments-import-j-russell-major-prize.tsv
+    reports/comments-dryrun-j-russell-major-prize.csv
+    reports/comments-summary-j-russell-major-prize.txt
 
 Use short lowercase hyphenated names.
 
@@ -779,6 +849,73 @@ This is read-only.
 
 ---
 
+## Comments Workflow
+
+The v0.6 Comments module is currently run through individual scripts rather than the LCC launcher.
+
+Recommended v0.6 workflow:
+
+    Export -> Generate Proposed Comments Externally -> Dry Run -> Summary
+
+### Export comments source TSV
+
+Example:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\Export-CalibreBatchForComments.ps1 -Search "#award_programs:""AHA - J. Russell Major Prize""" -ExactAwardProgram "AHA - J. Russell Major Prize" -OutputTsv ".\input\comments-source-j-russell-major-prize.tsv"
+
+This is read-only.
+
+### Prepare proposed comments TSV
+
+Copy the exported source TSV to an import TSV and fill the proposed comments workflow fields:
+
+    input/comments-import-{batch}.tsv
+
+Allowed template profiles:
+
+    Scholarly Nonfiction
+    General Nonfiction
+    Fiction
+    Reference
+    Poetry / Drama
+    Edited Collection / Anthology
+    Gaming / Technical / Manual
+
+Allowed comments modes:
+
+    Replace
+    Append
+    Prepend
+    Skip
+
+Allowed confidence values:
+
+    High - Source Grounded
+    Medium - Source Supported
+    Low - Manual Review Recommended
+
+SourceNotes are required. ProposedComments should also include a visible Source Notes HTML section.
+
+### Dry run proposed comments
+
+Example:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\Test-CommentsDryRun.ps1 -InputTsv ".\input\comments-import-j-russell-major-prize.tsv" -ReportCsv ".\reports\comments-dryrun-j-russell-major-prize.csv"
+
+This is read-only.
+
+### Write comments summary
+
+Example:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\Write-CommentsSummary.ps1 -DryRunCsv ".\reports\comments-dryrun-j-russell-major-prize.csv" -SummaryTxt ".\reports\comments-summary-j-russell-major-prize.txt"
+
+This is read-only.
+
+For v0.6, comments apply and verify behavior are intentionally deferred.
+
+---
+
 ## Safety Model
 
 The toolkit is designed around a conservative safety model.
@@ -797,6 +934,9 @@ The toolkit is designed around a conservative safety model.
 | Author / Title | Summary | No |
 | Author / Title | Apply | Yes |
 | Author / Title | Verify | No |
+| Comments | Export | No |
+| Comments | Dry Run | No |
+| Comments | Summary | No |
 
 Only explicit Apply scripts write to Calibre.
 
@@ -828,6 +968,12 @@ Author / Title Cleanup write-to-Calibre fields:
 title
 authors
 ```
+
+Comments module write-to-Calibre field, deferred beyond v0.6:
+
+    comments
+
+For v0.6, the Comments module does not write to Calibre. It only exports, dry-runs, and summarizes proposed comments changes.
 
 This keeps the Calibre schema clean while still making enrichment and cleanup processes reviewable.
 
@@ -947,6 +1093,7 @@ v0.2 = accepted toolkit with menu, health check, canonicalization, exact award f
 v0.3 = workflow label cleanup and documentation polish
 v0.4 = operational polish and LCC audit safety gate
 v0.5 = author/title cleanup module
+v0.6 = comments export, dry run, and summary
 ```
 
 Useful commands:
@@ -1050,6 +1197,27 @@ reports/author-title-cleanup-summary-{batch}.txt
 ```
 
 Fix the import TSV, rerun dry run, rerun summary, then apply only when the batch is clean.
+
+### Comments dry run blocks all rows
+
+This is expected when running against a raw comments source TSV with no proposed comments.
+
+Common causes:
+
+- missing ProposedComments
+- missing CommentsTemplateProfile
+- missing CommentsMode
+- missing or unexpected Confidence
+- missing ManualReviewRequired
+- missing SourceNotes
+- substantial existing comments with unsafe Replace mode
+
+Review:
+
+    reports/comments-dryrun-{batch}.csv
+    reports/comments-summary-{batch}.txt
+
+For v0.6, blocked comments rows are reviewed through dry-run and summary reports only. Apply behavior is deferred.
 
 ### Verification is not clean
 
