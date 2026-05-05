@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Exports a Calibre batch to TSV for structured comments generation.
 
@@ -33,7 +33,7 @@ param(
 
     [string]$DefaultCommentsTemplateProfile = "",
 
-    [string]$DefaultCommentsMode = "Replace",
+    [string]$DefaultCommentsMode = "",
 
     [int]$ExistingCommentsPreviewLength = 500,
 
