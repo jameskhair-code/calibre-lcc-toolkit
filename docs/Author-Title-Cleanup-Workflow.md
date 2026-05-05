@@ -1,4 +1,4 @@
-# Author / Title Cleanup Workflow
+﻿# Author / Title Cleanup Workflow
 
 ## 1. Purpose
 
@@ -304,7 +304,9 @@ If `OriginalAuthors` does not match the current Calibre authors, the row should 
 
 The proposed replacement author value.
 
-For v0.5, blank proposed authors should be blocked unless the original authors field was also blank.
+For v0.5, a blank `ProposedAuthors` means no author change is proposed.
+
+Intentional author blanking is not supported in v0.5. The apply workflow should never blank a non-blank authors value.
 
 #### ChangeReason
 
