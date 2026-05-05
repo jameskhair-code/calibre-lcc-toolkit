@@ -24,11 +24,16 @@ param(
 
 function Add-Line {
     param(
-        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [System.Collections.Generic.List[string]]$Lines,
 
+        [AllowEmptyString()]
         [string]$Text = ""
     )
+
+    if ($null -eq $Lines) {
+        throw "Lines collection was not initialized."
+    }
 
     $Lines.Add($Text) | Out-Null
 }
@@ -241,3 +246,5 @@ Write-Host "Rows eligible for apply: $eligibleRows"
 Write-Host "Rows blocked: $blockedRows"
 Write-Host ""
 Write-Host "This was a summary operation only. No Calibre metadata was modified."
+
+
