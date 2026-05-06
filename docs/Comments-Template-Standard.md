@@ -1,4 +1,4 @@
-# Comments Template Standard
+﻿# Comments Template Standard
 
 ## 1. Purpose
 
@@ -354,41 +354,46 @@ State why.
 
 Provide the reader-facing hook.
 
+This section should actively make the case for why the book is worth opening, especially by highlighting the most compelling angle, question, tension, oddity, or payoff.
+
 ### Use For
 
 Most books, especially when the comments field is meant to encourage rediscovery.
 
 ### Target Length
 
-```text
 60-120 words
-```
 
 ### Content Rules
 
 This section should answer:
 
+- why the reader might choose this book over nearby books
 - what reading mood or research interest the book fits
 - what kind of curiosity it rewards
-- why the reader might choose it over nearby books
-- what the book offers beyond its subject label
+- what makes the book tempting beyond its subject label
+- what payoff the reader can expect
 
 Good framing:
 
-```text
-Read this when you want...
-This is especially useful if...
-This may appeal if...
-```
+- Read this when you want...
+- The draw here is...
+- This is especially useful if...
+- What makes this one tempting is...
 
-Avoid hype, sales copy, or generic praise.
+The goal is not hype. The goal is a persuasive, specific, curator-style reading pitch.
+
+Avoid:
+
+- generic praise
+- vague claims that the book is important or fascinating
+- sales-copy tone
+- repeating the Overview in softer language
 
 ### HTML Pattern
 
-```html
 <h3>Why Read It</h3>
 <p>...</p>
-```
 
 ## 5.5 Notable Details
 
@@ -396,7 +401,7 @@ Avoid hype, sales copy, or generic praise.
 
 Capture concrete, memorable, curiosity-triggering details.
 
-This is the primary "draw me in" section.
+This is the primary draw-me-in section.
 
 ### Use For
 
@@ -404,13 +409,13 @@ Any book where specific details can be sourced or responsibly inferred.
 
 ### Target Length
 
-```text
 2-4 bullets
-```
 
 ### Content Rules
 
-Use for:
+Prefer book-specific details whenever possible.
+
+Use this section for:
 
 - surprising archival finds
 - unusual case studies
@@ -421,30 +426,31 @@ Use for:
 - unusual illustrations, maps, tables, or appendices
 - significant primary sources
 - production or edition details
+- strange or compelling subject-matter hooks
 
-The details should be concrete. Avoid vague bullets.
+If book-specific details are unavailable, include subject-specific details that honestly reflect the book's topic, setting, problem, or historical world.
+
+This fallback should still be concrete. It should not pretend to know details that were not sourced.
 
 Weak:
 
-```text
 <li>Explores many interesting historical issues.</li>
-```
 
 Better:
 
-```text
-<li>Uses navigation manuals and classroom exercises to show how early modern mariners learned mathematical techniques in practical settings.</li>
-```
+<li>Uses French Guiana as a lens for exploring penal exile, citizenship, and legal exclusion after the French Revolution.</li>
+
+Best:
+
+<li>Draws on navigation manuals and classroom practices to show how early modern sailors learned mathematical techniques in practical settings.</li>
 
 ### HTML Pattern
 
-```html
 <h3>Notable Details</h3>
 <ul>
   <li>...</li>
   <li>...</li>
 </ul>
-```
 
 ## 5.6 Themes & Threads
 
@@ -630,7 +636,7 @@ Setting & Context
 
 ### Purpose
 
-Record award, shortlist, longlist, finalist, or major recognition details.
+Record awards, shortlists, longlists, finalist placements, honorable mentions, best-book list appearances, or other meaningful recognition identified during the comments research pass.
 
 ### Use For
 
@@ -638,32 +644,42 @@ Books with meaningful awards or recognition.
 
 ### Target Length
 
-```text
 1-4 bullets
-```
 
 ### Content Rules
 
-Use this section for:
+This section should not be limited only to awards already present in Calibre metadata.
 
-- award wins
-- shortlist/finalist status
-- longlist status
-- major institutional recognition
-- notable best-book lists, when useful
+During comments generation, the Awards & Recognition section should reflect confidently identified awards and recognition for the book, including newly discovered awards that may not yet be tracked elsewhere.
 
-Do not overdo it. Keep award details concise.
+Use precise status language when known:
+
+- Winner
+- Finalist
+- Shortlisted
+- Longlisted
+- Honorable Mention
+- Named a Best Book by...
+
+Avoid using nominated unless the source itself uses that wording.
+
+Only include award claims declaratively when the evidence is solid. If an award or recognition detail is uncertain, omit it from this section rather than presenting it as fact.
+
+When useful, distinguish existing metadata from newly identified recognition in the wording.
+
+Examples:
+
+<li>Existing Calibre metadata lists the book under the AHA - J. Russell Major Prize award program.</li>
+<li>Research during this comments pass also identified the book as a finalist for [Award Name].</li>
 
 Award names should remain in comments and/or award-tracking fields. They should not be automatically pushed into Tags merely because a book won something.
 
 ### HTML Pattern
 
-```html
 <h3>Awards & Recognition</h3>
 <ul>
   <li>...</li>
 </ul>
-```
 
 ## 5.11 Reception & Response
 
