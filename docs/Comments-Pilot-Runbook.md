@@ -182,7 +182,24 @@ Export -> Dry Run -> Summary
 
 Apply and verify behavior should remain deferred until a later milestone after more dry-run batches are reviewed.
 
-## 9. Recommended Next Step
+## 9. Qualitative Acceptance Criteria
+
+A comments pilot should not be considered successful merely because the dry run passes.
+
+The proposed comments should also be reviewed for reading appeal and collection value.
+
+For each proposed comment, ask:
+
+```text
+Does this make the book more discoverable?
+Does this make me more likely to open the book?
+Does the Why Read It section make a specific case for this book?
+Do the Notable Details include concrete hooks, either book-specific or subject-specific?
+Does Why It Matters explain significance beyond the award label?
+Does Awards & Recognition reflect researched recognition rather than only existing Calibre metadata?
+Are Source Notes clear enough to understand where the claims came from?
+
+## 10. Recommended Next Step
 
 Run one broader dry-run-only batch with real proposed comments, likely 5-10 books, before designing any comments apply behavior.
 
@@ -210,7 +227,7 @@ or:
 v0.7 - Comments Apply and Verify
 ```
 
-## 10. Operating Reminder
+## 11. Operating Reminder
 
 The Comments module is powerful because it can make the library more browsable and inviting.
 
