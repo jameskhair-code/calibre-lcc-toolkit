@@ -21,3 +21,4 @@ metadata_db_prefs_backup.json
 .DS_Store
 Thumbs.db
 .vscode/
+reports/*.html
