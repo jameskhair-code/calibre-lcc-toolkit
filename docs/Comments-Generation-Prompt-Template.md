@@ -1,4 +1,4 @@
-# Comments Generation Prompt Template
+﻿# Comments Generation Prompt Template
 
 ## 1. Purpose
 
@@ -236,6 +236,21 @@ Companion Reads
 
 Do not output empty headers.
 
+## 9.1 Themes & Threads Style
+
+Themes & Threads should always be rendered as an HTML bullet list.
+
+Use polished Title Case for each bullet.
+
+Preferred examples:
+
+    French Revolution and Empire
+    Citizenship and Noncitizenship
+    Legal Identity and Exclusion
+    Penal Colonies and Exile
+    Rights Language and State Violence
+
+Do not mix lowercase bullets and Title Case bullets in the same Themes & Threads section.
 ## 10. HTML Output Rules
 
 Use simple Calibre-friendly HTML.
@@ -279,8 +294,8 @@ Overview: 80-140 words
 Central Argument: 50-100 words
 Why It Matters: 60-120 words
 Why Read It: 60-120 words
-Notable Details: 2-4 bullets
-Themes & Threads: 4-8 bullets
+Notable Details: 3-5 bullets when useful
+Themes & Threads: 4-8 Title Case bullets
 Reading Experience: 40-90 words
 Awards & Recognition: 1-4 bullets
 Source Notes: 3-6 bullets
@@ -289,10 +304,10 @@ Source Notes: 3-6 bullets
 Typical total proposed comment length:
 
 ```text
-2,000-5,000 characters
+3,000-6,000 characters
 ```
 
-Longer is acceptable when justified, but avoid runaway essays.
+Longer is acceptable when justified, especially when Notable Details, Awards & Recognition, or Reading Experience benefit from added context. Avoid runaway essays.
 
 ## 12. Source Notes Standard
 
