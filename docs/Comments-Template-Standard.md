@@ -464,39 +464,35 @@ Most books.
 
 ### Target Length
 
-```text
-4-8 short phrases or bullets
-```
+4-8 short bullet phrases
 
 ### Content Rules
 
 This section should help identify conceptual through-lines.
 
-Examples:
+Themes & Threads should render as a bullet list.
 
-```text
-state formation
-imperial administration
-print culture
-religious dissent
-scientific knowledge
-gender and power
-Atlantic world
-legal pluralism
-migration and diaspora
-```
+Use polished Title Case for each bullet.
+
+Preferred style:
+
+- French Revolution and Empire
+- Citizenship and Noncitizenship
+- Legal Identity and Exclusion
+- Penal Colonies and Exile
+- Rights Language and State Violence
+
+Avoid inconsistent casing such as mixing all-lowercase bullets with Title Case bullets in the same comment.
 
 This section should not simply duplicate Calibre Tags. It may overlap with tags, but it should be more curated and interpretive.
 
 ### HTML Pattern
 
-```html
 <h3>Themes & Threads</h3>
 <ul>
   <li>...</li>
   <li>...</li>
 </ul>
-```
 
 ## 5.7 Reading Experience
 
@@ -925,7 +921,7 @@ A Source Notes bullet may mention absence of evidence when it matters:
 
 ## 7. Length and Density Rules
 
-The comments field should be rich but not bloated.
+The comments field should be rich and inviting, but not bloated.
 
 Recommended section caps:
 
@@ -950,7 +946,7 @@ Recommended section caps:
 A typical generated comment should usually remain in the range:
 
 ```text
-500-1,200 words
+700-1,500 words
 ```
 
 Longer comments may be acceptable for especially important, complex, or collection-defining works, but should be intentional.
@@ -1256,3 +1252,4 @@ Test-CommentsVerify.ps1
 ```
 
 Apply should be deferred until export, dry run, and summary behavior are stable.
+
