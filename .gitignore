@@ -22,3 +22,4 @@ metadata_db_prefs_backup.json
 Thumbs.db
 .vscode/
 reports/*.html
+input/*.txt
