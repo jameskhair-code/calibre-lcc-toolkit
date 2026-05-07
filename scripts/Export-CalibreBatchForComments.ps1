@@ -11,8 +11,9 @@ This script is read-only and does not modify Calibre metadata.
 The output TSV includes current book metadata, existing comments information, existing comments
 hash/length/preview, and blank workflow columns for proposed comments.
 
-Supports an optional exact local Award Programs filter. This is useful because Calibre search
-syntax can overmatch award fields when using broad text matching.
+Supports an optional exact local Award Programs filter. This is useful because Calibre search syntax can overmatch award fields when using broad text matching.
+
+Also supports explicit CalibreId selection through -CalibreIds or -CalibreIdFile.
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File .\scripts\Export-CalibreBatchForComments.ps1 `
@@ -28,6 +29,10 @@ param(
     [string]$Search = "",
 
     [string]$ExactAwardProgram = "",
+
+    [string]$CalibreIds = "",
+
+    [string]$CalibreIdFile = "",
 
     [string]$OutputTsv = ".\input\comments-source-batch.tsv",
 
@@ -87,6 +92,60 @@ function Normalize-ComparableValue {
     }
 
     return (($Value.Trim()) -replace '\s+', ' ')
+}
+
+function Get-CalibreIdSelectionSet {
+    param(
+        [string]$CalibreIds = "",
+
+        [string]$CalibreIdFile = ""
+    )
+
+    $idValues = @()
+
+    if (-not [string]::IsNullOrWhiteSpace($CalibreIds)) {
+        $idValues += @(
+            $CalibreIds -split '[,\s;]+' |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($CalibreIdFile)) {
+        if (-not (Test-Path $CalibreIdFile)) {
+            throw "CalibreIdFile was not found: $CalibreIdFile"
+        }
+
+        foreach ($line in (Get-Content -Path $CalibreIdFile)) {
+            $cleanLine = (($line -replace '#.*$', '')).Trim()
+
+            if ([string]::IsNullOrWhiteSpace($cleanLine)) {
+                continue
+            }
+
+            $idValues += @(
+                $cleanLine -split '[,\s;]+' |
+                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            )
+        }
+    }
+
+    $idSet = @{}
+
+    foreach ($idValue in $idValues) {
+        $idText = ([string]$idValue).Trim()
+
+        if ([string]::IsNullOrWhiteSpace($idText)) {
+            continue
+        }
+
+        if ($idText -notmatch '^\d+$') {
+            throw "Invalid CalibreId value: $idText. Calibre IDs must be numeric."
+        }
+
+        $idSet[$idText] = $true
+    }
+
+    return $idSet
 }
 
 function Invoke-CalibreDb {
@@ -440,9 +499,15 @@ if (-not [string]::IsNullOrWhiteSpace($Search)) {
     $args += @("--search", $Search)
 }
 
+$requestedCalibreIdSet = Get-CalibreIdSelectionSet -CalibreIds $CalibreIds -CalibreIdFile $CalibreIdFile
+
 Write-Host "Running calibredb export for comments generation..."
 Write-Host "This operation is read-only and does not modify Calibre metadata."
 Write-Host "Search: $Search"
+
+if ($requestedCalibreIdSet.Count -gt 0) {
+    Write-Host "Explicit CalibreId selection count: $($requestedCalibreIdSet.Count)"
+}
 
 if (-not [string]::IsNullOrWhiteSpace($ExactAwardProgram)) {
     Write-Host "Exact Award Programs filter: $ExactAwardProgram"
@@ -473,6 +538,16 @@ if (-not [string]::IsNullOrWhiteSpace($ExactAwardProgram)) {
     )
 
     Write-Host "Books found after exact Award Programs filter: $($books.Count)"
+}
+
+if ($requestedCalibreIdSet.Count -gt 0) {
+    $books = @(
+        $books | Where-Object {
+            $requestedCalibreIdSet.ContainsKey(([string]$_.id))
+        }
+    )
+
+    Write-Host "Books found after CalibreId selection filter: $($books.Count)"
 }
 
 if ($books.Count -eq 0) {
@@ -534,3 +609,4 @@ Write-Host "Export complete: $OutputTsv"
 Write-Host "Rows exported: $($exportRows.Count)"
 Write-Host ""
 Write-Host "Next step: copy this TSV to a comments import TSV, fill ProposedComments and review fields, then run the future comments dry-run script."
+
