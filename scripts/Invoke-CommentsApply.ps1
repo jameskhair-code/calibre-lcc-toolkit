@@ -878,6 +878,46 @@ $applyResults = foreach ($preflightRow in $preflightRows) {
         $calibreOutput = [string]$_.Exception.Message
     }
 
+    $intendedFinalCommentsHash = Get-Sha256Hash -Value $finalComments
+    $intendedFinalCommentsLength = $finalComments.Length
+    $expectedFinalCommentsHash = $intendedFinalCommentsHash
+    $expectedFinalCommentsLength = $intendedFinalCommentsLength
+    $observedFinalCommentsHash = ""
+    $observedFinalCommentsLength = 0
+    $postWriteValidation = "Not checked"
+
+    if ($applyStatus -eq "Succeeded") {
+        try {
+            $postApplyBook = Get-CurrentCalibreBookById -CalibreId $calibreId
+
+            if ($null -eq $postApplyBook) {
+                $applyStatus = "Failed"
+                $postWriteValidation = "Post-apply read failed. CalibreId was not found after write."
+            }
+            else {
+                $postApplyComments = [string]$postApplyBook.comments
+                $observedFinalCommentsHash = Get-Sha256Hash -Value $postApplyComments
+                $observedFinalCommentsLength = $postApplyComments.Length
+
+                if (
+                    $postApplyComments.IndexOf($GeneratedStartMarker, [System.StringComparison]::Ordinal) -lt 0 -or
+                    $postApplyComments.IndexOf($GeneratedEndMarker, [System.StringComparison]::Ordinal) -lt 0
+                ) {
+                    $applyStatus = "Failed"
+                    $postWriteValidation = "Post-apply comments were missing managed CMT markers."
+                }
+                else {
+                    $expectedFinalCommentsHash = $observedFinalCommentsHash
+                    $expectedFinalCommentsLength = $observedFinalCommentsLength
+                    $postWriteValidation = "Post-apply comments re-read successfully. Expected hash reflects Calibre-stored HTML."
+                }
+            }
+        }
+        catch {
+            $applyStatus = "Failed"
+            $postWriteValidation = "Post-apply read failed: $($_.Exception.Message)"
+        }
+    }
     [pscustomobject]@{
         CalibreId                = $preflightRow.CalibreId
         Title                    = $preflightRow.Title
@@ -920,5 +960,6 @@ if ($failedCount -gt 0) {
 
 Write-Host ""
 Write-Host "Next step: run the comments verify script after it is available."
+
 
 
