@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Applies validated proposed comments to Calibre metadata.
 
@@ -39,6 +39,10 @@ param(
     [string]$PrependExistingHeaderHtml = "<hr/><h3>Original Comments</h3>",
 
     [string]$AppendProposedHeaderHtml = "<hr/><h3>Additional Curator Comments</h3>",
+
+    [string]$GeneratedStartMarker = '<!-- CMT-GENERATED-COMMENTS-START version="v0.7" -->',
+
+    [string]$GeneratedEndMarker = '<!-- CMT-GENERATED-COMMENTS-END -->',
 
     [switch]$PreflightOnly,
 
@@ -239,6 +243,120 @@ function Get-DuplicateIds {
     )
 }
 
+function New-GeneratedCommentsBlock {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProposedComments,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GeneratedStartMarker,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GeneratedEndMarker
+    )
+
+    $proposed = ""
+
+    if ($null -ne $ProposedComments) {
+        $proposed = $ProposedComments.Trim()
+    }
+
+    return $GeneratedStartMarker + "`n" + $proposed + "`n" + $GeneratedEndMarker
+}
+
+function Get-ExistingCommentsGenerationState {
+    param(
+        [AllowNull()]
+        [string]$ExistingComments,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GeneratedStartMarker,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GeneratedEndMarker,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PrependExistingHeaderHtml
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ExistingComments)) {
+        return "Blank"
+    }
+
+    $startIndex = $ExistingComments.IndexOf($GeneratedStartMarker, [System.StringComparison]::Ordinal)
+    $endIndex = $ExistingComments.IndexOf($GeneratedEndMarker, [System.StringComparison]::Ordinal)
+
+    if ($startIndex -ge 0 -and $endIndex -gt $startIndex) {
+        return "ManagedGeneratedBlock"
+    }
+
+    $legacyHeaderIndex = $ExistingComments.IndexOf($PrependExistingHeaderHtml, [System.StringComparison]::OrdinalIgnoreCase)
+
+    if ($legacyHeaderIndex -ge 0) {
+        return "LegacyPrependHeader"
+    }
+
+    return "UnmanagedExistingComments"
+}
+
+function Replace-ManagedGeneratedBlock {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ExistingComments,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GeneratedBlock,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GeneratedStartMarker,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GeneratedEndMarker
+    )
+
+    $startIndex = $ExistingComments.IndexOf($GeneratedStartMarker, [System.StringComparison]::Ordinal)
+
+    if ($startIndex -lt 0) {
+        throw "Generated start marker was not found."
+    }
+
+    $endIndex = $ExistingComments.IndexOf($GeneratedEndMarker, $startIndex, [System.StringComparison]::Ordinal)
+
+    if ($endIndex -lt 0) {
+        throw "Generated end marker was not found."
+    }
+
+    $afterEndIndex = $endIndex + $GeneratedEndMarker.Length
+
+    $before = $ExistingComments.Substring(0, $startIndex)
+    $after = $ExistingComments.Substring($afterEndIndex)
+
+    return $before + $GeneratedBlock + $after
+}
+
+function Replace-LegacyPrependBlock {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ExistingComments,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GeneratedBlock,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PrependExistingHeaderHtml
+    )
+
+    $headerIndex = $ExistingComments.IndexOf($PrependExistingHeaderHtml, [System.StringComparison]::OrdinalIgnoreCase)
+
+    if ($headerIndex -lt 0) {
+        throw "Legacy prepend header was not found."
+    }
+
+    $originalCommentsAndHeader = $ExistingComments.Substring($headerIndex)
+
+    return $GeneratedBlock + $originalCommentsAndHeader
+}
+
 function Join-CommentsHtml {
     param(
         [Parameter(Mandatory = $true)]
@@ -252,7 +370,11 @@ function Join-CommentsHtml {
 
         [string]$PrependExistingHeaderHtml = "<hr/><h3>Original Comments</h3>",
 
-        [string]$AppendProposedHeaderHtml = "<hr/><h3>Additional Curator Comments</h3>"
+        [string]$AppendProposedHeaderHtml = "<hr/><h3>Additional Curator Comments</h3>",
+
+        [string]$GeneratedStartMarker = '<!-- CMT-GENERATED-COMMENTS-START version="v0.7" -->',
+
+        [string]$GeneratedEndMarker = '<!-- CMT-GENERATED-COMMENTS-END -->'
     )
 
     $existing = ""
@@ -266,24 +388,58 @@ function Join-CommentsHtml {
         $proposed = $ProposedComments.Trim()
     }
 
+    $generatedBlock = New-GeneratedCommentsBlock `
+        -ProposedComments $proposed `
+        -GeneratedStartMarker $GeneratedStartMarker `
+        -GeneratedEndMarker $GeneratedEndMarker
+
+    $existingState = Get-ExistingCommentsGenerationState `
+        -ExistingComments $existing `
+        -GeneratedStartMarker $GeneratedStartMarker `
+        -GeneratedEndMarker $GeneratedEndMarker `
+        -PrependExistingHeaderHtml $PrependExistingHeaderHtml
+
     if ($Mode -eq "Replace") {
-        return $proposed
+        return $generatedBlock
     }
 
     if ($Mode -eq "Prepend") {
-        if ([string]::IsNullOrWhiteSpace($existing)) {
-            return $proposed
+        if ($existingState -eq "Blank") {
+            return $generatedBlock
         }
 
-        return $proposed + $PrependExistingHeaderHtml + $existing
+        if ($existingState -eq "ManagedGeneratedBlock") {
+            return Replace-ManagedGeneratedBlock `
+                -ExistingComments $existing `
+                -GeneratedBlock $generatedBlock `
+                -GeneratedStartMarker $GeneratedStartMarker `
+                -GeneratedEndMarker $GeneratedEndMarker
+        }
+
+        if ($existingState -eq "LegacyPrependHeader") {
+            return Replace-LegacyPrependBlock `
+                -ExistingComments $existing `
+                -GeneratedBlock $generatedBlock `
+                -PrependExistingHeaderHtml $PrependExistingHeaderHtml
+        }
+
+        return $generatedBlock + $PrependExistingHeaderHtml + $existing
     }
 
     if ($Mode -eq "Append") {
-        if ([string]::IsNullOrWhiteSpace($existing)) {
-            return $proposed
+        if ($existingState -eq "Blank") {
+            return $generatedBlock
         }
 
-        return $existing + $AppendProposedHeaderHtml + $proposed
+        if ($existingState -eq "ManagedGeneratedBlock") {
+            return Replace-ManagedGeneratedBlock `
+                -ExistingComments $existing `
+                -GeneratedBlock $generatedBlock `
+                -GeneratedStartMarker $GeneratedStartMarker `
+                -GeneratedEndMarker $GeneratedEndMarker
+        }
+
+        return $existing + $AppendProposedHeaderHtml + $generatedBlock
     }
 
     throw "Unsupported CommentsMode: $Mode"
@@ -486,6 +642,7 @@ $preflightRows = foreach ($dryRow in $eligibleDryRunRows) {
     $finalComments = ""
     $finalCommentsHash = ""
     $finalCommentsLength = 0
+    $currentGenerationState = ""
 
     if ($currentBookMap.ContainsKey($calibreId)) {
         $currentBook = $currentBookMap[$calibreId]
@@ -494,6 +651,11 @@ $preflightRows = foreach ($dryRow in $eligibleDryRunRows) {
         $currentComments = [string]$currentBook.comments
         $currentCommentsHash = Get-Sha256Hash -Value $currentComments
         $currentCommentsLength = $currentComments.Length
+        $currentGenerationState = Get-ExistingCommentsGenerationState `
+            -ExistingComments $currentComments `
+            -GeneratedStartMarker $GeneratedStartMarker `
+            -GeneratedEndMarker $GeneratedEndMarker `
+            -PrependExistingHeaderHtml $PrependExistingHeaderHtml
     }
     else {
         $blockingReasons += "CalibreId not found in current Calibre metadata"
@@ -571,6 +733,7 @@ $preflightRows = foreach ($dryRow in $eligibleDryRunRows) {
         Authors                  = $inputAuthors
         CommentsMode             = $commentsMode
         CurrentCommentsLength    = $currentCommentsLength
+        ExistingGeneratedState   = $currentGenerationState
         ProposedCommentsLength   = $proposedComments.Length
         FinalCommentsLength      = $finalCommentsLength
         ExistingCommentsHash     = $inputExistingCommentsHash
@@ -600,7 +763,7 @@ if ($blockedPreflightRows.Count -gt 0) {
 
     Write-Host ""
     Write-Host "Apply blocked during preflight."
-    Write-Host "Rows reviewed: $($preflightRows.Count)"
+    Write-Host "Rows reviewed: $(@($preflightRows).Count)"
     Write-Host "Rows ready: $(@($preflightRows | Where-Object { $_.PreflightStatus -eq 'Ready' }).Count)"
     Write-Host "Rows blocked: $($blockedPreflightRows.Count)"
     Write-Host "Apply report: $ApplyReportCsv"
@@ -612,7 +775,7 @@ $preflightRows | Export-Csv -Path $ApplyReportCsv -NoTypeInformation -Encoding U
 
 Write-Host ""
 Write-Host "Preflight complete."
-Write-Host "Rows ready for apply: $($preflightRows.Count)"
+Write-Host "Rows ready for apply: $(@($preflightRows).Count)"
 Write-Host "Apply report: $ApplyReportCsv"
 
 if ($PreflightOnly) {
@@ -683,6 +846,7 @@ $applyResults = foreach ($preflightRow in $preflightRows) {
         Authors                  = $preflightRow.Authors
         CommentsMode             = $preflightRow.CommentsMode
         CurrentCommentsLength    = $preflightRow.CurrentCommentsLength
+        ExistingGeneratedState   = $preflightRow.ExistingGeneratedState
         ProposedCommentsLength   = $preflightRow.ProposedCommentsLength
         FinalCommentsLength      = $finalComments.Length
         ExistingCommentsHash     = $preflightRow.ExistingCommentsHash
@@ -702,7 +866,7 @@ $failedCount = @($applyResults | Where-Object { $_.ApplyStatus -ne "Succeeded" }
 
 Write-Host ""
 Write-Host "Apply complete."
-Write-Host "Rows attempted: $($applyResults.Count)"
+Write-Host "Rows attempted: $(@($applyResults).Count)"
 Write-Host "Rows succeeded: $successCount"
 Write-Host "Rows failed: $failedCount"
 Write-Host "Apply report: $ApplyReportCsv"
