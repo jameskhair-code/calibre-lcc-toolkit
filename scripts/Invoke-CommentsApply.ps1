@@ -165,6 +165,44 @@ function Invoke-CalibreDb {
     & $CalibreDb @allArgs
 }
 
+function Get-CurrentCalibreBookById {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CalibreId
+    )
+
+    $fieldList = @(
+        "id",
+        "title",
+        "authors",
+        "comments"
+    ) -join ","
+
+    $args = @(
+        "list",
+        "--for-machine",
+        "--fields", $fieldList
+    )
+
+    $jsonLines = Invoke-CalibreDb -Arguments $args
+    $jsonText = ($jsonLines -join "`n").Trim()
+
+    if ([string]::IsNullOrWhiteSpace($jsonText)) {
+        throw "No output returned from calibredb while reading post-apply metadata."
+    }
+
+    $converted = $jsonText | ConvertFrom-Json
+    $books = @(Convert-ToFlatArray -Value $converted)
+
+    foreach ($book in $books) {
+        if ([string]$book.id -eq $CalibreId) {
+            return $book
+        }
+    }
+
+    return $null
+}
+
 function Get-FieldValue {
     param(
         [Parameter(Mandatory = $true)]
@@ -848,10 +886,15 @@ $applyResults = foreach ($preflightRow in $preflightRows) {
         CurrentCommentsLength    = $preflightRow.CurrentCommentsLength
         ExistingGeneratedState   = $preflightRow.ExistingGeneratedState
         ProposedCommentsLength   = $preflightRow.ProposedCommentsLength
-        FinalCommentsLength      = $finalComments.Length
+        FinalCommentsLength      = $expectedFinalCommentsLength
+        IntendedFinalCommentsLength = $intendedFinalCommentsLength
+        ObservedFinalCommentsLength = $observedFinalCommentsLength
         ExistingCommentsHash     = $preflightRow.ExistingCommentsHash
         CurrentCommentsHash      = $preflightRow.CurrentCommentsHash
-        ExpectedFinalCommentsHash = Get-Sha256Hash -Value $finalComments
+        ExpectedFinalCommentsHash = $expectedFinalCommentsHash
+        IntendedFinalCommentsHash = $intendedFinalCommentsHash
+        ObservedFinalCommentsHash = $observedFinalCommentsHash
+        PostWriteValidation       = $postWriteValidation
         PreflightStatus          = "Ready"
         ApplyStatus              = $applyStatus
         BlockingReasons          = ""
@@ -877,4 +920,5 @@ if ($failedCount -gt 0) {
 
 Write-Host ""
 Write-Host "Next step: run the comments verify script after it is available."
+
 

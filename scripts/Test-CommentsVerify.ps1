@@ -237,109 +237,111 @@ foreach ($book in $currentBooks) {
     }
 }
 
-$verifyRows = foreach ($row in $applyRows) {
-    $calibreId = (Get-FieldValue -Row $row -Name "CalibreId").Trim()
-    $expectedTitle = Get-FieldValue -Row $row -Name "Title"
-    $expectedAuthors = Get-FieldValue -Row $row -Name "Authors"
-    $expectedHash = (Get-FieldValue -Row $row -Name "ExpectedFinalCommentsHash").Trim()
-    $expectedLength = Get-FieldValue -Row $row -Name "FinalCommentsLength"
-    $applyStatus = Get-FieldValue -Row $row -Name "ApplyStatus"
+$verifyRows = @(
+    foreach ($row in $applyRows) {
+        $calibreId = (Get-FieldValue -Row $row -Name "CalibreId").Trim()
+        $expectedTitle = Get-FieldValue -Row $row -Name "Title"
+        $expectedAuthors = Get-FieldValue -Row $row -Name "Authors"
+        $expectedHash = (Get-FieldValue -Row $row -Name "ExpectedFinalCommentsHash").Trim()
+        $expectedLength = Get-FieldValue -Row $row -Name "FinalCommentsLength"
+        $applyStatus = Get-FieldValue -Row $row -Name "ApplyStatus"
 
-    $actualTitle = ""
-    $actualAuthors = ""
-    $actualComments = ""
-    $actualHash = ""
-    $actualLength = 0
-    $titleVerified = "Skipped"
-    $authorsVerified = "Skipped"
-    $commentsVerified = "Skipped"
-    $verificationStatus = "Skipped"
-    $verificationNotes = ""
+        $actualTitle = ""
+        $actualAuthors = ""
+        $actualComments = ""
+        $actualHash = ""
+        $actualLength = 0
+        $titleVerified = "Skipped"
+        $authorsVerified = "Skipped"
+        $commentsVerified = "Skipped"
+        $verificationStatus = "Skipped"
+        $verificationNotes = ""
 
-    if ($applyStatus -ne "Succeeded") {
-        $verificationStatus = "Skipped - Apply Not Successful"
-        $verificationNotes = "ApplyStatus was '$applyStatus'. Verification requires ApplyStatus = Succeeded."
-    }
-    elseif (-not $currentBookMap.ContainsKey($calibreId)) {
-        $verificationStatus = "Missing"
-        $verificationNotes = "CalibreId was not found in current Calibre metadata."
-    }
-    else {
-        $book = $currentBookMap[$calibreId]
-        $actualTitle = [string]$book.title
-        $actualAuthors = Format-Authors $book.authors
-        $actualComments = [string]$book.comments
-        $actualHash = Get-Sha256Hash -Value $actualComments
-        $actualLength = $actualComments.Length
-
-        if ((Normalize-ComparableValue $actualTitle) -ceq (Normalize-ComparableValue $expectedTitle)) {
-            $titleVerified = "Yes"
+        if ($applyStatus -ne "Succeeded") {
+            $verificationStatus = "Skipped - Apply Not Successful"
+            $verificationNotes = "ApplyStatus was '$applyStatus'. Verification requires ApplyStatus = Succeeded."
+        }
+        elseif (-not $currentBookMap.ContainsKey($calibreId)) {
+            $verificationStatus = "Missing"
+            $verificationNotes = "CalibreId was not found in current Calibre metadata."
         }
         else {
-            $titleVerified = "No"
-        }
+            $book = $currentBookMap[$calibreId]
+            $actualTitle = [string]$book.title
+            $actualAuthors = Format-Authors $book.authors
+            $actualComments = [string]$book.comments
+            $actualHash = Get-Sha256Hash -Value $actualComments
+            $actualLength = $actualComments.Length
 
-        if ((Normalize-ComparableValue $actualAuthors) -ceq (Normalize-ComparableValue $expectedAuthors)) {
-            $authorsVerified = "Yes"
-        }
-        else {
-            $authorsVerified = "No"
-        }
-
-        if ([string]::IsNullOrWhiteSpace($expectedHash)) {
-            $commentsVerified = "No"
-            $verificationStatus = "Mismatch"
-            $verificationNotes = "ExpectedFinalCommentsHash is blank."
-        }
-        elseif ($actualHash -eq $expectedHash) {
-            $commentsVerified = "Yes"
-            $verificationStatus = "Verified"
-            $verificationNotes = "Current comments hash matches expected final comments hash."
-        }
-        else {
-            $commentsVerified = "No"
-            $verificationStatus = "Mismatch"
-            $verificationNotes = "Current comments hash does not match expected final comments hash."
-        }
-
-        if ($titleVerified -ne "Yes") {
-            if (-not [string]::IsNullOrWhiteSpace($verificationNotes)) {
-                $verificationNotes += " "
+            if ((Normalize-ComparableValue $actualTitle) -ceq (Normalize-ComparableValue $expectedTitle)) {
+                $titleVerified = "Yes"
+            }
+            else {
+                $titleVerified = "No"
             }
 
-            $verificationNotes += "Title does not match expected value."
-        }
-
-        if ($authorsVerified -ne "Yes") {
-            if (-not [string]::IsNullOrWhiteSpace($verificationNotes)) {
-                $verificationNotes += " "
+            if ((Normalize-ComparableValue $actualAuthors) -ceq (Normalize-ComparableValue $expectedAuthors)) {
+                $authorsVerified = "Yes"
+            }
+            else {
+                $authorsVerified = "No"
             }
 
-            $verificationNotes += "Authors do not match expected value."
+            if ([string]::IsNullOrWhiteSpace($expectedHash)) {
+                $commentsVerified = "No"
+                $verificationStatus = "Mismatch"
+                $verificationNotes = "ExpectedFinalCommentsHash is blank."
+            }
+            elseif ($actualHash -eq $expectedHash) {
+                $commentsVerified = "Yes"
+                $verificationStatus = "Verified"
+                $verificationNotes = "Current comments hash matches expected final comments hash."
+            }
+            else {
+                $commentsVerified = "No"
+                $verificationStatus = "Mismatch"
+                $verificationNotes = "Current comments hash does not match expected final comments hash."
+            }
+
+            if ($titleVerified -ne "Yes") {
+                if (-not [string]::IsNullOrWhiteSpace($verificationNotes)) {
+                    $verificationNotes += " "
+                }
+
+                $verificationNotes += "Title does not match expected value."
+            }
+
+            if ($authorsVerified -ne "Yes") {
+                if (-not [string]::IsNullOrWhiteSpace($verificationNotes)) {
+                    $verificationNotes += " "
+                }
+
+                $verificationNotes += "Authors do not match expected value."
+            }
+
+            if ($verificationStatus -eq "Verified" -and ($titleVerified -ne "Yes" -or $authorsVerified -ne "Yes")) {
+                $verificationStatus = "Mismatch"
+            }
         }
 
-        if ($verificationStatus -eq "Verified" -and ($titleVerified -ne "Yes" -or $authorsVerified -ne "Yes")) {
-            $verificationStatus = "Mismatch"
+        [pscustomobject]@{
+            CalibreId                 = $calibreId
+            Title                     = $expectedTitle
+            Authors                   = $expectedAuthors
+            CommentsMode              = Get-FieldValue -Row $row -Name "CommentsMode"
+            ApplyStatus               = $applyStatus
+            ExpectedFinalCommentsHash = $expectedHash
+            ActualCommentsHash        = $actualHash
+            ExpectedFinalLength       = $expectedLength
+            ActualCommentsLength      = $actualLength
+            TitleVerified             = $titleVerified
+            AuthorsVerified           = $authorsVerified
+            CommentsVerified          = $commentsVerified
+            VerificationStatus        = $verificationStatus
+            VerificationNotes         = $verificationNotes
         }
     }
-
-    [pscustomobject]@{
-        CalibreId                 = $calibreId
-        Title                     = $expectedTitle
-        Authors                   = $expectedAuthors
-        CommentsMode              = Get-FieldValue -Row $row -Name "CommentsMode"
-        ApplyStatus               = $applyStatus
-        ExpectedFinalCommentsHash = $expectedHash
-        ActualCommentsHash        = $actualHash
-        ExpectedFinalLength       = $expectedLength
-        ActualCommentsLength      = $actualLength
-        TitleVerified             = $titleVerified
-        AuthorsVerified           = $authorsVerified
-        CommentsVerified          = $commentsVerified
-        VerificationStatus        = $verificationStatus
-        VerificationNotes         = $verificationNotes
-    }
-}
+)
 
 $outputFolder = Split-Path -Path $VerifyReportCsv -Parent
 
@@ -362,3 +364,5 @@ Write-Host "Rows missing: $missingCount"
 Write-Host "Rows skipped: $skippedCount"
 Write-Host ""
 Write-Host "This was a verification operation only. No Calibre metadata was modified."
+
+
