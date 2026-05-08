@@ -261,7 +261,7 @@ function New-GeneratedCommentsBlock {
         $proposed = $ProposedComments.Trim()
     }
 
-    return $GeneratedStartMarker + "`n" + $proposed + "`n" + $GeneratedEndMarker
+    return $GeneratedStartMarker + $proposed + $GeneratedEndMarker
 }
 
 function Get-ExistingCommentsGenerationState {
@@ -785,7 +785,7 @@ if ($PreflightOnly) {
 }
 
 Write-Host ""
-Write-Host "About to modify Calibre comments for $($preflightRows.Count) row(s)."
+Write-Host "About to modify Calibre comments for $(@($preflightRows).Count) row(s)."
 Write-Host "Type the exact confirmation phrase to continue:"
 Write-Host ""
 Write-Host "  $ConfirmationPhrase"
@@ -877,3 +877,4 @@ if ($failedCount -gt 0) {
 
 Write-Host ""
 Write-Host "Next step: run the comments verify script after it is available."
+

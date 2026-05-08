@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Verifies applied Calibre comments metadata against a comments apply report.
 
@@ -355,7 +355,7 @@ $missingCount = @($verifyRows | Where-Object { $_.VerificationStatus -eq "Missin
 $skippedCount = @($verifyRows | Where-Object { $_.VerificationStatus -like "Skipped*" }).Count
 
 Write-Host "Verification complete: $VerifyReportCsv"
-Write-Host "Rows reviewed: $($verifyRows.Count)"
+Write-Host "Rows reviewed: $(@($verifyRows).Count)"
 Write-Host "Rows verified: $verifiedCount"
 Write-Host "Rows mismatched: $mismatchCount"
 Write-Host "Rows missing: $missingCount"
