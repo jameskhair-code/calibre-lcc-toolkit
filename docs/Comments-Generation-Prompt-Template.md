@@ -64,13 +64,32 @@ Do not invent missing metadata.
 
 If a field is blank, work from available metadata and research.
 
+## 2.1 Existing Comments Are Optional Input
+
+ExistingComments is optional evidence, not a dependency.
+
+The comments generation process must support both:
+
+- records that already have useful existing Calibre comments
+- records where the existing Calibre comments field is blank
+
+When existing comments are present, they may be used as one source among others.
+
+When existing comments are blank, the generated comment should still be rich, useful, and source-grounded. In that case, rely on available metadata and external research, such as publisher pages, catalog records, award body pages, author/institutional profiles, reviews, tables of contents, and other reliable sources.
+
+Do not produce weak comments merely because ExistingComments is blank.
+
+Do not include Source Notes that claim existing Calibre comments were used unless they were actually present and meaningfully used.
+
+Source Notes must describe the actual evidence used for that specific book.
+
 ## 3. Recommended Generation Workflow
 
 For each book:
 
 ```text
 1. Confirm book identity from title, author, identifiers, publisher, and publication date.
-2. Use existing Calibre comments as a starting point, not as text to copy wholesale.
+2. If existing Calibre comments are present, use them as optional evidence, not as text to copy wholesale.
 3. Research or infer the central argument/premise from reliable sources.
 4. Research awards and recognition.
 5. Identify book-specific notable details when possible.
@@ -313,29 +332,45 @@ Longer is acceptable when justified, especially when Notable Details, Awards & R
 
 Every generated comment must include a visible final section:
 
-```html
-<h3>Source Notes</h3>
-<ul>
-  <li>...</li>
-</ul>
-```
+    <h3>Source Notes</h3>
+    <ul>
+      <li>...</li>
+    </ul>
 
-Source Notes should identify the types of sources used.
+Source Notes must be evidence-specific, not boilerplate.
 
-Examples:
+They should identify the types of sources actually used for that specific book.
 
-```text
-Publisher description used for scope and overview.
-Library catalog metadata used for bibliographic context.
-Award body records used for awards and recognition.
-Existing Calibre LCC classification used for subject framing.
-Review or reception sources used for reception notes.
-No additional award recognition was confidently identified during this pass.
-```
+Do not include a statement such as "Existing Calibre comments were used" unless existing comments were nonblank and meaningfully used.
+
+If existing comments were blank, say so plainly when useful.
+
+If LCC data was blank or unavailable, do not imply that LCC classification was used.
+
+Examples when existing comments were used:
+
+    <li>Existing Calibre comments were used for initial scope and summary context.</li>
+    <li>Publisher metadata was used for bibliographic and subject framing.</li>
+    <li>Award body records were used for awards and recognition.</li>
+    <li>LCC classification context was used to support Themes & Threads.</li>
+
+Examples when existing comments were blank:
+
+    <li>Existing Calibre comments were blank at the time of generation.</li>
+    <li>Publisher and catalog metadata were used to establish scope, subject framing, and publication context.</li>
+    <li>Award body records were used for awards and recognition.</li>
+    <li>Author, institutional, review, or reception sources were used where available to identify reading appeal and notable details.</li>
+
+Examples when both comments and LCC were blank:
+
+    <li>Existing Calibre comments and LCC fields were blank at the time of generation.</li>
+    <li>Publisher and catalog metadata were used for scope, subject framing, and publication context.</li>
+    <li>Award body records were used for awards and recognition.</li>
+    <li>Themes & Threads were derived from researched subject matter rather than existing LCC classification.</li>
 
 Source Notes should be concise.
 
-Do not turn Source Notes into a bibliography unless specifically needed.
+Do not turn Source Notes into a full bibliography unless specifically needed.
 
 ## 13. Workflow Fields to Return
 
@@ -424,7 +459,7 @@ You are generating structured HTML comments for a Calibre library using the Cali
 Goal:
 Create a source-grounded curator note that makes the book more discoverable, more interesting, and more likely to be opened later. Do not write a generic summary.
 
-Use the provided Calibre metadata row as the starting point. Use existing comments as evidence, but do not copy them wholesale. If external research is available, use reliable sources to verify book identity, central argument, awards/recognition, author context, notable details, and reception when useful.
+Use the provided Calibre metadata row as the starting point. Existing comments are optional evidence only, not a dependency. If existing comments are present, use them as evidence but do not copy them wholesale. If existing comments are blank, generate the comment from available metadata and external research. Use reliable sources to verify book identity, central argument, awards/recognition, author context, notable details, and reception when useful.
 
 Preserve the section label "Why It Matters."
 
@@ -472,7 +507,7 @@ ManualReviewRequired = No
 Use High - Source Grounded only when strongly supported by multiple reliable sources.
 Use Low - Manual Review Recommended when major claims are uncertain.
 
-The ProposedComments value must be TSV-friendly single-line HTML when possible.
+The ProposedComments value must be TSV-friendly single-line HTML when possible. Source Notes must accurately reflect which sources were actually used; do not claim that existing Calibre comments, LCC data, or award metadata were used unless they were present and used.
 ```
 
 ## 17. Acceptance Criteria
@@ -489,3 +524,4 @@ It includes researched, declarative awards/recognition when confidently supporte
 It includes Source Notes.
 It preserves existing comments by using Prepend when substantial existing comments exist.
 ```
+

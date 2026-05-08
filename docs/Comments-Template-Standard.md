@@ -224,6 +224,38 @@ Likely sections:
 
 The following section registry defines the available sections. Sections should be conditionally rendered. Do not output empty headers.
 
+## 4.1 Source Dependency and Blank Comments
+
+Existing Calibre comments are optional input, not a dependency.
+
+The template must support both:
+
+- books with substantial existing comments
+- books with blank existing comments
+
+When existing comments are present, they may help establish scope, framing, and initial summary context.
+
+When existing comments are blank, the comments generator should still create a rich curator note using available metadata and external research.
+
+Blank existing comments should trigger more research, not weaker output.
+
+Possible sources include:
+
+- publisher pages
+- library catalog records
+- award body pages
+- author or institutional profiles
+- reviews or reception sources
+- tables of contents or previews
+- existing identifiers
+- tags
+- award metadata
+- LCC metadata, when available
+
+Do not state or imply that a source was used unless it was actually available and used.
+
+Source Notes must be specific to the evidence used for the individual book.
+
 ## 5.1 Overview
 
 ### Purpose
@@ -833,55 +865,76 @@ Avoid inventing ownership or claiming a book is in the library unless confirmed.
 
 ### Purpose
 
-Document the evidence basis for the generated comments.
+Document the evidence used to generate the comment.
+
+Source Notes are the provenance layer for the comments field.
+
+They should help a future reviewer understand where the claims came from and whether the comment was generated from existing comments, external research, library metadata, award records, LCC context, or some combination of those sources.
 
 ### Use For
 
-Always.
+All generated comments.
 
 ### Target Length
 
-```text
 3-6 bullets
-```
 
 ### Content Rules
 
-Source Notes should explain what kinds of sources informed the comment.
+Source Notes must be evidence-specific, not boilerplate.
 
-Examples:
+Do not include a statement such as "Existing Calibre comments were used" unless existing comments were nonblank and meaningfully used.
 
-```text
-Publisher description used for scope and overview.
-Library catalog metadata used for publication and subject context.
-Award record used for recognition note.
-Review/reception details paraphrased from available source summaries.
-Author or institutional biography used for author context.
-No independent reception source found during this pass.
-```
+If existing comments were blank, say so plainly when useful.
 
-Source Notes should distinguish between:
+If LCC data was blank or unavailable, do not imply that LCC classification was used.
 
-- publisher description
-- library catalog metadata
-- award body information
-- review/reception source
-- author/institutional biography
-- inferred classification or reading guidance
+If awards or recognition were researched externally, say that award body records or external award research were used.
 
-Source Notes should be concise. They are not a research essay.
+If no additional awards or recognition were confidently identified, it is acceptable to say so.
+
+Good examples when existing comments were used:
+
+<ul>
+  <li>Existing Calibre comments were used for initial scope and summary context.</li>
+  <li>Publisher metadata was used for bibliographic and subject framing.</li>
+  <li>Award body records were used for awards and recognition.</li>
+  <li>LCC classification context was used to support Themes & Threads.</li>
+</ul>
+
+Good examples when existing comments were blank:
+
+<ul>
+  <li>Existing Calibre comments were blank at the time of generation.</li>
+  <li>Publisher and catalog metadata were used to establish scope, subject framing, and publication context.</li>
+  <li>Award body records were used for awards and recognition.</li>
+  <li>Author, institutional, review, or reception sources were used where available to identify reading appeal and notable details.</li>
+</ul>
+
+Good examples when existing comments and LCC were blank:
+
+<ul>
+  <li>Existing Calibre comments and LCC fields were blank at the time of generation.</li>
+  <li>Publisher and catalog metadata were used for scope, subject framing, and publication context.</li>
+  <li>Award body records were used for awards and recognition.</li>
+  <li>Themes & Threads were derived from researched subject matter rather than existing LCC classification.</li>
+</ul>
+
+Avoid:
+
+<ul>
+  <li>Generic source notes that repeat the same text for every book.</li>
+  <li>Claims that existing comments were used when the comments field was blank.</li>
+  <li>Claims that LCC metadata was used when LCC fields were blank.</li>
+  <li>Unverifiable award or reception claims.</li>
+</ul>
 
 ### HTML Pattern
 
-```html
 <h3>Source Notes</h3>
 <ul>
   <li>...</li>
-  <li>...</li>
 </ul>
-```
-
-Source Notes should normally be the final section.
 
 ## 6. Conditional Rendering Rules
 
@@ -1252,4 +1305,5 @@ Test-CommentsVerify.ps1
 ```
 
 Apply should be deferred until export, dry run, and summary behavior are stable.
+
 
