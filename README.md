@@ -438,7 +438,7 @@ The launcher menu organizes the LCC workflow into phases:
 0. Exit
 ```
 
-The Author / Title Cleanup module is currently run through individual scripts rather than the LCC launcher.
+The v0.8 Author / Title Cleanup module is available through the interactive launcher and can also be run through individual scripts.
 
 ---
 
@@ -748,9 +748,19 @@ That is the end-state win condition.
 
 ## Author / Title Cleanup Workflow
 
-The v0.5 Author / Title Cleanup module is currently run through individual scripts rather than the LCC launcher.
+The v0.8 Author / Title Cleanup module is available through the interactive launcher and can also be run through individual scripts.
 
 Recommended workflow:
+
+Launcher options:
+
+    A1. Author/Title: Export source TSV
+    A2. Author/Title: Dry run cleanup TSV
+    A3. Author/Title: Write dry-run summary
+    A4. Author/Title: Apply cleanup metadata
+    A5. Author/Title: Verify cleanup results
+
+Recommended script workflow:
 
 ```text
 Export -> Review/Edit Proposed TSV -> Dry Run -> Summary -> Apply -> Verify
@@ -1170,6 +1180,7 @@ v0.4 = operational polish and LCC audit safety gate
 v0.5 = author/title cleanup module
 v0.6 = comments export, dry run, and summary
 v0.7 = comments apply, verify, and launcher integration
+v0.8 = author/title cleanup launcher integration
 ```
 
 Useful commands:
@@ -1328,6 +1339,9 @@ For LCC, the external enrichment step populates classification fields.
 For Author / Title Cleanup, the external review step populates only proposed title/author changes.
 
 Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+
+
+
 
 
 
