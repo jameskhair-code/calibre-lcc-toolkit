@@ -225,3 +225,50 @@ The apply script now writes comments by:
 6. re-reading the Calibre record and storing the observed post-write hash
 
 This method is safer for long AI-generated HTML comments.
+
+## 10. Mixed-State Batch Smoke Test
+
+Test records:
+
+    4074 - Red Mars - Kim Stanley Robinson
+    5177 - Contraband: Louis Mandrin and the Making of a Global Underground - Michael Kwass
+    5153 - Empire and Underworld - Miranda Frances Spieler
+
+Starting states tested:
+
+    4074 - ManagedGeneratedOnly / generated-only comments already present
+    5177 - LegacyPrependHeader / generated comments plus preserved original comments
+    5153 - UnmanagedExistingComments / existing publisher-style comments, no managed generated marker
+
+Workflow tested:
+
+    Export -> Import TSV Assembly -> Dry Run -> Summary -> HTML Review -> Apply Preflight -> Apply -> Verify
+
+Expected preflight states:
+
+    4074 -> ManagedGeneratedOnly
+    5177 -> LegacyPrependHeader
+    5153 -> UnmanagedExistingComments
+
+Apply result:
+
+    Rows attempted: 3
+    Rows succeeded: 3
+    Rows failed: 0
+
+Verify result:
+
+    Rows reviewed: 3
+    Rows verified: 3
+    Rows mismatched: 0
+    Rows missing: 0
+    Rows skipped: 0
+
+The mixed-state smoke test confirmed that the Comments module can safely process multiple comments states in one batch.
+
+This test proved:
+
+- generated-only comments can be updated without adding an Original Comments section
+- prior generated comments above an Original Comments divider can be replaced without duplicating the generated section
+- unmanaged existing comments can receive generated curator comments while preserving the original comments underneath
+- post-apply verification succeeds across all three states
