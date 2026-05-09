@@ -80,7 +80,7 @@ The Author / Title Cleanup workflow is intentionally conservative because title 
 
 ### Comments Module
 
-The v0.6 Comments module provides a safe review workflow for generating and validating structured HTML comments before anything is written to Calibre.
+The v0.7 Comments module provides a controlled workflow for enriching the standard Calibre Comments field with structured, source-aware HTML curator comments.
 
 The module supports:
 
@@ -89,12 +89,15 @@ The module supports:
 - Running a dry run against current Calibre metadata.
 - Detecting risky existing comments, hash mismatches, missing source notes, unsupported HTML, placeholder text, and unsafe workflow values.
 - Writing a readable summary report.
+- Creating a visual HTML review page before apply.
+- Applying approved comments metadata after explicit confirmation.
+- Verifying final Calibre comments after apply.
 
-For v0.6, the Comments module is intentionally limited to:
+The Comments workflow is:
 
-    Export -> Dry Run -> Summary
+    Export -> Generate Proposed Comments -> Dry Run -> Summary -> HTML Review -> Apply -> Verify
 
-Apply and verify behavior are deferred to a later milestone after real dry-run batches have been reviewed.
+The apply step writes to the standard Calibre comments field using a temporary OPF file and `calibredb set_metadata`.
 
 ---
 
@@ -315,7 +318,7 @@ Required fields:
     ManualReviewRequired
     SourceNotes
 
-For v0.6, this TSV is used for dry-run and summary validation only. Comments apply behavior is deferred.
+For v0.7, this TSV is used for dry run, summary, HTML review, apply, and verify. Comments are still generated externally and reviewed before apply.
 
 ### Reports
 
@@ -851,19 +854,47 @@ This is read-only.
 
 ## Comments Workflow
 
-The v0.6 Comments module is currently run through individual scripts rather than the LCC launcher.
+The v0.7 Comments module is available through the interactive launcher and can also be run through individual scripts.
 
-Recommended v0.6 workflow:
+Recommended v0.7 workflow:
 
-    Export -> Generate Proposed Comments Externally -> Dry Run -> Summary
+    Export -> Generate Proposed Comments Externally -> Dry Run -> Summary -> HTML Review -> Apply -> Verify
+
+Launcher options:
+
+    C1. Comments: Export source TSV
+    C2. Comments: Dry run import TSV
+    C3. Comments: Write dry-run summary
+    C4. Comments: Write HTML review
+    C5. Comments: Apply comments metadata
+    C6. Comments: Verify comments apply report
 
 ### Export comments source TSV
 
-Example:
+Use the launcher option:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\Export-CalibreBatchForComments.ps1 -Search "#award_programs:""AHA - J. Russell Major Prize""" -ExactAwardProgram "AHA - J. Russell Major Prize" -OutputTsv ".\input\comments-source-j-russell-major-prize.tsv"
+    C1. Comments: Export source TSV
 
-This is read-only.
+Or run directly:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\Export-CalibreBatchForComments.ps1 `
+      -Search "comments:false" `
+      -OutputTsv ".\input\comments-source-{batch}.tsv"
+
+The export step is read-only.
+
+You may select books using a Calibre search string, explicit Calibre IDs, or both.
+
+### Generate proposed comments externally
+
+The toolkit does not perform web research or AI generation inside PowerShell.
+
+Use the exported TSV plus:
+
+    docs/Comments-Generation-Prompt-Template.md
+    docs/Comments-Template-Standard.md
+
+to generate proposed comments externally.
 
 ### Prepare proposed comments TSV
 
@@ -871,48 +902,92 @@ Copy the exported source TSV to an import TSV and fill the proposed comments wor
 
     input/comments-import-{batch}.tsv
 
-Allowed template profiles:
+Required workflow fields include:
 
-    Scholarly Nonfiction
-    General Nonfiction
-    Fiction
-    Reference
-    Poetry / Drama
-    Edited Collection / Anthology
-    Gaming / Technical / Manual
+    ProposedComments
+    CommentsTemplateProfile
+    CommentsMode
+    ChangeReason
+    Confidence
+    ManualReviewRequired
+    SourceNotes
 
-Allowed comments modes:
+### Dry run
 
-    Replace
-    Append
-    Prepend
-    Skip
+Use launcher option:
 
-Allowed confidence values:
+    C2. Comments: Dry run import TSV
 
-    High - Source Grounded
-    Medium - Source Supported
-    Low - Manual Review Recommended
+Or run directly:
 
-SourceNotes are required. ProposedComments should also include a visible Source Notes HTML section.
+    powershell -ExecutionPolicy Bypass -File .\scripts\Test-CommentsDryRun.ps1 `
+      -InputTsv ".\input\comments-import-{batch}.tsv" `
+      -ReportCsv ".\reports\comments-dryrun-{batch}.csv"
 
-### Dry run proposed comments
+The dry run is read-only.
 
-Example:
+Do not apply unless the dry run reports zero blocked rows.
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\Test-CommentsDryRun.ps1 -InputTsv ".\input\comments-import-j-russell-major-prize.tsv" -ReportCsv ".\reports\comments-dryrun-j-russell-major-prize.csv"
+### Summary
 
-This is read-only.
+Use launcher option:
 
-### Write comments summary
+    C3. Comments: Write dry-run summary
 
-Example:
+Or run directly:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\Write-CommentsSummary.ps1 -DryRunCsv ".\reports\comments-dryrun-j-russell-major-prize.csv" -SummaryTxt ".\reports\comments-summary-j-russell-major-prize.txt"
+    powershell -ExecutionPolicy Bypass -File .\scripts\Write-CommentsSummary.ps1 `
+      -DryRunCsv ".\reports\comments-dryrun-{batch}.csv" `
+      -SummaryTxt ".\reports\comments-summary-{batch}.txt"
 
-This is read-only.
+### HTML review
 
-For v0.6, comments apply and verify behavior are intentionally deferred.
+Use launcher option:
+
+    C4. Comments: Write HTML review
+
+Or run directly:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\Write-CommentsReviewHtml.ps1 `
+      -InputTsv ".\input\comments-import-{batch}.tsv" `
+      -OutputHtml ".\reports\comments-review-{batch}.html" `
+      -IncludeExistingComments `
+      -Open
+
+Review the rendered HTML before applying.
+
+### Apply comments metadata
+
+Use launcher option:
+
+    C5. Comments: Apply comments metadata
+
+The apply step modifies Calibre metadata.
+
+The launcher defaults to preflight-only mode. Use preflight first, review the report, then run real apply only when the batch is clean.
+
+Direct command example:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\Invoke-CommentsApply.ps1 `
+      -InputTsv ".\input\comments-import-{batch}.tsv" `
+      -DryRunCsv ".\reports\comments-dryrun-{batch}.csv" `
+      -ApplyReportCsv ".\reports\comments-apply-{batch}.csv"
+
+The apply script requires the exact confirmation phrase before writing.
+
+### Verify comments
+
+Use launcher option:
+
+    C6. Comments: Verify comments apply report
+
+Or run directly:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\Test-CommentsVerify.ps1 `
+      -ApplyReportCsv ".\reports\comments-apply-{batch}.csv" `
+      -VerifyReportCsv ".\reports\comments-verify-{batch}.csv"
+
+Verification is read-only.
 
 ---
 
@@ -969,11 +1044,11 @@ title
 authors
 ```
 
-Comments module write-to-Calibre field, deferred beyond v0.6:
+Comments module write-to-Calibre field:
 
     comments
 
-For v0.6, the Comments module does not write to Calibre. It only exports, dry-runs, and summarizes proposed comments changes.
+For v0.7, the Comments module can write approved proposed comments to Calibre through the controlled apply workflow.
 
 This keeps the Calibre schema clean while still making enrichment and cleanup processes reviewable.
 
@@ -1094,6 +1169,7 @@ v0.3 = workflow label cleanup and documentation polish
 v0.4 = operational polish and LCC audit safety gate
 v0.5 = author/title cleanup module
 v0.6 = comments export, dry run, and summary
+v0.7 = comments apply, verify, and launcher integration
 ```
 
 Useful commands:
@@ -1217,7 +1293,7 @@ Review:
     reports/comments-dryrun-{batch}.csv
     reports/comments-summary-{batch}.txt
 
-For v0.6, blocked comments rows are reviewed through dry-run and summary reports only. Apply behavior is deferred.
+For v0.7, blocked comments rows must be fixed in the import TSV, then dry-run again. Do not apply until the dry run reports zero blocked rows.
 
 ### Verification is not clean
 
@@ -1252,3 +1328,6 @@ For LCC, the external enrichment step populates classification fields.
 For Author / Title Cleanup, the external review step populates only proposed title/author changes.
 
 Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+
+
+

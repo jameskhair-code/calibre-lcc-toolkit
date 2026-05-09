@@ -24,3 +24,5 @@ Thumbs.db
 reports/*.html
 input/*.txt
 reports/backup/
+reports/audit/
+
