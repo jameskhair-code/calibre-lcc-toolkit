@@ -5,7 +5,7 @@ Applies validated proposed comments to Calibre metadata.
 .DESCRIPTION
 Reads a comments import TSV and matching comments dry-run CSV, rechecks current Calibre
 metadata, builds final comments HTML according to CommentsMode, and writes the standard
-Calibre comments field using calibredb set_metadata --field comments:<html>.
+Calibre comments field using a temporary OPF file and calibredb set_metadata.
 
 This script modifies Calibre metadata unless -PreflightOnly is used.
 
@@ -48,6 +48,93 @@ param(
 
     [switch]$AllowReplaceNonBlank
 )
+
+
+function Convert-ToXmlTextContent {
+    param(
+        [AllowNull()]
+        [string]$Value
+    )
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    return [System.Security.SecurityElement]::Escape($Value)
+}
+
+function Set-CalibreCommentsViaTempOpf {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CalibreId,
+
+        [Parameter(Mandatory = $true)]
+        [string]$FinalComments
+    )
+
+    $tempOpf = Join-Path ([System.IO.Path]::GetTempPath()) ("cmt-comments-" + $CalibreId + "-" + [guid]::NewGuid().ToString("N") + ".opf")
+
+    try {
+        $opfLines = Invoke-CalibreDb -Arguments @(
+            "show_metadata",
+            $CalibreId,
+            "--as-opf"
+        )
+
+        $opfText = ($opfLines -join "`n").Trim()
+
+        if ([string]::IsNullOrWhiteSpace($opfText)) {
+            throw "No OPF output returned from calibredb show_metadata --as-opf."
+        }
+
+        $escapedComments = Convert-ToXmlTextContent -Value $FinalComments
+        $newDescription = "<dc:description>$escapedComments</dc:description>"
+
+        $regexOptions = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
+            [System.Text.RegularExpressions.RegexOptions]::Singleline
+
+        $descriptionRegex = [System.Text.RegularExpressions.Regex]::new(
+            "<dc:description>.*?</dc:description>",
+            $regexOptions
+        )
+
+        if ($descriptionRegex.IsMatch($opfText)) {
+            $opfText = $descriptionRegex.Replace($opfText, $newDescription, 1)
+        }
+        else {
+            $metadataEndRegex = [System.Text.RegularExpressions.Regex]::new(
+                "</metadata>",
+                [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+            )
+
+            if (-not $metadataEndRegex.IsMatch($opfText)) {
+                throw "Could not find </metadata> in OPF output."
+            }
+
+            $opfText = $metadataEndRegex.Replace($opfText, $newDescription + "</metadata>", 1)
+        }
+
+        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText($tempOpf, $opfText, $utf8NoBom)
+
+        $output = Invoke-CalibreDb -Arguments @(
+            "set_metadata",
+            $CalibreId,
+            $tempOpf
+        ) 2>&1
+
+        return [pscustomobject]@{
+            Output = ($output | ForEach-Object { [string]$_ }) -join " "
+            ExitCode = $LASTEXITCODE
+            TempOpf = $tempOpf
+        }
+    }
+    finally {
+        if (Test-Path $tempOpf) {
+            Remove-Item -Path $tempOpf -Force
+        }
+    }
+}
 
 $AllowedCommentsModes = @(
     "Replace",
@@ -840,23 +927,17 @@ $applyResults = foreach ($preflightRow in $preflightRows) {
         -PrependExistingHeaderHtml $PrependExistingHeaderHtml `
         -AppendProposedHeaderHtml $AppendProposedHeaderHtml
 
-    $fieldArgument = "comments:$finalComments"
-
-    $setArgs = @(
-        "set_metadata",
-        $calibreId,
-        "--field",
-        $fieldArgument
-    )
-
     $calibreOutput = ""
     $applyStatus = "Succeeded"
 
     try {
-        $output = Invoke-CalibreDb -Arguments $setArgs 2>&1
-        $calibreOutput = ($output | ForEach-Object { [string]$_ }) -join " "
+        $setResult = Set-CalibreCommentsViaTempOpf `
+            -CalibreId $calibreId `
+            -FinalComments $finalComments
 
-        if ($LASTEXITCODE -ne 0) {
+        $calibreOutput = $setResult.Output
+
+        if ($setResult.ExitCode -ne 0) {
             $applyStatus = "Failed"
         }
     }
@@ -947,6 +1028,7 @@ if ($failedCount -gt 0) {
 
 Write-Host ""
 Write-Host "Next step: run the comments verify script after it is available."
+
 
 
 
