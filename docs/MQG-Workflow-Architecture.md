@@ -74,6 +74,12 @@ MQG-03 requires all four LCC fields to be populated and verified before the gate
 
 Awards should come before comments because award recognition is meaningful context for the final comments block.
 
+MQG-04 is a manual completion gate.
+
+The toolkit may validate that award metadata fields are populated and internally consistent, but it does not decide award correctness by itself.
+
+The gate should only be marked complete after manual award review confirms that Award Programs, Award Entries, Award Designations, Award Years, Award Status - Highest, and Award Recognition Count are aligned.
+
 ### MQG-05: Description / Comments
 
 Comments should be generated after title, author, identifiers, LCC, and awards are known.
@@ -182,5 +188,6 @@ When in doubt:
     Verify first.
     Mark MQG complete second.
     Mark MQG-99 last.
+
 
 

@@ -30,7 +30,7 @@ main
 Current stable tag:
 
 ```text
-v0.8.5
+v0.8.6
 ```
 
 Current repository name:
@@ -573,7 +573,7 @@ Recommended approach:
 Current development branch:
 
 ```text
-v0.8.5-comments-mqg-complete
+v0.8.6-awards-mqg-complete
 ```
 
 Recommended next work:
@@ -651,4 +651,20 @@ The Comments gate now follows the verified-completion pattern:
 MQG-05: Description / Comments requires verified title, authors, comments hash, final comments length, and successful apply status.
 
 The script also detects already-complete rows and reports them without rewriting the checkbox.
+
+### v0.8.6 - Awards Manual MQG Completion
+
+Added Awards MQG completion support.
+
+The Awards gate now follows the manual-completion pattern:
+
+    manual award review
+    -> selected IDs or CSV
+    -> award metadata checks
+    -> mark #mqg_awards true
+    -> read back confirmation
+
+This step does not generate or enrich award metadata.
+
+It supports already-complete detection and avoids rewriting rows where `#mqg_awards` is already true.
 

@@ -931,6 +931,52 @@ and is not rewritten.
 A successful newly marked row requires both the write operation and post-write readback confirmation.
 
 
+
+### Awards manual MQG completion
+
+The toolkit includes a manual MQG completion step for Awards:
+
+    W1. Awards: Mark reviewed MQG complete
+
+This step updates the Calibre custom field:
+
+    #mqg_awards
+
+This is a manual-gate completion step.
+
+It does not generate, enrich, or correct award metadata. Use it only after award metadata has already been reviewed.
+
+For records with tracked award recognition, the step checks:
+
+- `Award Programs`
+- `Award Entries`
+- `Award Designations`
+- `Award Years`
+- `Award Status - Highest`
+- `Award Recognition Count`
+
+The standard pass rule is:
+
+- award metadata exists
+- award entries use the expected `Award Designation - Year - Status` shape
+- award status is one of `Winner`, `Shortlist`, or `Longlist`
+- award recognition count is numeric
+- award recognition count matches the number of award entries
+
+The step also supports no-awards / not-applicable rows using:
+
+    -AllowNoAwards
+
+Only use that option after manual review confirms that the book has no tracked award recognition or that award tracking is not applicable for the current workflow stage.
+
+If `#mqg_awards` is already true, the row is reported as:
+
+    Already Complete
+
+and is not rewritten.
+
+A successful newly marked row requires both the write operation and post-write readback confirmation.
+
 ### Comments verified MQG completion
 
 The Comments workflow includes a separate MQG completion step:
@@ -1323,6 +1369,7 @@ v0.8.2 = author/title verified MQG completion
 v0.8.3 = MQG order alignment
 v0.8.4 = LCC verified MQG completion
 v0.8.5 = Comments verified MQG completion
+v0.8.6 = Awards manual MQG completion
 ```
 
 Useful commands:
@@ -1481,6 +1528,7 @@ For LCC, the external enrichment step populates classification fields.
 For Author / Title Cleanup, the external review step populates only proposed title/author changes.
 
 Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+
 
 
 

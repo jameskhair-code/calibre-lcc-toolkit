@@ -17,9 +17,54 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.8.3 = MQG order alignment
     v0.8.4 = LCC verified MQG completion
     v0.8.5 = Comments verified MQG completion
+    v0.8.6 = Awards manual MQG completion
 
 ---
 
+## v0.8.6 - Awards Manual MQG Completion
+
+### Added
+
+- Added `scripts/Invoke-AwardsMqgComplete.ps1`.
+- Added launcher section:
+  - `Manual MQG Completion Module`
+- Added launcher option:
+  - `W1. Awards: Mark reviewed MQG complete`
+
+### Behavior
+
+- Marks `#mqg_awards` true only after manual award review has already been completed.
+- Supports input by:
+  - comma-separated Calibre IDs
+  - CSV with a `CalibreId` column
+- Checks award metadata fields:
+  - `Award Programs`
+  - `Award Entries`
+  - `Award Designations`
+  - `Award Years`
+  - `Award Status - Highest`
+  - `Award Recognition Count`
+- Blocks rows with missing or malformed award metadata unless `-AllowNoAwards` is explicitly used.
+- Detects rows where `#mqg_awards` is already true and reports them as `Already Complete` instead of rewriting them.
+- Requires confirmation phrase when new rows need to be marked:
+
+    MARK AWARDS MQG COMPLETE
+
+### Safety
+
+- Supports preflight-only mode.
+- Writes an Awards MQG completion report.
+- Performs post-write readback using `calibredb show_metadata --as-opf`.
+- Reports `ReadBackStatus = Confirmed true` when the custom field is confirmed true.
+
+### Validated
+
+- Successfully preflighted three AHA Leo Gershoy Award records.
+- Confirmed all three rows were eligible.
+- Confirmed all three rows were already complete.
+- Confirmed launcher wiring and parser checks for `Invoke-AwardsMqgComplete.ps1` and `Start-LccWorkflow.ps1`.
+
+---
 ## v0.8.5 - Comments Verified MQG Completion
 
 ### Added
@@ -516,6 +561,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
