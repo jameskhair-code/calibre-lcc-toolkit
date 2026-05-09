@@ -14,9 +14,38 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.8 = author/title cleanup launcher integration
     v0.8.1 = author/title explicit ID export support
     v0.8.2 = author/title verified MQG completion
+    v0.8.3 = MQG order alignment
 
 ---
 
+## v0.8.3 - MQG Order Alignment
+
+### Added
+
+- Added `docs/MQG-Workflow-Architecture.md`.
+
+### Changed
+
+- Documented the canonical MQG processing order:
+  - `MQG-01: Title & Author`
+  - `MQG-02: Identifiers`
+  - `MQG-03: LCC`
+  - `MQG-04: Awards`
+  - `MQG-05: Description / Comments`
+  - `MQG-06: Tags`
+  - `MQG-07: Cover`
+  - `MQG-99: Metadata Complete`
+- Updated launcher header to `Calibre LCC Toolkit v0.8.3`.
+- Updated toolkit config version to `0.8.3`.
+
+### Notes
+
+- This is a documentation and workflow-alignment release.
+- No script behavior changes were made.
+- Calibre display labels were reordered manually.
+- Stable lookup names remain unchanged and should continue to be used by scripts.
+
+---
 ## v0.8.2 - Author / Title Verified MQG Completion
 
 ### Added
@@ -404,6 +433,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
