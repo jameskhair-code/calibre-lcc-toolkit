@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.8" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.8.2" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -181,6 +181,7 @@ function Show-Menu {
     Write-Host "A3. Author/Title: Write dry-run summary"
     Write-Host "A4. Author/Title: Apply cleanup metadata"
     Write-Host "A5. Author/Title: Verify cleanup results"
+    Write-Host "A6. Author/Title: Mark verified MQG complete"
     Write-Host ""
     Write-Host "Comments Module" -ForegroundColor Cyan
     Write-Host "C1. Comments: Export source TSV"
@@ -823,6 +824,57 @@ function Start-AuthorTitleVerify {
     Pause-Toolkit
 }
 
+
+function Start-AuthorTitleMqgComplete {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Author/Title: mark verified MQG complete" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "This step can modify the Calibre custom field #mqg_title_author." -ForegroundColor Yellow
+    Write-Host "Only rows with VerificationStatus = Verified are eligible." -ForegroundColor Yellow
+    Write-Host ""
+
+    $verifyReportCsv = Read-ToolkitInput `
+        -Prompt "Verify report CSV" `
+        -Default ".\reports\author-title-cleanup-verify-$batchSlug.csv"
+
+    $mqgReportCsv = Read-ToolkitInput `
+        -Prompt "MQG completion report CSV" `
+        -Default ".\reports\author-title-cleanup-mqg-complete-$batchSlug.csv"
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $preflightOnlyAnswer = Read-ToolkitInput `
+        -Prompt "Preflight only? YES = no write, NO = mark complete" `
+        -Default "YES"
+
+    $mqgScriptPath = Get-ToolkitScriptPath -ScriptName "Invoke-AuthorTitleMqgComplete.ps1"
+
+    $mqgArgs = @{
+        VerifyReportCsv = $verifyReportCsv
+        MqgReportCsv = $mqgReportCsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $mqgArgs.LibraryPath = $libraryPath
+    }
+
+    if ($preflightOnlyAnswer -ne "NO") {
+        $mqgArgs.PreflightOnly = $true
+    }
+
+    Write-Host ""
+    Write-Host "Running: Invoke-AuthorTitleMqgComplete.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $mqgScriptPath @mqgArgs
+
+    Pause-Toolkit
+}
+
 function Start-CommentsExport {
     $batchSlug = Read-BatchSlug
 
@@ -1096,6 +1148,7 @@ function Start-CommentsVerify {
                 "A3" { Start-AuthorTitleSummary }
                 "A4" { Start-AuthorTitleApply }
                 "A5" { Start-AuthorTitleVerify }
+                "A6" { Start-AuthorTitleMqgComplete }
                 "C1" { Start-CommentsExport }
                 "C2" { Start-CommentsDryRun }
                 "C3" { Start-CommentsSummary }
@@ -1122,6 +1175,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 

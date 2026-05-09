@@ -573,7 +573,7 @@ Recommended approach:
 Current development branch:
 
 ```text
-v0.8-author-title-launcher
+v0.8.2-author-title-mqg-complete
 ```
 
 Recommended next work:
@@ -599,5 +599,6 @@ Report first.
 Apply last.
 Verify always.
 ```
+
 
 

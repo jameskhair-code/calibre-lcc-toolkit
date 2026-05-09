@@ -12,9 +12,43 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.6 = comments export, dry run, and summary
     v0.7 = comments apply, verify, and launcher integration
     v0.8 = author/title cleanup launcher integration
+    v0.8.1 = author/title explicit ID export support
+    v0.8.2 = author/title verified MQG completion
 
 ---
 
+## v0.8.2 - Author / Title Verified MQG Completion
+
+### Added
+
+- Added `scripts/Invoke-AuthorTitleMqgComplete.ps1`.
+- Added launcher option:
+  - `A6. Author/Title: Mark verified MQG complete`
+
+### Behavior
+
+- Reads the Author / Title verify report as the source of truth.
+- Only rows with `VerificationStatus = Verified` are eligible.
+- Skips mismatched, missing, skipped, duplicate, or otherwise unverified rows.
+- Updates the Calibre custom field `#mqg_title_author` to true.
+- Requires the confirmation phrase:
+
+    MARK MQG COMPLETE
+
+### Safety
+
+- Supports preflight-only mode.
+- Writes a MQG completion report.
+- Performs post-write readback using `calibredb show_metadata --as-opf`.
+- Reports `ReadBackStatus = Confirmed true` only when the custom field is confirmed true after writing.
+
+### Validated
+
+- Successfully marked three verified Author / Title cleanup records complete.
+- Confirmed all three rows reported `MarkStatus = Succeeded`.
+- Confirmed all three rows reported `ReadBackStatus = Confirmed true`.
+
+---
 ## v0.8 - Author / Title Cleanup Launcher Integration
 
 ### Added
@@ -370,5 +404,6 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 

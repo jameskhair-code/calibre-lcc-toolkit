@@ -759,6 +759,7 @@ Launcher options:
     A3. Author/Title: Write dry-run summary
     A4. Author/Title: Apply cleanup metadata
     A5. Author/Title: Verify cleanup results
+    A6. Author/Title: Mark verified MQG complete
 
 Recommended script workflow:
 
@@ -999,6 +1000,39 @@ Or run directly:
 
 Verification is read-only.
 
+### Mark verified MQG complete
+
+Use launcher option:
+
+    A6. Author/Title: Mark verified MQG complete
+
+This step updates the Calibre custom field:
+
+    #mqg_title_author
+
+Only rows from the Author / Title verify report with:
+
+    VerificationStatus = Verified
+
+are eligible.
+
+Mismatched, missing, skipped, duplicate, or otherwise unverified rows are not marked complete.
+
+The step requires explicit confirmation:
+
+    MARK MQG COMPLETE
+
+The MQG completion report records:
+
+- rows reviewed
+- rows eligible
+- rows skipped
+- rows marked complete
+- rows failed
+- readback status
+
+A successful mark requires both the write operation and post-write readback confirmation.
+
 ---
 
 ## Safety Model
@@ -1181,6 +1215,8 @@ v0.5 = author/title cleanup module
 v0.6 = comments export, dry run, and summary
 v0.7 = comments apply, verify, and launcher integration
 v0.8 = author/title cleanup launcher integration
+v0.8.1 = author/title explicit ID export support
+v0.8.2 = author/title verified MQG completion
 ```
 
 Useful commands:
@@ -1339,6 +1375,8 @@ For LCC, the external enrichment step populates classification fields.
 For Author / Title Cleanup, the external review step populates only proposed title/author changes.
 
 Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+
+
 
 
 
