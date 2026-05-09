@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Exports a Calibre batch to TSV for author/title cleanup review.
 
@@ -28,6 +28,8 @@ param(
     [string]$Search = "",
 
     [string]$ExactAwardProgram = "",
+
+    [string]$CalibreIds = "",
 
     [string]$OutputTsv = ".\input\author-title-cleanup-source-batch.tsv",
 
@@ -359,6 +361,31 @@ if ([string]::IsNullOrWhiteSpace($jsonText)) {
 
 $converted = $jsonText | ConvertFrom-Json
 $books = @(Convert-ToFlatArray -Value $converted)
+
+if (-not [string]::IsNullOrWhiteSpace($CalibreIds)) {
+    Write-Host "Filtering by explicit Calibre IDs: $CalibreIds"
+
+    $idFilterSet = @{}
+
+    $CalibreIds -split "," |
+        ForEach-Object {
+            $idText = ([string]$_).Trim()
+
+            if (-not [string]::IsNullOrWhiteSpace($idText)) {
+                $idFilterSet[$idText] = $true
+            }
+        }
+
+    if ($idFilterSet.Count -eq 0) {
+        throw "CalibreIds was provided, but no usable IDs were found."
+    }
+
+    $books = @(
+        $books | Where-Object {
+            $idFilterSet.ContainsKey(([string]$_.id).Trim())
+        }
+    )
+}
 
 Write-Host "Books found before local filters: $($books.Count)"
 

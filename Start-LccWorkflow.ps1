@@ -599,8 +599,9 @@ function Start-AuthorTitleExport {
     Write-Host "This step reads Calibre and creates a source TSV for author/title cleanup review." -ForegroundColor DarkGray
     Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "You may use a Calibre search string, an exact Award Programs value, or both." -ForegroundColor DarkGray
+    Write-Host "You may use a Calibre search string, explicit Calibre IDs, an exact Award Programs value, or a combination." -ForegroundColor DarkGray
     Write-Host "Example search: title:false or author:false" -ForegroundColor DarkGray
+    Write-Host "Example IDs: 4040,4048,4049" -ForegroundColor DarkGray
     Write-Host "Example award program: AHA - J. Russell Major Prize" -ForegroundColor DarkGray
     Write-Host ""
 
@@ -1121,6 +1122,8 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
+
 
 
 
