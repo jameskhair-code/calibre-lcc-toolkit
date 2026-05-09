@@ -175,6 +175,13 @@ function Show-Menu {
     Write-Host "10. Reports: Show latest report files"
     Write-Host "11. Show Git status"
     Write-Host ""
+    Write-Host "Author / Title Cleanup Module" -ForegroundColor Cyan
+    Write-Host "A1. Author/Title: Export source TSV"
+    Write-Host "A2. Author/Title: Dry run cleanup TSV"
+    Write-Host "A3. Author/Title: Write dry-run summary"
+    Write-Host "A4. Author/Title: Apply cleanup metadata"
+    Write-Host "A5. Author/Title: Verify cleanup results"
+    Write-Host ""
     Write-Host "Comments Module" -ForegroundColor Cyan
     Write-Host "C1. Comments: Export source TSV"
     Write-Host "C2. Comments: Dry run import TSV"
@@ -582,6 +589,239 @@ try {
         $choice = Read-Host "Select an option"
 
 
+
+function Start-AuthorTitleExport {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Author/Title: export source TSV" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step reads Calibre and creates a source TSV for author/title cleanup review." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "You may use a Calibre search string, an exact Award Programs value, or both." -ForegroundColor DarkGray
+    Write-Host "Example search: title:false or author:false" -ForegroundColor DarkGray
+    Write-Host "Example award program: AHA - J. Russell Major Prize" -ForegroundColor DarkGray
+    Write-Host ""
+
+    $search = Read-ToolkitInput `
+        -Prompt "Calibre search string, blank if using exact award program only" `
+        -Default ""
+
+    $exactAwardProgram = Read-ToolkitInput `
+        -Prompt "Exact Award Programs value, blank to skip" `
+        -Default ""
+
+    if ([string]::IsNullOrWhiteSpace($search) -and [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
+        throw "Provide either a Calibre search string or an exact Award Programs value."
+    }
+
+    $outputTsv = Read-ToolkitInput `
+        -Prompt "Output author/title source TSV" `
+        -Default ".\input\author-title-cleanup-source-$batchSlug.tsv"
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $exportScriptPath = Get-ToolkitScriptPath -ScriptName "Export-CalibreBatchForAuthorTitleCleanup.ps1"
+
+    $exportArgs = @{
+        OutputTsv = $outputTsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($search)) {
+        $exportArgs.Search = $search
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
+        $exportArgs.ExactAwardProgram = $exactAwardProgram
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $exportArgs.LibraryPath = $libraryPath
+    }
+
+    Write-Host ""
+    Write-Host "Running: Export-CalibreBatchForAuthorTitleCleanup.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $exportScriptPath @exportArgs
+
+    Write-Host ""
+    Write-Host "Next step:" -ForegroundColor Cyan
+    Write-Host "Review the exported TSV, populate proposed title/author fields, then save the import TSV as:"
+    Write-Host ".\input\author-title-cleanup-import-$batchSlug.tsv"
+
+    Pause-Toolkit
+}
+
+function Start-AuthorTitleDryRun {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Author/Title: dry run cleanup TSV" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step validates proposed title/author cleanup without modifying Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $inputTsv = Read-ToolkitInput `
+        -Prompt "Input author/title import TSV" `
+        -Default ".\input\author-title-cleanup-import-$batchSlug.tsv"
+
+    $reportCsv = Read-ToolkitInput `
+        -Prompt "Dry-run report CSV" `
+        -Default ".\reports\author-title-cleanup-dryrun-$batchSlug.csv"
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $dryRunScriptPath = Get-ToolkitScriptPath -ScriptName "Test-AuthorTitleCleanupDryRun.ps1"
+
+    $dryRunArgs = @{
+        InputTsv = $inputTsv
+        ReportCsv = $reportCsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $dryRunArgs.LibraryPath = $libraryPath
+    }
+
+    Write-Host ""
+    Write-Host "Running: Test-AuthorTitleCleanupDryRun.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $dryRunScriptPath @dryRunArgs
+
+    Pause-Toolkit
+}
+
+function Start-AuthorTitleSummary {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Author/Title: write dry-run summary" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step summarizes an author/title cleanup dry-run CSV." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $dryRunCsv = Read-ToolkitInput `
+        -Prompt "Dry-run CSV" `
+        -Default ".\reports\author-title-cleanup-dryrun-$batchSlug.csv"
+
+    $summaryTxt = Read-ToolkitInput `
+        -Prompt "Summary TXT" `
+        -Default ".\reports\author-title-cleanup-summary-$batchSlug.txt"
+
+    $summaryScriptPath = Get-ToolkitScriptPath -ScriptName "Write-AuthorTitleCleanupSummary.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Write-AuthorTitleCleanupSummary.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $summaryScriptPath `
+        -DryRunCsv $dryRunCsv `
+        -SummaryTxt $summaryTxt
+
+    Pause-Toolkit
+}
+
+function Start-AuthorTitleApply {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Author/Title: apply cleanup metadata" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "This step can modify Calibre title and author metadata." -ForegroundColor Yellow
+    Write-Host "Run only after the dry-run report and summary are clean." -ForegroundColor Yellow
+    Write-Host ""
+
+    $dryRunCsv = Read-ToolkitInput `
+        -Prompt "Dry-run CSV" `
+        -Default ".\reports\author-title-cleanup-dryrun-$batchSlug.csv"
+
+    $applyReportCsv = Read-ToolkitInput `
+        -Prompt "Apply report CSV" `
+        -Default ".\reports\author-title-cleanup-apply-$batchSlug.csv"
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $launchAnswer = Read-ToolkitInput `
+        -Prompt "Launch real apply script now? Type YES to continue" `
+        -Default "NO"
+
+    if ($launchAnswer -ne "YES") {
+        Write-Host ""
+        Write-Host "Apply not launched." -ForegroundColor Yellow
+        Pause-Toolkit
+        return
+    }
+
+    $applyScriptPath = Get-ToolkitScriptPath -ScriptName "Invoke-AuthorTitleCleanupApply.ps1"
+
+    $applyArgs = @{
+        DryRunCsv = $dryRunCsv
+        ApplyReportCsv = $applyReportCsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $applyArgs.LibraryPath = $libraryPath
+    }
+
+    Write-Host ""
+    Write-Host "Running: Invoke-AuthorTitleCleanupApply.ps1" -ForegroundColor Yellow
+    Write-Host ""
+
+    & $applyScriptPath @applyArgs
+
+    Pause-Toolkit
+}
+
+function Start-AuthorTitleVerify {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Author/Title: verify cleanup results" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step verifies current Calibre title/author values against the dry-run report." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $dryRunCsv = Read-ToolkitInput `
+        -Prompt "Dry-run CSV" `
+        -Default ".\reports\author-title-cleanup-dryrun-$batchSlug.csv"
+
+    $verifyReportCsv = Read-ToolkitInput `
+        -Prompt "Verify report CSV" `
+        -Default ".\reports\author-title-cleanup-verify-$batchSlug.csv"
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $verifyScriptPath = Get-ToolkitScriptPath -ScriptName "Test-AuthorTitleCleanupVerify.ps1"
+
+    $verifyArgs = @{
+        DryRunCsv = $dryRunCsv
+        VerifyReportCsv = $verifyReportCsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $verifyArgs.LibraryPath = $libraryPath
+    }
+
+    Write-Host ""
+    Write-Host "Running: Test-AuthorTitleCleanupVerify.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $verifyScriptPath @verifyArgs
+
+    Pause-Toolkit
+}
+
 function Start-CommentsExport {
     $batchSlug = Read-BatchSlug
 
@@ -850,6 +1090,11 @@ function Start-CommentsVerify {
                 "9"  { Open-WorkflowDocumentation }
                 "10" { Start-ShowLatestReports }
                 "11" { Show-GitStatus }
+                "A1" { Start-AuthorTitleExport }
+                "A2" { Start-AuthorTitleDryRun }
+                "A3" { Start-AuthorTitleSummary }
+                "A4" { Start-AuthorTitleApply }
+                "A5" { Start-AuthorTitleVerify }
                 "C1" { Start-CommentsExport }
                 "C2" { Start-CommentsDryRun }
                 "C3" { Start-CommentsSummary }
