@@ -78,6 +78,16 @@ Awards should come before comments because award recognition is meaningful conte
 
 Comments should be generated after title, author, identifiers, LCC, and awards are known.
 
+MQG-05 requires verified comments metadata before the gate is complete:
+
+    ApplyStatus = Succeeded
+    VerificationStatus = Verified
+    TitleVerified = Yes
+    AuthorsVerified = Yes
+    CommentsVerified = Yes
+    ExpectedFinalCommentsHash matches ActualCommentsHash
+    ExpectedFinalLength matches ActualCommentsLength
+
 ### MQG-06: Tags
 
 Tags should be final tags, not starter tags. They should be informed by the completed metadata context.
@@ -172,4 +182,5 @@ When in doubt:
     Verify first.
     Mark MQG complete second.
     Mark MQG-99 last.
+
 

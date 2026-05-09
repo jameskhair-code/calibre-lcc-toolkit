@@ -930,6 +930,42 @@ and is not rewritten.
 
 A successful newly marked row requires both the write operation and post-write readback confirmation.
 
+
+### Comments verified MQG completion
+
+The Comments workflow includes a separate MQG completion step:
+
+    C7. Comments: Mark verified MQG complete
+
+This step updates the Calibre custom field:
+
+    #mqg_description
+
+The Comments verify report is the source of truth.
+
+MQG-05: Description / Comments is only considered complete when the comments verify report confirms:
+
+- `ApplyStatus = Succeeded`
+- `VerificationStatus = Verified`
+- `TitleVerified = Yes`
+- `AuthorsVerified = Yes`
+- `CommentsVerified = Yes`
+- `ExpectedFinalCommentsHash` is populated
+- `ActualCommentsHash` is populated
+- the expected and actual comments hashes match
+- final comments length is greater than zero
+- expected and actual comments lengths match
+
+The step supports preflight-only mode.
+
+If `#mqg_description` is already true, the row is reported as:
+
+    Already Complete
+
+and is not rewritten.
+
+A successful newly marked row requires both the write operation and post-write readback confirmation.
+
 ## Comments Workflow
 
 The v0.7 Comments module is available through the interactive launcher and can also be run through individual scripts.
@@ -1286,6 +1322,7 @@ v0.8.1 = author/title explicit ID export support
 v0.8.2 = author/title verified MQG completion
 v0.8.3 = MQG order alignment
 v0.8.4 = LCC verified MQG completion
+v0.8.5 = Comments verified MQG completion
 ```
 
 Useful commands:
@@ -1444,6 +1481,7 @@ For LCC, the external enrichment step populates classification fields.
 For Author / Title Cleanup, the external review step populates only proposed title/author changes.
 
 Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+
 
 
 

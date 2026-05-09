@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.8.4" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.8.5" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -191,6 +191,7 @@ function Show-Menu {
     Write-Host "C4. Comments: Write HTML review"
     Write-Host "C5. Comments: Apply comments metadata"
     Write-Host "C6. Comments: Verify comments apply report"
+    Write-Host "C7. Comments: Mark verified MQG complete"
     Write-Host ""
     Write-Host "0. Exit"
     Write-Host ""
@@ -1208,6 +1209,55 @@ function Start-CommentsVerify {
                 "C4" { Start-CommentsReviewHtml }
                 "C5" { Start-CommentsApply }
                 "C6" { Start-CommentsVerify }
+                "C7" {
+                    $batchSlug = Read-BatchSlug
+
+                    Write-Host ""
+                    Write-Host "Comments: mark verified MQG complete" -ForegroundColor Yellow
+                    Write-Host ""
+                    Write-Host "This step can modify the Calibre custom field #mqg_description." -ForegroundColor Yellow
+                    Write-Host "Only rows from a clean Comments verification report are eligible." -ForegroundColor Yellow
+                    Write-Host ""
+
+                    $verifyReportCsv = Read-ToolkitInput `
+                        -Prompt "Comments verify report CSV" `
+                        -Default ".\reports\comments-verify-$batchSlug.csv"
+
+                    $mqgReportCsv = Read-ToolkitInput `
+                        -Prompt "Comments MQG completion report CSV" `
+                        -Default ".\reports\comments-mqg-complete-$batchSlug.csv"
+
+                    $libraryPath = Read-ToolkitInput `
+                        -Prompt "Optional Calibre library path, blank for default" `
+                        -Default ""
+
+                    $preflightOnlyAnswer = Read-ToolkitInput `
+                        -Prompt "Preflight only? YES = no write, NO = mark complete" `
+                        -Default "YES"
+
+                    $mqgScriptPath = Get-ToolkitScriptPath -ScriptName "Invoke-CommentsMqgComplete.ps1"
+
+                    $mqgArgs = @{
+                        VerifyReportCsv = $verifyReportCsv
+                        MqgReportCsv    = $mqgReportCsv
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+                        $mqgArgs.LibraryPath = $libraryPath
+                    }
+
+                    if ($preflightOnlyAnswer -ne "NO") {
+                        $mqgArgs.PreflightOnly = $true
+                    }
+
+                    Write-Host ""
+                    Write-Host "Running: Invoke-CommentsMqgComplete.ps1" -ForegroundColor Cyan
+                    Write-Host ""
+
+                    & $mqgScriptPath @mqgArgs
+
+                    Pause-Toolkit
+                }
                 "0"  {
                     Write-Host "Exiting Calibre LCC Toolkit."
                     break
@@ -1228,6 +1278,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 

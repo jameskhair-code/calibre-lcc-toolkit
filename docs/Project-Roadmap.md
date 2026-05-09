@@ -30,7 +30,7 @@ main
 Current stable tag:
 
 ```text
-v0.8.4
+v0.8.5
 ```
 
 Current repository name:
@@ -573,7 +573,7 @@ Recommended approach:
 Current development branch:
 
 ```text
-v0.8.4-lcc-mqg-complete
+v0.8.5-comments-mqg-complete
 ```
 
 Recommended next work:
@@ -634,6 +634,21 @@ MQG-03: LCC requires all four LCC fields to be populated and verified:
     LCC Classification Path
     LCC Primary Class
     LCC Secondary Class
+
+The script also detects already-complete rows and reports them without rewriting the checkbox.
+
+### v0.8.5 - Comments Verified MQG Completion
+
+Added Comments MQG completion support.
+
+The Comments gate now follows the verified-completion pattern:
+
+    Comments verify report
+    -> eligible rows only
+    -> mark #mqg_description true
+    -> read back confirmation
+
+MQG-05: Description / Comments requires verified title, authors, comments hash, final comments length, and successful apply status.
 
 The script also detects already-complete rows and reports them without rewriting the checkbox.
 
