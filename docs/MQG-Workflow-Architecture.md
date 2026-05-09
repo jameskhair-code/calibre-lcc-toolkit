@@ -63,6 +63,13 @@ Identifiers improve confidence for classification, awards, comments, cover match
 
 LCC should come before final comments because it gives the comments generator a classification spine.
 
+MQG-03 requires all four LCC fields to be populated and verified before the gate is complete:
+
+    LCC
+    LCC Classification Path
+    LCC Primary Class
+    LCC Secondary Class
+
 ### MQG-04: Awards
 
 Awards should come before comments because award recognition is meaningful context for the final comments block.
@@ -165,3 +172,4 @@ When in doubt:
     Verify first.
     Mark MQG complete second.
     Mark MQG-99 last.
+

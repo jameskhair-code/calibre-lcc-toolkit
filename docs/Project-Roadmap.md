@@ -30,7 +30,7 @@ main
 Current stable tag:
 
 ```text
-v0.8.3
+v0.8.4
 ```
 
 Current repository name:
@@ -573,7 +573,7 @@ Recommended approach:
 Current development branch:
 
 ```text
-v0.8.3-mqg-order-alignment
+v0.8.4-lcc-mqg-complete
 ```
 
 Recommended next work:
@@ -616,4 +616,24 @@ Canonical MQG order:
     MQG-06: Tags
     MQG-07: Cover
     MQG-99: Metadata Complete
+
+### v0.8.4 - LCC Verified MQG Completion
+
+Added LCC MQG completion support.
+
+The LCC gate now follows the verified-completion pattern:
+
+    LCC verify report
+    -> eligible rows only
+    -> mark #mqg_lcc true
+    -> read back confirmation
+
+MQG-03: LCC requires all four LCC fields to be populated and verified:
+
+    LCC
+    LCC Classification Path
+    LCC Primary Class
+    LCC Secondary Class
+
+The script also detects already-complete rows and reports them without rewriting the checkbox.
 
