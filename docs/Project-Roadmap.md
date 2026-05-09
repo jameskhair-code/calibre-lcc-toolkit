@@ -30,7 +30,7 @@ main
 Current stable tag:
 
 ```text
-v0.8.6
+v0.8.7
 ```
 
 Current repository name:
@@ -573,7 +573,7 @@ Recommended approach:
 Current development branch:
 
 ```text
-v0.8.6-awards-mqg-complete
+v0.8.7-cover-mqg-complete
 ```
 
 Recommended next work:
@@ -667,4 +667,20 @@ The Awards gate now follows the manual-completion pattern:
 This step does not generate or enrich award metadata.
 
 It supports already-complete detection and avoids rewriting rows where `#mqg_awards` is already true.
+
+### v0.8.7 - Cover Manual MQG Completion
+
+Added Cover MQG completion support.
+
+The Cover gate now follows the manual-completion pattern:
+
+    manual cover review
+    -> selected IDs or CSV
+    -> cover path / file checks
+    -> mark #mqg_cover true
+    -> read back confirmation
+
+This step does not download, generate, replace, or enrich cover images.
+
+It supports already-complete detection and avoids rewriting rows where `#mqg_cover` is already true.
 

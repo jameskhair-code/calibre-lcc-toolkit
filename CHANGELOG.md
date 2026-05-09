@@ -18,9 +18,51 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.8.4 = LCC verified MQG completion
     v0.8.5 = Comments verified MQG completion
     v0.8.6 = Awards manual MQG completion
+    v0.8.7 = Cover manual MQG completion
 
 ---
 
+## v0.8.7 - Cover Manual MQG Completion
+
+### Added
+
+- Added `scripts/Invoke-CoverMqgComplete.ps1`.
+- Added launcher option:
+  - `W2. Cover: Mark reviewed MQG complete`
+
+### Behavior
+
+- Marks `#mqg_cover` true only after manual cover review has already been completed.
+- Supports input by:
+  - comma-separated Calibre IDs
+  - CSV with a `CalibreId` column
+- Checks that:
+  - Calibre record exists
+  - cover path is populated
+  - cover file exists on disk
+  - duplicate Calibre IDs are blocked
+- Blocks rows with missing cover paths or missing cover files unless `-AllowNoCover` is explicitly used.
+- Detects rows where `#mqg_cover` is already true and reports them as `Already Complete` instead of rewriting them.
+- Requires confirmation phrase when new rows need to be marked:
+
+    MARK COVER MQG COMPLETE
+
+### Safety
+
+- Supports preflight-only mode.
+- Writes a Cover MQG completion report.
+- Performs post-write readback using `calibredb show_metadata --as-opf`.
+- Reports `ReadBackStatus = Confirmed true` when the custom field is confirmed true.
+
+### Validated
+
+- Successfully tested three AHA Leo Gershoy Award records.
+- Confirmed all three records had cover paths.
+- Confirmed all three cover files existed on disk.
+- Confirmed all three rows were already complete.
+- Confirmed launcher wiring and parser checks for `Invoke-CoverMqgComplete.ps1` and `Start-LccWorkflow.ps1`.
+
+---
 ## v0.8.6 - Awards Manual MQG Completion
 
 ### Added
@@ -561,6 +603,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 

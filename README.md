@@ -932,6 +932,43 @@ A successful newly marked row requires both the write operation and post-write r
 
 
 
+
+### Cover manual MQG completion
+
+The toolkit includes a manual MQG completion step for Cover:
+
+    W2. Cover: Mark reviewed MQG complete
+
+This step updates the Calibre custom field:
+
+    #mqg_cover
+
+This is a manual-gate completion step.
+
+It does not download, generate, replace, or improve cover images. Use it only after the cover has already been manually reviewed.
+
+For records with covers, the step checks:
+
+- the Calibre record exists
+- the `cover` field is populated
+- the cover path exists on disk
+- duplicate Calibre IDs are blocked
+- current `#mqg_cover` state can be read back
+
+The step also supports missing/no-cover rows using:
+
+    -AllowNoCover
+
+Only use that option after manual review confirms that a missing cover is acceptable for the current workflow stage.
+
+If `#mqg_cover` is already true, the row is reported as:
+
+    Already Complete
+
+and is not rewritten.
+
+A successful newly marked row requires both the write operation and post-write readback confirmation.
+
 ### Awards manual MQG completion
 
 The toolkit includes a manual MQG completion step for Awards:
@@ -1370,6 +1407,7 @@ v0.8.3 = MQG order alignment
 v0.8.4 = LCC verified MQG completion
 v0.8.5 = Comments verified MQG completion
 v0.8.6 = Awards manual MQG completion
+v0.8.7 = Cover manual MQG completion
 ```
 
 Useful commands:
@@ -1528,6 +1566,7 @@ For LCC, the external enrichment step populates classification fields.
 For Author / Title Cleanup, the external review step populates only proposed title/author changes.
 
 Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+
 
 
 

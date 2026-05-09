@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.8.6" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.8.7" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -195,6 +195,7 @@ function Show-Menu {
     Write-Host ""
     Write-Host "Manual MQG Completion Module" -ForegroundColor Cyan
     Write-Host "W1. Awards: Mark reviewed MQG complete"
+    Write-Host "W2. Cover: Mark reviewed MQG complete"
     Write-Host ""
     Write-Host "0. Exit"
     Write-Host ""
@@ -1329,6 +1330,74 @@ function Start-CommentsVerify {
 
                     Pause-Toolkit
                 }
+                "W2" {
+                    $batchSlug = Read-BatchSlug
+
+                    Write-Host ""
+                    Write-Host "Cover: mark reviewed MQG complete" -ForegroundColor Yellow
+                    Write-Host ""
+                    Write-Host "This step can modify the Calibre custom field #mqg_cover." -ForegroundColor Yellow
+                    Write-Host "Use this only after the cover has been manually reviewed." -ForegroundColor Yellow
+                    Write-Host ""
+
+                    $calibreIds = Read-ToolkitInput `
+                        -Prompt "Comma-separated Calibre IDs, blank if using CSV" `
+                        -Default ""
+
+                    $inputCsv = Read-ToolkitInput `
+                        -Prompt "Optional input CSV with CalibreId column" `
+                        -Default ""
+
+                    $mqgReportCsv = Read-ToolkitInput `
+                        -Prompt "Cover MQG completion report CSV" `
+                        -Default ".\reports\cover-mqg-complete-$batchSlug.csv"
+
+                    $libraryPath = Read-ToolkitInput `
+                        -Prompt "Optional Calibre library path, blank for default" `
+                        -Default ""
+
+                    $allowNoCoverAnswer = Read-ToolkitInput `
+                        -Prompt "Allow missing/no-cover rows? YES or NO" `
+                        -Default "NO"
+
+                    $preflightOnlyAnswer = Read-ToolkitInput `
+                        -Prompt "Preflight only? YES = no write, NO = mark complete" `
+                        -Default "YES"
+
+                    $mqgScriptPath = Get-ToolkitScriptPath -ScriptName "Invoke-CoverMqgComplete.ps1"
+
+                    $mqgArgs = @{
+                        MqgReportCsv = $mqgReportCsv
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($calibreIds)) {
+                        $mqgArgs.CalibreIds = $calibreIds
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($inputCsv)) {
+                        $mqgArgs.InputCsv = $inputCsv
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+                        $mqgArgs.LibraryPath = $libraryPath
+                    }
+
+                    if ($allowNoCoverAnswer -eq "YES") {
+                        $mqgArgs.AllowNoCover = $true
+                    }
+
+                    if ($preflightOnlyAnswer -ne "NO") {
+                        $mqgArgs.PreflightOnly = $true
+                    }
+
+                    Write-Host ""
+                    Write-Host "Running: Invoke-CoverMqgComplete.ps1" -ForegroundColor Cyan
+                    Write-Host ""
+
+                    & $mqgScriptPath @mqgArgs
+
+                    Pause-Toolkit
+                }
                 "0"  {
                     Write-Host "Exiting Calibre LCC Toolkit."
                     break
@@ -1349,6 +1418,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 
