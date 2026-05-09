@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Interactive launcher for the Calibre LCC Toolkit.
 
@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.4" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.7" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -153,7 +153,8 @@ function Show-Header {
     }
 
     Write-Host ""
-    Write-Host "Workflow: Preflight -> Export -> Enrich -> Prepare -> Validate -> Apply -> Verify" -ForegroundColor DarkGray
+    Write-Host "LCC Workflow: Preflight -> Export -> Enrich -> Prepare -> Validate -> Apply -> Verify" -ForegroundColor DarkGray
+    Write-Host "Comments Workflow: Export -> Generate -> Dry Run -> Summary -> HTML Review -> Apply -> Verify" -ForegroundColor DarkGray
     Write-Host "Tip: The batch file slug is only used for default filenames." -ForegroundColor DarkGray
     Write-Host "Tip: Press Enter at prompts to accept the default value shown in brackets." -ForegroundColor DarkGray
     Write-Host ""
@@ -173,6 +174,15 @@ function Show-Menu {
     Write-Host "9. Open workflow documentation"
     Write-Host "10. Reports: Show latest report files"
     Write-Host "11. Show Git status"
+    Write-Host ""
+    Write-Host "Comments Module" -ForegroundColor Cyan
+    Write-Host "C1. Comments: Export source TSV"
+    Write-Host "C2. Comments: Dry run import TSV"
+    Write-Host "C3. Comments: Write dry-run summary"
+    Write-Host "C4. Comments: Write HTML review"
+    Write-Host "C5. Comments: Apply comments metadata"
+    Write-Host "C6. Comments: Verify comments apply report"
+    Write-Host ""
     Write-Host "0. Exit"
     Write-Host ""
 }
@@ -571,6 +581,262 @@ try {
         Show-Menu
         $choice = Read-Host "Select an option"
 
+
+function Start-CommentsExport {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Comments: export source TSV" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step reads Calibre and creates a source TSV for comments generation." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "You may use a Calibre search string, explicit Calibre IDs, or both." -ForegroundColor DarkGray
+    Write-Host "Example search: comments:false" -ForegroundColor DarkGray
+    Write-Host "Example IDs: 4074,5177,5153" -ForegroundColor DarkGray
+    Write-Host ""
+
+    $search = Read-ToolkitInput `
+        -Prompt "Calibre search string, blank if using explicit IDs only" `
+        -Default ""
+
+    $calibreIds = Read-ToolkitInput `
+        -Prompt "Explicit Calibre IDs, comma-separated, blank to skip" `
+        -Default ""
+
+    if ([string]::IsNullOrWhiteSpace($search) -and [string]::IsNullOrWhiteSpace($calibreIds)) {
+        throw "Provide either a Calibre search string or explicit Calibre IDs."
+    }
+
+    $defaultOutput = ".\input\comments-source-$batchSlug.tsv"
+
+    $outputTsv = Read-ToolkitInput `
+        -Prompt "Output comments source TSV" `
+        -Default $defaultOutput
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $exportScriptPath = Get-ToolkitScriptPath -ScriptName "Export-CalibreBatchForComments.ps1"
+
+    $exportArgs = @{
+        OutputTsv = $outputTsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($search)) {
+        $exportArgs.Search = $search
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($calibreIds)) {
+        $exportArgs.CalibreIds = $calibreIds
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $exportArgs.LibraryPath = $libraryPath
+    }
+
+    Write-Host ""
+    Write-Host "Running: Export-CalibreBatchForComments.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $exportScriptPath @exportArgs
+
+    Write-Host ""
+    Write-Host "Next step:" -ForegroundColor Cyan
+    Write-Host "Generate proposed comments, then save the completed import TSV as:"
+    Write-Host ".\input\comments-import-$batchSlug.tsv"
+
+    Pause-Toolkit
+}
+
+function Start-CommentsDryRun {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Comments: dry run import TSV" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step validates proposed comments without modifying Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $inputTsv = Read-ToolkitInput `
+        -Prompt "Input comments import TSV" `
+        -Default ".\input\comments-import-$batchSlug.tsv"
+
+    $reportCsv = Read-ToolkitInput `
+        -Prompt "Dry-run report CSV" `
+        -Default ".\reports\comments-dryrun-$batchSlug.csv"
+
+    $dryRunScriptPath = Get-ToolkitScriptPath -ScriptName "Test-CommentsDryRun.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Test-CommentsDryRun.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $dryRunScriptPath `
+        -InputTsv $inputTsv `
+        -ReportCsv $reportCsv
+
+    Pause-Toolkit
+}
+
+function Start-CommentsSummary {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Comments: write dry-run summary" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step summarizes a comments dry-run CSV." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $dryRunCsv = Read-ToolkitInput `
+        -Prompt "Dry-run CSV" `
+        -Default ".\reports\comments-dryrun-$batchSlug.csv"
+
+    $summaryTxt = Read-ToolkitInput `
+        -Prompt "Summary TXT" `
+        -Default ".\reports\comments-summary-$batchSlug.txt"
+
+    $summaryScriptPath = Get-ToolkitScriptPath -ScriptName "Write-CommentsSummary.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Write-CommentsSummary.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $summaryScriptPath `
+        -DryRunCsv $dryRunCsv `
+        -SummaryTxt $summaryTxt
+
+    Pause-Toolkit
+}
+
+function Start-CommentsReviewHtml {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Comments: write HTML review" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step creates a visual HTML review page for proposed comments." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $inputTsv = Read-ToolkitInput `
+        -Prompt "Input comments import TSV" `
+        -Default ".\input\comments-import-$batchSlug.tsv"
+
+    $outputHtml = Read-ToolkitInput `
+        -Prompt "Output HTML review file" `
+        -Default ".\reports\comments-review-$batchSlug.html"
+
+    $includeExistingAnswer = Read-ToolkitInput `
+        -Prompt "Include existing comments in review? YES/NO" `
+        -Default "YES"
+
+    $openAnswer = Read-ToolkitInput `
+        -Prompt "Open HTML review after writing? YES/NO" `
+        -Default "YES"
+
+    $reviewScriptPath = Get-ToolkitScriptPath -ScriptName "Write-CommentsReviewHtml.ps1"
+
+    $reviewArgs = @{
+        InputTsv = $inputTsv
+        OutputHtml = $outputHtml
+    }
+
+    if ($includeExistingAnswer -eq "YES") {
+        $reviewArgs.IncludeExistingComments = $true
+    }
+
+    if ($openAnswer -eq "YES") {
+        $reviewArgs.Open = $true
+    }
+
+    Write-Host ""
+    Write-Host "Running: Write-CommentsReviewHtml.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $reviewScriptPath @reviewArgs
+
+    Pause-Toolkit
+}
+
+function Start-CommentsApply {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Comments: apply comments metadata" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "This step can modify the Calibre Comments field." -ForegroundColor Yellow
+    Write-Host "Make sure Calibre is closed and the dry-run report has zero blocked rows." -ForegroundColor Yellow
+    Write-Host ""
+
+    $inputTsv = Read-ToolkitInput `
+        -Prompt "Input comments import TSV" `
+        -Default ".\input\comments-import-$batchSlug.tsv"
+
+    $dryRunCsv = Read-ToolkitInput `
+        -Prompt "Dry-run CSV" `
+        -Default ".\reports\comments-dryrun-$batchSlug.csv"
+
+    $applyReportCsv = Read-ToolkitInput `
+        -Prompt "Apply report CSV" `
+        -Default ".\reports\comments-apply-$batchSlug.csv"
+
+    $preflightOnlyAnswer = Read-ToolkitInput `
+        -Prompt "Preflight only? YES = no write, NO = real apply" `
+        -Default "YES"
+
+    $applyScriptPath = Get-ToolkitScriptPath -ScriptName "Invoke-CommentsApply.ps1"
+
+    $applyArgs = @{
+        InputTsv = $inputTsv
+        DryRunCsv = $dryRunCsv
+        ApplyReportCsv = $applyReportCsv
+    }
+
+    if ($preflightOnlyAnswer -ne "NO") {
+        $applyArgs.PreflightOnly = $true
+    }
+
+    Write-Host ""
+    Write-Host "Running: Invoke-CommentsApply.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $applyScriptPath @applyArgs
+
+    Pause-Toolkit
+}
+
+function Start-CommentsVerify {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Comments: verify comments apply report" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step verifies current Calibre comments against an apply report." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $applyReportCsv = Read-ToolkitInput `
+        -Prompt "Apply report CSV" `
+        -Default ".\reports\comments-apply-$batchSlug.csv"
+
+    $verifyReportCsv = Read-ToolkitInput `
+        -Prompt "Verify report CSV" `
+        -Default ".\reports\comments-verify-$batchSlug.csv"
+
+    $verifyScriptPath = Get-ToolkitScriptPath -ScriptName "Test-CommentsVerify.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Test-CommentsVerify.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $verifyScriptPath `
+        -ApplyReportCsv $applyReportCsv `
+        -VerifyReportCsv $verifyReportCsv
+
+    Pause-Toolkit
+}
+
         try {
             switch ($choice) {
                 "1"  { Start-HealthCheck }
@@ -584,6 +850,12 @@ try {
                 "9"  { Open-WorkflowDocumentation }
                 "10" { Start-ShowLatestReports }
                 "11" { Show-GitStatus }
+                "C1" { Start-CommentsExport }
+                "C2" { Start-CommentsDryRun }
+                "C3" { Start-CommentsSummary }
+                "C4" { Start-CommentsReviewHtml }
+                "C5" { Start-CommentsApply }
+                "C6" { Start-CommentsVerify }
                 "0"  {
                     Write-Host "Exiting Calibre LCC Toolkit."
                     break
@@ -604,3 +876,5 @@ try {
 finally {
     Pop-Location
 }
+
+

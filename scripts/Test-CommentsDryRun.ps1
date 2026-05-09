@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Performs a read-only dry run for proposed Calibre comments changes.
 
@@ -34,6 +34,7 @@ $AllowedTemplateProfiles = @(
     "Scholarly Nonfiction",
     "General Nonfiction",
     "Fiction",
+    "Speculative Fiction",
     "Reference",
     "Poetry / Drama",
     "Edited Collection / Anthology",
@@ -808,7 +809,7 @@ $missingSourceNotesCount = @($reportRows | Where-Object { $_.SourceNotesPresent 
 $manualReviewCount = @($reportRows | Where-Object { $_.ManualReviewRequired -eq "Yes" }).Count
 
 Write-Host "Dry run complete: $ReportCsv"
-Write-Host "Rows reviewed: $($reportRows.Count)"
+Write-Host "Rows reviewed: $(@($reportRows).Count)"
 Write-Host "Rows eligible for apply: $eligibleCount"
 Write-Host "Rows blocked: $blockedCount"
 Write-Host "Rows missing proposed comments: $missingProposedCount"
