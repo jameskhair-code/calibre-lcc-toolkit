@@ -746,6 +746,32 @@ That is the end-state win condition.
 
 ---
 
+
+## Canonical MQG Processing Order
+
+The toolkit now uses the following canonical Metadata Quality Gate order:
+
+| Order | Display Label | Stable Lookup Name |
+|---:|---|---|
+| 1 | MQG-01: Title & Author | `#mqg_title_author` |
+| 2 | MQG-02: Identifiers | `#mqg_identifiers` |
+| 3 | MQG-03: LCC | `#mqg_lcc` |
+| 4 | MQG-04: Awards | `#mqg_awards` |
+| 5 | MQG-05: Description / Comments | `#mqg_description` |
+| 6 | MQG-06: Tags | `#mqg_tags` |
+| 7 | MQG-07: Cover | `#mqg_cover` |
+| 99 | MQG-99: Metadata Complete | `#mqg_metadata_complete` |
+
+Only the display labels were reordered.
+
+The lookup names are stable and should not be renamed without a deliberate migration plan.
+
+See:
+
+    docs/MQG-Workflow-Architecture.md
+
+for the current one-pass MQG workflow design.
+
 ## Author / Title Cleanup Workflow
 
 The v0.8 Author / Title Cleanup module is available through the interactive launcher and can also be run through individual scripts.
@@ -1217,6 +1243,7 @@ v0.7 = comments apply, verify, and launcher integration
 v0.8 = author/title cleanup launcher integration
 v0.8.1 = author/title explicit ID export support
 v0.8.2 = author/title verified MQG completion
+v0.8.3 = MQG order alignment
 ```
 
 Useful commands:
@@ -1375,6 +1402,7 @@ For LCC, the external enrichment step populates classification fields.
 For Author / Title Cleanup, the external review step populates only proposed title/author changes.
 
 Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+
 
 
 

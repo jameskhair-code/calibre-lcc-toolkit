@@ -30,7 +30,7 @@ main
 Current stable tag:
 
 ```text
-v0.8
+v0.8.3
 ```
 
 Current repository name:
@@ -573,7 +573,7 @@ Recommended approach:
 Current development branch:
 
 ```text
-v0.8.2-author-title-mqg-complete
+v0.8.3-mqg-order-alignment
 ```
 
 Recommended next work:
@@ -600,5 +600,20 @@ Apply last.
 Verify always.
 ```
 
+### v0.8.3 - MQG Order Alignment
 
+Added `docs/MQG-Workflow-Architecture.md` to define the canonical one-pass MQG processing order.
+
+Clarified that Calibre display labels may be reordered while stable lookup names should remain unchanged.
+
+Canonical MQG order:
+
+    MQG-01: Title & Author
+    MQG-02: Identifiers
+    MQG-03: LCC
+    MQG-04: Awards
+    MQG-05: Description / Comments
+    MQG-06: Tags
+    MQG-07: Cover
+    MQG-99: Metadata Complete
 
