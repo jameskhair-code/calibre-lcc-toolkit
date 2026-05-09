@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.8.5" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.8.6" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -192,6 +192,9 @@ function Show-Menu {
     Write-Host "C5. Comments: Apply comments metadata"
     Write-Host "C6. Comments: Verify comments apply report"
     Write-Host "C7. Comments: Mark verified MQG complete"
+    Write-Host ""
+    Write-Host "Manual MQG Completion Module" -ForegroundColor Cyan
+    Write-Host "W1. Awards: Mark reviewed MQG complete"
     Write-Host ""
     Write-Host "0. Exit"
     Write-Host ""
@@ -1258,6 +1261,74 @@ function Start-CommentsVerify {
 
                     Pause-Toolkit
                 }
+                "W1" {
+                    $batchSlug = Read-BatchSlug
+
+                    Write-Host ""
+                    Write-Host "Awards: mark reviewed MQG complete" -ForegroundColor Yellow
+                    Write-Host ""
+                    Write-Host "This step can modify the Calibre custom field #mqg_awards." -ForegroundColor Yellow
+                    Write-Host "Use this only after award metadata has been manually reviewed." -ForegroundColor Yellow
+                    Write-Host ""
+
+                    $calibreIds = Read-ToolkitInput `
+                        -Prompt "Comma-separated Calibre IDs, blank if using CSV" `
+                        -Default ""
+
+                    $inputCsv = Read-ToolkitInput `
+                        -Prompt "Optional input CSV with CalibreId column" `
+                        -Default ""
+
+                    $mqgReportCsv = Read-ToolkitInput `
+                        -Prompt "Awards MQG completion report CSV" `
+                        -Default ".\reports\awards-mqg-complete-$batchSlug.csv"
+
+                    $libraryPath = Read-ToolkitInput `
+                        -Prompt "Optional Calibre library path, blank for default" `
+                        -Default ""
+
+                    $allowNoAwardsAnswer = Read-ToolkitInput `
+                        -Prompt "Allow no-awards / not-applicable rows? YES or NO" `
+                        -Default "NO"
+
+                    $preflightOnlyAnswer = Read-ToolkitInput `
+                        -Prompt "Preflight only? YES = no write, NO = mark complete" `
+                        -Default "YES"
+
+                    $mqgScriptPath = Get-ToolkitScriptPath -ScriptName "Invoke-AwardsMqgComplete.ps1"
+
+                    $mqgArgs = @{
+                        MqgReportCsv = $mqgReportCsv
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($calibreIds)) {
+                        $mqgArgs.CalibreIds = $calibreIds
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($inputCsv)) {
+                        $mqgArgs.InputCsv = $inputCsv
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+                        $mqgArgs.LibraryPath = $libraryPath
+                    }
+
+                    if ($allowNoAwardsAnswer -eq "YES") {
+                        $mqgArgs.AllowNoAwards = $true
+                    }
+
+                    if ($preflightOnlyAnswer -ne "NO") {
+                        $mqgArgs.PreflightOnly = $true
+                    }
+
+                    Write-Host ""
+                    Write-Host "Running: Invoke-AwardsMqgComplete.ps1" -ForegroundColor Cyan
+                    Write-Host ""
+
+                    & $mqgScriptPath @mqgArgs
+
+                    Pause-Toolkit
+                }
                 "0"  {
                     Write-Host "Exiting Calibre LCC Toolkit."
                     break
@@ -1278,6 +1349,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 
