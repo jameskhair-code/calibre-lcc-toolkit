@@ -15,9 +15,47 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.8.1 = author/title explicit ID export support
     v0.8.2 = author/title verified MQG completion
     v0.8.3 = MQG order alignment
+    v0.8.4 = LCC verified MQG completion
 
 ---
 
+## v0.8.4 - LCC Verified MQG Completion
+
+### Added
+
+- Added `scripts/Invoke-LccMqgComplete.ps1`.
+- Added launcher option:
+  - `12. LCC: Mark verified MQG complete`
+
+### Behavior
+
+- Reads the LCC verify report as the source of truth.
+- Marks `#mqg_lcc` true only for verified LCC rows.
+- Requires all four LCC fields to be populated and verified:
+  - `LCC`
+  - `LCC Classification Path`
+  - `LCC Primary Class`
+  - `LCC Secondary Class`
+- Skips mismatched, missing, duplicate, warned, manually blocked, or pending-update rows.
+- Detects rows where `#mqg_lcc` is already true and reports them as `Already Complete` instead of rewriting them.
+- Requires confirmation phrase when new rows need to be marked:
+
+    MARK LCC MQG COMPLETE
+
+### Safety
+
+- Supports preflight-only mode.
+- Writes a LCC MQG completion report.
+- Performs post-write readback using `calibredb show_metadata --as-opf`.
+- Reports `ReadBackStatus = Confirmed true` when the custom field is confirmed true.
+
+### Validated
+
+- Successfully preflighted a 35-row AHA Leo Gershoy LCC verify report.
+- Confirmed all 35 rows were eligible.
+- Confirmed all 35 rows were already complete with `ReadBackStatus = Confirmed true`.
+
+---
 ## v0.8.3 - MQG Order Alignment
 
 ### Added
@@ -433,6 +471,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 

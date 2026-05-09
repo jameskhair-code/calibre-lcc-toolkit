@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.8.3" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.8.4" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -174,6 +174,7 @@ function Show-Menu {
     Write-Host "9. Open workflow documentation"
     Write-Host "10. Reports: Show latest report files"
     Write-Host "11. Show Git status"
+    Write-Host "12. LCC: Mark verified MQG complete"
     Write-Host ""
     Write-Host "Author / Title Cleanup Module" -ForegroundColor Cyan
     Write-Host "A1. Author/Title: Export source TSV"
@@ -590,6 +591,57 @@ try {
         $choice = Read-Host "Select an option"
 
 
+
+
+function Start-LccMqgComplete {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "LCC: mark verified MQG complete" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "This step can modify the Calibre custom field #mqg_lcc." -ForegroundColor Yellow
+    Write-Host "Only rows from a clean LCC verification report are eligible." -ForegroundColor Yellow
+    Write-Host ""
+
+    $verifyReportCsv = Read-ToolkitInput `
+        -Prompt "LCC verify report CSV" `
+        -Default ".\reports\lcc-verify-$batchSlug.csv"
+
+    $mqgReportCsv = Read-ToolkitInput `
+        -Prompt "LCC MQG completion report CSV" `
+        -Default ".\reports\lcc-mqg-complete-$batchSlug.csv"
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $preflightOnlyAnswer = Read-ToolkitInput `
+        -Prompt "Preflight only? YES = no write, NO = mark complete" `
+        -Default "YES"
+
+    $mqgScriptPath = Get-ToolkitScriptPath -ScriptName "Invoke-LccMqgComplete.ps1"
+
+    $mqgArgs = @{
+        VerifyReportCsv = $verifyReportCsv
+        MqgReportCsv    = $mqgReportCsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $mqgArgs.LibraryPath = $libraryPath
+    }
+
+    if ($preflightOnlyAnswer -ne "NO") {
+        $mqgArgs.PreflightOnly = $true
+    }
+
+    Write-Host ""
+    Write-Host "Running: Invoke-LccMqgComplete.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $mqgScriptPath @mqgArgs
+
+    Pause-Toolkit
+}
 
 function Start-AuthorTitleExport {
     $batchSlug = Read-BatchSlug
@@ -1143,6 +1195,7 @@ function Start-CommentsVerify {
                 "9"  { Open-WorkflowDocumentation }
                 "10" { Start-ShowLatestReports }
                 "11" { Show-GitStatus }
+                "12" { Start-LccMqgComplete }
                 "A1" { Start-AuthorTitleExport }
                 "A2" { Start-AuthorTitleDryRun }
                 "A3" { Start-AuthorTitleSummary }
@@ -1175,6 +1228,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 

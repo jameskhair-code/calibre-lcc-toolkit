@@ -889,6 +889,47 @@ This is read-only.
 
 ---
 
+
+### LCC verified MQG completion
+
+The LCC workflow includes a separate MQG completion step:
+
+    12. LCC: Mark verified MQG complete
+
+This step updates the Calibre custom field:
+
+    #mqg_lcc
+
+The LCC verify report is the source of truth.
+
+MQG-03: LCC is only considered complete when all four LCC fields are populated and verified:
+
+    LCC
+    LCC Classification Path
+    LCC Primary Class
+    LCC Secondary Class
+
+Eligible rows must have:
+
+- `MatchStatus = Matched`
+- a populated `CalibreId`
+- no duplicate `CalibreId` in the verify report
+- no warnings
+- no manual review block
+- no unexpected confidence status
+- all four existing LCC fields matching their proposed values
+- all four `WouldUpdate...` fields set to `No`
+
+The step supports preflight-only mode.
+
+If `#mqg_lcc` is already true, the row is reported as:
+
+    Already Complete
+
+and is not rewritten.
+
+A successful newly marked row requires both the write operation and post-write readback confirmation.
+
 ## Comments Workflow
 
 The v0.7 Comments module is available through the interactive launcher and can also be run through individual scripts.
@@ -1244,6 +1285,7 @@ v0.8 = author/title cleanup launcher integration
 v0.8.1 = author/title explicit ID export support
 v0.8.2 = author/title verified MQG completion
 v0.8.3 = MQG order alignment
+v0.8.4 = LCC verified MQG completion
 ```
 
 Useful commands:
@@ -1402,6 +1444,7 @@ For LCC, the external enrichment step populates classification fields.
 For Author / Title Cleanup, the external review step populates only proposed title/author changes.
 
 Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+
 
 
 
