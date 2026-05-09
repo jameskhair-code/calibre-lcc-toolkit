@@ -148,7 +148,7 @@ Add-Line -Lines $lines
 Add-Line -Lines $lines -Text "Safety Note"
 Add-Line -Lines $lines -Text "-----------"
 Add-Line -Lines $lines -Text "This summary is read-only. It does not modify Calibre metadata."
-Add-Line -Lines $lines -Text "Only the future apply script should write title or author changes."
+Add-Line -Lines $lines -Text "Only the Author / Title apply script should write title or author changes."
 Add-Line -Lines $lines
 Add-Line -Lines $lines -Text "Batch Totals"
 Add-Line -Lines $lines -Text "------------"
@@ -246,5 +246,6 @@ Write-Host "Rows eligible for apply: $eligibleRows"
 Write-Host "Rows blocked: $blockedRows"
 Write-Host ""
 Write-Host "This was a summary operation only. No Calibre metadata was modified."
+
 
 
