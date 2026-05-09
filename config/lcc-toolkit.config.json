@@ -1,27 +1,27 @@
 ﻿{
-  "ToolkitVersion": "0.2",
-  "CalibreDbPath": "C:\\Program Files\\Calibre2\\calibredb.exe",
-  "DefaultLibraryPath": "",
-  "InputFolder": ".\\input",
-  "ReportsFolder": ".\\reports",
-  "ScriptsFolder": ".\\scripts",
-  "DocsFolder": ".\\docs",
-  "PrimaryClassCanonicalFile": ".\\config\\lcc-primary-canonical.csv",
-  "SecondaryClassCanonicalFile": ".\\config\\lcc-secondary-canonical.csv",
-  "RequiredImportColumns": [
-    "Title",
-    "Author",
-    "ISBN",
-    "LCC",
-    "LCC Primary Class",
-    "LCC Secondary Class",
-    "LCC Classification Path"
-  ],
-  "ManagedFields": {
-    "LCC": "lcc",
-    "LCCPrimaryClass": "lcc_primary_class",
-    "LCCSecondaryClass": "lcc_secondary_class",
-    "LCCClassificationPath": "lcc_class_path"
-  },
-  "Notes": "Configuration for the Calibre LCC Toolkit. Paths are relative to the toolkit root unless absolute."
+    "ToolkitVersion":  "0.7",
+    "CalibreDbPath":  "C:\\Program Files\\Calibre2\\calibredb.exe",
+    "DefaultLibraryPath":  "",
+    "InputFolder":  ".\\input",
+    "ReportsFolder":  ".\\reports",
+    "ScriptsFolder":  ".\\scripts",
+    "DocsFolder":  ".\\docs",
+    "PrimaryClassCanonicalFile":  ".\\config\\lcc-primary-canonical.csv",
+    "SecondaryClassCanonicalFile":  ".\\config\\lcc-secondary-canonical.csv",
+    "RequiredImportColumns":  [
+                                  "Title",
+                                  "Author",
+                                  "ISBN",
+                                  "LCC",
+                                  "LCC Primary Class",
+                                  "LCC Secondary Class",
+                                  "LCC Classification Path"
+                              ],
+    "ManagedFields":  {
+                          "LCC":  "lcc",
+                          "LCCPrimaryClass":  "lcc_primary_class",
+                          "LCCSecondaryClass":  "lcc_secondary_class",
+                          "LCCClassificationPath":  "lcc_class_path"
+                      },
+    "Notes":  "Configuration for the Calibre LCC Toolkit. Paths are relative to the toolkit root unless absolute."
 }

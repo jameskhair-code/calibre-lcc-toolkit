@@ -1,4 +1,4 @@
-# Calibre Metadata Toolkit - Project Roadmap
+﻿# Calibre Metadata Toolkit - Project Roadmap
 
 ## 1. Purpose
 
@@ -30,7 +30,7 @@ main
 Current stable tag:
 
 ```text
-v0.4
+v0.7
 ```
 
 Current repository name:
@@ -73,7 +73,7 @@ scripts/Test-LccToolkitHealth.ps1
 scripts/Show-LccLatestReports.ps1
 ```
 
-Current v0.4 capabilities include:
+Current LCC capabilities include:
 
 - latest reports viewer
 - launcher option for latest reports
@@ -205,7 +205,7 @@ Improve Library of Congress Classification metadata for selected Calibre records
 
 Status:
 
-Stable as of v0.4.
+Stable.
 
 Primary workflow:
 
@@ -426,7 +426,7 @@ SourceNotes
 
 Comments should be treated as high-risk because they may overwrite substantial existing metadata.
 
-### v0.7 - LOC Identifier / Provenance Support
+### v0.8 - LOC Identifier / Provenance Support
 
 Goal:
 
@@ -451,7 +451,7 @@ docs/Identifier-Storage-Options.md
 
 ## 8. Deferred Ideas
 
-The following ideas are useful but should not distract from v0.5:
+The following ideas are useful but should remain deferred:
 
 - full automatic title cleanup
 - full automatic author cleanup
@@ -483,10 +483,10 @@ Do not rename the GitHub repository yet.
 
 Recommended approach:
 
-1. Keep current repo name through v0.5.
-2. Implement one successful non-LCC module.
-3. Update README language to describe the broader toolkit.
-4. Revisit repo naming after v0.5 or v0.6.
+1. Keep current repo name through v0.7.1.
+2. Continue using broader project language in README/docs.
+3. Consider a future repo rename only after the multi-module toolkit shape is stable.
+4. Revisit repo naming only after the multi-module toolkit shape is stable.
 5. Rename only if the broader toolkit identity is clearly established.
 
 Possible future repo names:
@@ -573,19 +573,18 @@ Recommended approach:
 Current development branch:
 
 ```text
-v0.5-author-title-cleanup
+v0.7.1-doc-polish
 ```
 
 Recommended next work:
 
-1. Add this roadmap document.
-2. Commit the roadmap document.
-3. Draft `docs/Author-Title-Cleanup-Workflow.md`.
-4. Design the v0.5 TSV schema.
-5. Build read-only export script.
-6. Build dry-run script.
-7. Build summary report.
-8. Only then build apply behavior.
+1. Finish README and roadmap polish.
+2. Run full PowerShell parser check.
+3. Review git diff.
+4. Commit v0.7.1 documentation polish.
+5. Merge into main.
+6. Tag v0.7.1.
+7. Push main, branch, and tag.
 
 ## 13. Operating Reminder
 
@@ -600,3 +599,4 @@ Report first.
 Apply last.
 Verify always.
 ```
+
