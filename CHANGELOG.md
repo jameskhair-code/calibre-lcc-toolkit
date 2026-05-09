@@ -11,9 +11,44 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.5 = author/title cleanup module
     v0.6 = comments export, dry run, and summary
     v0.7 = comments apply, verify, and launcher integration
+    v0.8 = author/title cleanup launcher integration
 
 ---
 
+## v0.8 - Author / Title Cleanup Launcher Integration
+
+### Added
+
+- Added Author / Title Cleanup Module entries to the interactive launcher:
+  - `A1. Author/Title: Export source TSV`
+  - `A2. Author/Title: Dry run cleanup TSV`
+  - `A3. Author/Title: Write dry-run summary`
+  - `A4. Author/Title: Apply cleanup metadata`
+  - `A5. Author/Title: Verify cleanup results`
+
+### Changed
+
+- Updated launcher header to `Calibre LCC Toolkit v0.8`.
+- Updated toolkit config version to `0.8`.
+- Made the Author / Title Cleanup workflow accessible from the launcher rather than requiring hand-run scripts.
+
+### Safety Model
+
+The Author / Title launcher wrappers preserve the existing conservative script behavior.
+
+The apply wrapper does not directly write metadata by itself. It launches the existing apply script only after the user explicitly confirms that they want to continue.
+
+The underlying apply script still requires its own exact confirmation phrase:
+
+    APPLY AUTHOR TITLE CLEANUP
+
+### Notes
+
+- No Author / Title apply-script behavior was changed in v0.8.
+- The verify workflow uses the dry-run CSV and writes a verify report.
+- This milestone is launcher integration only.
+
+---
 ## v0.7 - Comments Apply, Verify, and Launcher Integration
 
 ### Added
@@ -335,4 +370,5 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 

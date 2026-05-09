@@ -30,7 +30,7 @@ main
 Current stable tag:
 
 ```text
-v0.7
+v0.8
 ```
 
 Current repository name:
@@ -426,7 +426,7 @@ SourceNotes
 
 Comments should be treated as high-risk because they may overwrite substantial existing metadata.
 
-### v0.8 - LOC Identifier / Provenance Support
+### v0.9 - LOC Identifier / Provenance Support
 
 Goal:
 
@@ -573,7 +573,7 @@ Recommended approach:
 Current development branch:
 
 ```text
-v0.7.1-doc-polish
+v0.8-author-title-launcher
 ```
 
 Recommended next work:
@@ -599,4 +599,5 @@ Report first.
 Apply last.
 Verify always.
 ```
+
 
