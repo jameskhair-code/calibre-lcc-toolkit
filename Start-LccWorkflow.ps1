@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.8.7" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.8.8" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -175,6 +175,7 @@ function Show-Menu {
     Write-Host "10. Reports: Show latest report files"
     Write-Host "11. Show Git status"
     Write-Host "12. LCC: Mark verified MQG complete"
+    Write-Host "13. MQG: Show batch status / readiness report"
     Write-Host ""
     Write-Host "Author / Title Cleanup Module" -ForegroundColor Cyan
     Write-Host "A1. Author/Title: Export source TSV"
@@ -1201,6 +1202,57 @@ function Start-CommentsVerify {
                 "10" { Start-ShowLatestReports }
                 "11" { Show-GitStatus }
                 "12" { Start-LccMqgComplete }
+                "13" {
+                    $batchSlug = Read-BatchSlug
+
+                    Write-Host ""
+                    Write-Host "MQG: show batch status / readiness report" -ForegroundColor Yellow
+                    Write-Host ""
+                    Write-Host "This operation is read-only and does not modify Calibre metadata." -ForegroundColor Yellow
+                    Write-Host ""
+
+                    $calibreIds = Read-ToolkitInput `
+                        -Prompt "Comma-separated Calibre IDs, blank if using CSV" `
+                        -Default ""
+
+                    $inputCsv = Read-ToolkitInput `
+                        -Prompt "Optional input CSV with CalibreId column" `
+                        -Default ""
+
+                    $reportCsv = Read-ToolkitInput `
+                        -Prompt "MQG batch status report CSV" `
+                        -Default ".\reports\mqg-batch-status-$batchSlug.csv"
+
+                    $libraryPath = Read-ToolkitInput `
+                        -Prompt "Optional Calibre library path, blank for default" `
+                        -Default ""
+
+                    $statusScriptPath = Get-ToolkitScriptPath -ScriptName "Show-MqgBatchStatus.ps1"
+
+                    $statusArgs = @{
+                        ReportCsv = $reportCsv
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($calibreIds)) {
+                        $statusArgs.CalibreIds = $calibreIds
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($inputCsv)) {
+                        $statusArgs.InputCsv = $inputCsv
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+                        $statusArgs.LibraryPath = $libraryPath
+                    }
+
+                    Write-Host ""
+                    Write-Host "Running: Show-MqgBatchStatus.ps1" -ForegroundColor Cyan
+                    Write-Host ""
+
+                    & $statusScriptPath @statusArgs
+
+                    Pause-Toolkit
+                }
                 "A1" { Start-AuthorTitleExport }
                 "A2" { Start-AuthorTitleDryRun }
                 "A3" { Start-AuthorTitleSummary }
@@ -1418,6 +1470,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 
