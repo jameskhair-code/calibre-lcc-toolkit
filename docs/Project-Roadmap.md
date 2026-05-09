@@ -30,7 +30,7 @@ main
 Current stable tag:
 
 ```text
-v0.8.7
+v0.8.8
 ```
 
 Current repository name:
@@ -573,7 +573,7 @@ Recommended approach:
 Current development branch:
 
 ```text
-v0.8.7-cover-mqg-complete
+v0.8.8-mqg-batch-status
 ```
 
 Recommended next work:
@@ -683,4 +683,20 @@ The Cover gate now follows the manual-completion pattern:
 This step does not download, generate, replace, or enrich cover images.
 
 It supports already-complete detection and avoids rewriting rows where `#mqg_cover` is already true.
+
+### v0.8.8 - MQG Batch Status Readiness Report
+
+Added read-only MQG batch status reporting.
+
+The status report acts as a control tower for selected records:
+
+    selected IDs or CSV
+    -> read current MQG gate states
+    -> calculate missing gates
+    -> report MQG-99 readiness
+    -> report already-complete metadata state
+
+This milestone does not write Calibre metadata.
+
+It helps identify where a batch is blocked before final metadata completion.
 

@@ -189,6 +189,17 @@ When in doubt:
     Mark MQG complete second.
     Mark MQG-99 last.
 
+## MQG Batch Status Reporting
 
+The MQG batch status report is read-only.
 
+It provides a control-tower view of selected records by reading all MQG checkbox states and reporting:
+
+    completed required gates
+    missing required gates
+    ready-for-MQG-99 status
+    existing MQG-99 metadata-complete status
+    blocking reasons
+
+This report should be used before final metadata completion to identify records that still need work.
 

@@ -933,6 +933,54 @@ A successful newly marked row requires both the write operation and post-write r
 
 
 
+
+### MQG batch status / readiness report
+
+The toolkit includes a read-only MQG status report:
+
+    13. MQG: Show batch status / readiness report
+
+This step does not modify Calibre metadata.
+
+It reads the current MQG checkbox state for selected Calibre records and writes a batch status report.
+
+The report checks:
+
+- `#mqg_title_author`
+- `#mqg_identifiers`
+- `#mqg_lcc`
+- `#mqg_awards`
+- `#mqg_description`
+- `#mqg_tags`
+- `#mqg_cover`
+- `#mqg_metadata_complete`
+
+The report includes:
+
+- completed required gate count
+- required gate count
+- missing required gates
+- ready-for-MQG-99 status
+- already-metadata-complete status
+- status summary
+- blocking reasons
+
+A record is considered ready for MQG-99 when all required MQG gates are complete:
+
+- MQG-01: Title & Author
+- MQG-02: Identifiers
+- MQG-03: LCC
+- MQG-04: Awards
+- MQG-05: Description / Comments
+- MQG-06: Tags
+- MQG-07: Cover
+
+If `#mqg_metadata_complete` is already true, the status summary reports:
+
+    Metadata Complete
+
+This allows the report to distinguish records that are ready for the final gate from records that have already passed it.
+
 ### Cover manual MQG completion
 
 The toolkit includes a manual MQG completion step for Cover:
@@ -1408,6 +1456,7 @@ v0.8.4 = LCC verified MQG completion
 v0.8.5 = Comments verified MQG completion
 v0.8.6 = Awards manual MQG completion
 v0.8.7 = Cover manual MQG completion
+v0.8.8 = MQG batch status readiness report
 ```
 
 Useful commands:
@@ -1566,6 +1615,7 @@ For LCC, the external enrichment step populates classification fields.
 For Author / Title Cleanup, the external review step populates only proposed title/author changes.
 
 Future versions may add stronger provenance tracking, assisted catalog lookup logic, structured comments generation, or Library of Congress catalog identifiers/links, but the current design intentionally keeps research and metadata writes separate.
+
 
 
 

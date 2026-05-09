@@ -19,9 +19,55 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.8.5 = Comments verified MQG completion
     v0.8.6 = Awards manual MQG completion
     v0.8.7 = Cover manual MQG completion
+    v0.8.8 = MQG batch status readiness report
 
 ---
 
+## v0.8.8 - MQG Batch Status Readiness Report
+
+### Added
+
+- Added `scripts/Show-MqgBatchStatus.ps1`.
+- Added launcher option:
+  - `13. MQG: Show batch status / readiness report`
+
+### Behavior
+
+- Reads current MQG checkbox state for selected Calibre records.
+- Supports input by:
+  - comma-separated Calibre IDs
+  - CSV with a `CalibreId` column
+- Reports current state for:
+  - `#mqg_title_author`
+  - `#mqg_identifiers`
+  - `#mqg_lcc`
+  - `#mqg_awards`
+  - `#mqg_description`
+  - `#mqg_tags`
+  - `#mqg_cover`
+  - `#mqg_metadata_complete`
+- Calculates:
+  - completed required gate count
+  - missing required gates
+  - ready-for-MQG-99 status
+  - metadata-complete status
+  - status summary
+  - blocking reasons
+
+### Safety
+
+- Read-only operation.
+- Does not modify Calibre metadata.
+- Writes a CSV report for review.
+
+### Validated
+
+- Successfully tested three AHA Leo Gershoy Award records.
+- Confirmed all three records had 7 of 7 required gates complete.
+- Confirmed all three records were already metadata complete.
+- Confirmed launcher wiring and parser checks for `Show-MqgBatchStatus.ps1` and `Start-LccWorkflow.ps1`.
+
+---
 ## v0.8.7 - Cover Manual MQG Completion
 
 ### Added
@@ -603,6 +649,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
