@@ -16,9 +16,54 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.8.2 = author/title verified MQG completion
     v0.8.3 = MQG order alignment
     v0.8.4 = LCC verified MQG completion
+    v0.8.5 = Comments verified MQG completion
 
 ---
 
+## v0.8.5 - Comments Verified MQG Completion
+
+### Added
+
+- Added `scripts/Invoke-CommentsMqgComplete.ps1`.
+- Added launcher option:
+  - `C7. Comments: Mark verified MQG complete`
+
+### Behavior
+
+- Reads the Comments verify report as the source of truth.
+- Marks `#mqg_description` true only for verified Comments rows.
+- Requires:
+  - `ApplyStatus = Succeeded`
+  - `VerificationStatus = Verified`
+  - `TitleVerified = Yes`
+  - `AuthorsVerified = Yes`
+  - `CommentsVerified = Yes`
+  - populated expected and actual comments hashes
+  - matching expected and actual comments hashes
+  - nonzero final comments length
+  - matching expected and actual comments lengths
+- Skips mismatched, missing, duplicate, failed, skipped, or otherwise unverified rows.
+- Detects rows where `#mqg_description` is already true and reports them as `Already Complete` instead of rewriting them.
+- Requires confirmation phrase when new rows need to be marked:
+
+    MARK COMMENTS MQG COMPLETE
+
+### Safety
+
+- Supports preflight-only mode.
+- Writes a Comments MQG completion report.
+- Performs post-write readback using `calibredb show_metadata --as-opf`.
+- Reports `ReadBackStatus = Confirmed true` when the custom field is confirmed true.
+
+### Validated
+
+- Successfully preflighted `comments-verify-mixed-v07-smoketest.csv`.
+- Confirmed three verified Comments rows were eligible.
+- Confirmed two rows were already complete.
+- Successfully marked one new row complete.
+- Confirmed all three rows reported `ReadBackStatus = Confirmed true`.
+
+---
 ## v0.8.4 - LCC Verified MQG Completion
 
 ### Added
@@ -471,6 +516,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
