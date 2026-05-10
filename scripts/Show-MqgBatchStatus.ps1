@@ -1,9 +1,9 @@
-﻿<#
+<#
 .SYNOPSIS
 Writes a read-only MQG batch status and readiness report.
 
 .DESCRIPTION
-Reads selected Calibre IDs from either -CalibreIds or -InputCsv and reports the current
+Reads selected Calibre IDs from -CalibreIds, -InputCsv, or -BatchManifest and reports the current
 Metadata Quality Gate checkbox state for each record.
 
 This script does not modify Calibre metadata.
@@ -23,6 +23,8 @@ param(
     [string]$CalibreIds = "",
 
     [string]$InputCsv = "",
+
+    [string]$BatchManifest = "",
 
     [string]$ReportCsv = ".\reports\mqg-batch-status.csv",
 
@@ -109,44 +111,71 @@ function Join-ArrayValue {
     return [string]$Value
 }
 
+function Add-CalibreIdsFromCsv {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [System.Collections.Generic.List[string]]$Ids,
+
+        [Parameter(Mandatory = $true)]
+        [string]$CsvPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SourceLabel
+    )
+
+    if (-not (Test-Path $CsvPath)) {
+        throw "$SourceLabel was not found: $CsvPath"
+    }
+
+    $csvRows = @(Import-Csv -Path $CsvPath)
+
+    foreach ($row in $csvRows) {
+        $idProperty = $row.PSObject.Properties["CalibreId"]
+
+        if ($null -eq $idProperty) {
+            throw "$SourceLabel must contain a CalibreId column."
+        }
+
+        $idText = Normalize-Value -Value ([string]$idProperty.Value)
+
+        if (-not [string]::IsNullOrWhiteSpace($idText)) {
+            $Ids.Add($idText)
+        }
+    }
+}
+
 function Get-SelectedCalibreIds {
-    $ids = @()
+    $ids = [System.Collections.Generic.List[string]]::new()
 
     if (-not [string]::IsNullOrWhiteSpace($CalibreIds)) {
-        $ids += $CalibreIds -split "," |
+        $CalibreIds -split "," |
             ForEach-Object { $_.Trim() } |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { $ids.Add($_) }
     }
 
     if (-not [string]::IsNullOrWhiteSpace($InputCsv)) {
-        if (-not (Test-Path $InputCsv)) {
-            throw "Input CSV was not found: $InputCsv"
-        }
-
-        $csvRows = @(Import-Csv -Path $InputCsv)
-
-        foreach ($row in $csvRows) {
-            $idProperty = $row.PSObject.Properties["CalibreId"]
-
-            if ($null -eq $idProperty) {
-                throw "Input CSV must contain a CalibreId column."
-            }
-
-            $idText = Normalize-Value -Value ([string]$idProperty.Value)
-
-            if (-not [string]::IsNullOrWhiteSpace($idText)) {
-                $ids += $idText
-            }
-        }
+        Add-CalibreIdsFromCsv `
+            -Ids $ids `
+            -CsvPath $InputCsv `
+            -SourceLabel "InputCsv"
     }
 
-    $ids = @($ids | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-
-    if ($ids.Count -eq 0) {
-        throw "No Calibre IDs were supplied. Use -CalibreIds or -InputCsv."
+    if (-not [string]::IsNullOrWhiteSpace($BatchManifest)) {
+        Add-CalibreIdsFromCsv `
+            -Ids $ids `
+            -CsvPath $BatchManifest `
+            -SourceLabel "BatchManifest"
     }
 
-    return $ids
+    $selectedIds = @($ids | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+    if ($selectedIds.Count -eq 0) {
+        throw "No Calibre IDs were supplied. Use -CalibreIds, -InputCsv, or -BatchManifest."
+    }
+
+    return $selectedIds
 }
 
 function Get-CalibreMqgRecord {
@@ -233,6 +262,19 @@ Write-Host "======================="
 Write-Host ""
 Write-Host "This operation is read-only and does not modify Calibre metadata."
 Write-Host "Report CSV: $ReportCsv"
+
+if (-not [string]::IsNullOrWhiteSpace($BatchManifest)) {
+    Write-Host "Batch manifest: $BatchManifest"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($InputCsv)) {
+    Write-Host "Input CSV: $InputCsv"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($CalibreIds)) {
+    Write-Host "Explicit Calibre IDs supplied."
+}
+
 Write-Host ""
 
 $selectedIds = @(Get-SelectedCalibreIds)
@@ -398,8 +440,12 @@ Write-Host "Rows already metadata complete: $rowsMetadataComplete"
 Write-Host ""
 Write-Host "Report written: $ReportCsv"
 Write-Host ""
-Write-Host "Status preview:"
+$previewCount = 25
+
+Write-Host "Status preview: first $previewCount rows. Full results are in the CSV report."
 
 $reportRows |
-    Select-Object CalibreId,Title,CompletedGateCount,RequiredGateCount,ReadyForMqg99,MqgMetadataComplete,StatusSummary,MissingRequiredGates |
+    Select-Object -First $previewCount CalibreId,Title,CompletedGateCount,RequiredGateCount,ReadyForMqg99,MqgMetadataComplete,StatusSummary,MissingRequiredGates |
     Format-Table -AutoSize
+
+
