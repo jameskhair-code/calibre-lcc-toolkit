@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.9.0" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.9.1" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -240,23 +240,40 @@ function Start-ExportSourceBatch {
     Write-Host "This step reads Calibre and creates a source TSV for LCC enrichment." -ForegroundColor DarkGray
     Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "Paste the Calibre search string exactly as used in Calibre." -ForegroundColor DarkGray
-    Write-Host "For award batches, the loose award search usually works best here." -ForegroundColor DarkGray
-    Write-Host "Example: #award_programs:`"AHA - J. Russell Major Prize`" and #mqg_lcc:false" -ForegroundColor DarkGray
+    Write-Host "Preferred workflow:" -ForegroundColor DarkGray
+    Write-Host "1. Use B1 to create a stable batch manifest." -ForegroundColor DarkGray
+    Write-Host "2. Use that manifest here to export the LCC source TSV." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "You may use a batch manifest, Calibre search string, explicit Calibre IDs, exact Award Programs filter, or a combination." -ForegroundColor DarkGray
+    Write-Host "If a search and manifest/IDs are both supplied, the manifest/IDs are treated as a local filter/intersection." -ForegroundColor DarkGray
+    Write-Host "Example manifest: .\input\batch-$batchSlug.csv" -ForegroundColor DarkGray
+    Write-Host "Example search: #award_programs:`"AHA - J. Russell Major Prize`" and #mqg_lcc:false" -ForegroundColor DarkGray
+    Write-Host "Example IDs: 5374,5375,5376" -ForegroundColor DarkGray
+    Write-Host "Example award program: AHA - J. Russell Major Prize" -ForegroundColor DarkGray
     Write-Host ""
 
-    $search = Read-RequiredInput "Calibre search string"
+    $batchManifest = Read-ToolkitInput `
+        -Prompt "Batch manifest CSV, blank to skip" `
+        -Default ".\input\batch-$batchSlug.csv"
 
-    Write-Host ""
-    Write-Host "Optional exact Award Programs filter:" -ForegroundColor DarkGray
-    Write-Host "- Leave blank for normal exports." -ForegroundColor DarkGray
-    Write-Host "- Use this for award batches when Calibre search overmatches." -ForegroundColor DarkGray
-    Write-Host "Example: AHA - J. Russell Major Prize" -ForegroundColor DarkGray
-    Write-Host ""
+    $search = Read-ToolkitInput `
+        -Prompt "Calibre search string, blank if using manifest/IDs only" `
+        -Default ""
+
+    $calibreIds = Read-ToolkitInput `
+        -Prompt "Explicit Calibre IDs, comma-separated, blank to skip" `
+        -Default ""
 
     $exactAwardProgram = Read-ToolkitInput `
         -Prompt "Exact Award Programs filter, blank to skip" `
         -Default ""
+
+    if ([string]::IsNullOrWhiteSpace($batchManifest) -and
+        [string]::IsNullOrWhiteSpace($search) -and
+        [string]::IsNullOrWhiteSpace($calibreIds) -and
+        [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
+        throw "Provide a batch manifest, Calibre search string, explicit Calibre IDs, or an exact Award Programs filter."
+    }
 
     $defaultOutput = ".\input\lcc-source-$batchSlug.tsv"
 
@@ -270,23 +287,35 @@ function Start-ExportSourceBatch {
 
     $exportScriptPath = Get-ToolkitScriptPath -ScriptName "Export-CalibreBatchForLcc.ps1"
 
+    $exportArgs = @{
+        OutputTsv = $outputTsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($batchManifest)) {
+        $exportArgs.BatchManifest = $batchManifest
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($search)) {
+        $exportArgs.Search = $search
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($calibreIds)) {
+        $exportArgs.CalibreIds = $calibreIds
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
+        $exportArgs.ExactAwardProgram = $exactAwardProgram
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $exportArgs.LibraryPath = $libraryPath
+    }
+
     Write-Host ""
     Write-Host "Running: Export-CalibreBatchForLcc.ps1" -ForegroundColor Cyan
     Write-Host ""
 
-    if ([string]::IsNullOrWhiteSpace($libraryPath)) {
-        & $exportScriptPath `
-            -Search $search `
-            -ExactAwardProgram $exactAwardProgram `
-            -OutputTsv $outputTsv
-    }
-    else {
-        & $exportScriptPath `
-            -Search $search `
-            -ExactAwardProgram $exactAwardProgram `
-            -OutputTsv $outputTsv `
-            -LibraryPath $libraryPath
-    }
+    & $exportScriptPath @exportArgs
 
     Write-Host ""
     Write-Host "Next step:" -ForegroundColor Cyan
@@ -1602,6 +1631,8 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
+
 
 
 
