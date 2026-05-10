@@ -24,6 +24,39 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.9.3 - Guided Author/Title Prep Workflow
+
+### Added
+
+- Added a new guided workflow:
+  - `G1. Guided Author/Title prep`
+- Added read-only guided orchestration for Author/Title preparation.
+
+### Behavior
+
+- `G1` can reuse an existing batch manifest or create a new one from:
+  - Calibre search string
+  - explicit comma-separated Calibre IDs
+  - optional exact Award Programs filter
+- `G1` performs the following read-only sequence:
+  - create or reuse batch manifest
+  - preview selected books
+  - export Author/Title source TSV
+  - generate MQG status/readiness report
+  - write operation summary
+- `G1` writes an operation summary to:
+  - `.\reports\operation-summary-author-title-$batchName.txt`
+- Guided workflow output clearly states that Calibre metadata is not modified.
+
+### Validated
+
+- Successfully ran `G1` against the 3-row `idfile-smoketest` manifest.
+- Successfully ran `G1` against the 86-row `search-smoketest` manifest.
+- Confirmed Author/Title source TSV row counts match the source manifests.
+- Confirmed MQG status report row counts match the source manifests.
+- Confirmed operation summary files are created with input, file, count, recommendation, and safety details.
+
+---
 ## v0.9.2 - MQG Status Batch Manifest UX
 
 ### Added
@@ -774,6 +807,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
