@@ -1,15 +1,25 @@
-﻿<#
+<#
 .SYNOPSIS
-Marks MQG-01 Title & Author complete for records verified by the Author / Title Cleanup workflow.
+Marks MQG-01 Title & Author complete for records verified or cleanly reviewed by the Author / Title Cleanup workflow.
 
 .DESCRIPTION
 Reads an author/title cleanup verify report and marks the Calibre custom field
-#mqg_title_author true only for rows with VerificationStatus = Verified.
+#mqg_title_author true for rows that are safe to mark complete.
+
+Eligible rows:
+- VerificationStatus = Verified
+- OR clean no-change rows where:
+  - VerificationStatus = Clean No-Change
+  - TitleChangeDetected is not Yes
+  - AuthorsChangeDetected is not Yes
+  - ApplyEligible is not Yes
+  - BlockingReasons is blank
+  - expected and actual title/author values still match
 
 This script does not trust export, dry run, summary, or apply reports directly.
 The verify report is the source of truth.
 
-Rows that are mismatched, missing, skipped, duplicate, or otherwise not verified are not marked complete.
+Rows that are mismatched, missing, duplicate, blocked, or otherwise unsafe are not marked complete.
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File .\scripts\Invoke-AuthorTitleMqgComplete.ps1 `
@@ -76,6 +86,37 @@ function Normalize-Status {
     return $Value.Trim()
 }
 
+function Normalize-ComparableValue {
+    param(
+        [AllowNull()]
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ""
+    }
+
+    return (($Value.Trim()) -replace '\s+', ' ')
+}
+
+function Get-RowValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Row,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $property = $Row.PSObject.Properties[$Name]
+
+    if ($null -eq $property) {
+        return ""
+    }
+
+    return [string]$property.Value
+}
+
 function Add-BlockingReason {
     param(
         [Parameter(Mandatory = $true)]
@@ -132,8 +173,59 @@ function Test-MqgFieldTrue {
         Status = "Field was not confirmed true during readback"
     }
 }
+
+function Test-CleanNoChangeRow {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Row,
+
+        [Parameter(Mandatory = $true)]
+        [string]$VerificationStatus
+    )
+
+    $titleChangeDetected = Get-RowValue -Row $Row -Name "TitleChangeDetected"
+    $authorsChangeDetected = Get-RowValue -Row $Row -Name "AuthorsChangeDetected"
+    $applyEligible = Get-RowValue -Row $Row -Name "ApplyEligible"
+    $blockingReasons = Get-RowValue -Row $Row -Name "BlockingReasons"
+
+    $expectedTitle = Get-RowValue -Row $Row -Name "ExpectedTitle"
+    $actualTitle = Get-RowValue -Row $Row -Name "ActualTitle"
+    $expectedAuthors = Get-RowValue -Row $Row -Name "ExpectedAuthors"
+    $actualAuthors = Get-RowValue -Row $Row -Name "ActualAuthors"
+
+    if ($VerificationStatus -ne "Clean No-Change") {
+        return $false
+    }
+
+    if ($titleChangeDetected -eq "Yes" -or $authorsChangeDetected -eq "Yes") {
+        return $false
+    }
+
+    if ($applyEligible -eq "Yes") {
+        return $false
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($blockingReasons)) {
+        return $false
+    }
+
+    if ((Normalize-ComparableValue $expectedTitle) -cne (Normalize-ComparableValue $actualTitle)) {
+        return $false
+    }
+
+    if ((Normalize-ComparableValue $expectedAuthors) -cne (Normalize-ComparableValue $actualAuthors)) {
+        return $false
+    }
+
+    return $true
+}
+
 if (-not (Test-Path $VerifyReportCsv)) {
     throw "Verify report CSV was not found: $VerifyReportCsv"
+}
+
+if (-not (Test-Path $CalibreDb)) {
+    throw "calibredb.exe was not found at: $CalibreDb"
 }
 
 Write-Host "Author/Title MQG complete marker"
@@ -178,13 +270,23 @@ $preflightRows = foreach ($row in $rows) {
     $calibreId = ([string]$row.CalibreId).Trim()
     $verificationStatus = Normalize-Status -Value $row.VerificationStatus
     $blockingReasons = @()
+    $completionBasis = ""
 
     if ([string]::IsNullOrWhiteSpace($calibreId)) {
         $blockingReasons += "Missing CalibreId"
     }
 
-    if ($verificationStatus -ne "Verified") {
-        $blockingReasons += "VerificationStatus is not Verified"
+    $isVerified = ($verificationStatus -eq "Verified")
+    $isCleanNoChange = Test-CleanNoChangeRow -Row $row -VerificationStatus $verificationStatus
+
+    if ($isVerified) {
+        $completionBasis = "Verified"
+    }
+    elseif ($isCleanNoChange) {
+        $completionBasis = "Clean No-Change"
+    }
+    else {
+        $blockingReasons += "VerificationStatus is not Verified or clean no-change"
     }
 
     if (-not [string]::IsNullOrWhiteSpace($calibreId) -and $idCounts[$calibreId] -gt 1) {
@@ -201,6 +303,7 @@ $preflightRows = foreach ($row in $rows) {
         ActualAuthors      = [string]$row.ActualAuthors
         VerificationStatus = $verificationStatus
         VerificationNotes  = [string]$row.VerificationNotes
+        CompletionBasis    = $completionBasis
         MarkEligible       = if ($eligible) { "Yes" } else { "No" }
         MarkStatus         = if ($eligible) { "Ready" } else { "Skipped" }
         ReadBackStatus     = ""
@@ -211,9 +314,13 @@ $preflightRows = foreach ($row in $rows) {
 
 $eligibleRows = @($preflightRows | Where-Object { $_.MarkEligible -eq "Yes" })
 $skippedRows = @($preflightRows | Where-Object { $_.MarkEligible -ne "Yes" })
+$verifiedEligibleRows = @($eligibleRows | Where-Object { $_.CompletionBasis -eq "Verified" })
+$cleanNoChangeEligibleRows = @($eligibleRows | Where-Object { $_.CompletionBasis -eq "Clean No-Change" })
 
 Write-Host "Rows reviewed: $($preflightRows.Count)"
 Write-Host "Rows eligible to mark complete: $($eligibleRows.Count)"
+Write-Host "Rows eligible from verified changes: $($verifiedEligibleRows.Count)"
+Write-Host "Rows eligible from clean no-change review: $($cleanNoChangeEligibleRows.Count)"
 Write-Host "Rows skipped: $($skippedRows.Count)"
 Write-Host ""
 
@@ -226,12 +333,12 @@ if ($eligibleRows.Count -eq 0) {
 
     $preflightRows | Export-Csv -Path $MqgReportCsv -NoTypeInformation -Encoding UTF8
 
-    throw "No verified rows are eligible to mark MQG complete."
+    throw "No rows are eligible to mark MQG complete."
 }
 
 Write-Host "Eligible rows:"
 foreach ($row in $eligibleRows) {
-    Write-Host "  $($row.CalibreId) - $($row.ActualTitle) - $($row.ActualAuthors)"
+    Write-Host "  $($row.CalibreId) - $($row.CompletionBasis) - $($row.ActualTitle) - $($row.ActualAuthors)"
 }
 
 if ($skippedRows.Count -gt 0) {
@@ -279,7 +386,7 @@ if ($confirmation -ne $ConfirmationPhrase) {
 }
 
 Write-Host ""
-Write-Host "Marking verified records complete..."
+Write-Host "Marking Author/Title MQG complete records..."
 
 $finalRows = foreach ($row in $preflightRows) {
     if ($row.MarkEligible -ne "Yes") {
@@ -341,7 +448,4 @@ Write-Host "MQG report: $MqgReportCsv"
 if ($failedCount -gt 0) {
     throw "One or more MQG complete mark operations failed. Review the MQG report."
 }
-
-
-
 

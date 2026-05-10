@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.9.8" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.9.9" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -2129,6 +2129,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 

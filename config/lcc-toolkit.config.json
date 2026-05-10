@@ -1,5 +1,5 @@
 {
-    "ToolkitVersion":  "0.9.8",
+    "ToolkitVersion":  "0.9.9",
     "CalibreDbPath":  "C:\\Program Files\\Calibre2\\calibredb.exe",
     "DefaultLibraryPath":  "",
     "InputFolder":  ".\\input",
@@ -25,6 +25,7 @@
                       },
     "Notes":  "Configuration for the Calibre LCC Toolkit. Paths are relative to the toolkit root unless absolute."
 }
+
 
 
 
