@@ -24,6 +24,43 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.9.4 - Guided Workflow Large Batch Handling
+
+### Added
+
+- Added medium-batch and large-batch handling to:
+  - `G1. Guided Author/Title prep`
+- Added optional Author/Title review chunk creation for large batches.
+- Added review chunk reporting to the guided operation summary.
+
+### Behavior
+
+- `G1` now detects batch size after manifest preview:
+  - 1-25 rows: normal guided flow
+  - 26-100 rows: medium-batch note
+  - 101+ rows: large-batch note and optional review chunk creation
+- Large batches can generate smaller Author/Title review chunk TSV files under:
+  - `.\input\review-chunks`
+- Review chunk files use row-range filenames, such as:
+  - `author-title-$batchName-001-050.tsv`
+  - `author-title-$batchName-051-100.tsv`
+- Operation summaries now include:
+  - review chunk count
+  - review chunk size
+  - review chunk folder
+  - row-count warning when manifest row count differs from Author/Title export row count
+- Final guided workflow output now lists the review chunk folder when chunk files are created.
+- Workflow remains read-only against Calibre metadata.
+
+### Validated
+
+- Confirmed 86-row `search-smoketest` manifest triggers the medium-batch note and creates no review chunks.
+- Confirmed temporary 120-row `large-guided-validation` manifest triggers the large-batch path.
+- Confirmed large-batch path creates review chunk files.
+- Confirmed operation summary records review chunk details and row-count mismatch warning.
+- Confirmed final workflow output lists the review chunk folder.
+
+---
 ## v0.9.3 - Guided Author/Title Prep Workflow
 
 ### Added
@@ -807,6 +844,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
