@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.8.9" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.9.0" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -764,22 +764,39 @@ function Start-AuthorTitleExport {
     Write-Host "This step reads Calibre and creates a source TSV for author/title cleanup review." -ForegroundColor DarkGray
     Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "You may use a Calibre search string, explicit Calibre IDs, an exact Award Programs value, or a combination." -ForegroundColor DarkGray
+    Write-Host "Preferred workflow:" -ForegroundColor DarkGray
+    Write-Host "1. Use B1 to create a stable batch manifest." -ForegroundColor DarkGray
+    Write-Host "2. Use that manifest here to export the Author/Title source TSV." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "You may use a batch manifest, Calibre search string, explicit Calibre IDs, exact Award Programs value, or a combination." -ForegroundColor DarkGray
+    Write-Host "If a search and manifest/IDs are both supplied, the manifest/IDs are treated as a local filter/intersection." -ForegroundColor DarkGray
+    Write-Host "Example manifest: .\input\batch-$batchSlug.csv" -ForegroundColor DarkGray
     Write-Host "Example search: title:false or author:false" -ForegroundColor DarkGray
     Write-Host "Example IDs: 4040,4048,4049" -ForegroundColor DarkGray
     Write-Host "Example award program: AHA - J. Russell Major Prize" -ForegroundColor DarkGray
     Write-Host ""
 
+    $batchManifest = Read-ToolkitInput `
+        -Prompt "Batch manifest CSV, blank to skip" `
+        -Default ".\input\batch-$batchSlug.csv"
+
     $search = Read-ToolkitInput `
-        -Prompt "Calibre search string, blank if using exact award program only" `
+        -Prompt "Calibre search string, blank if using manifest/IDs only" `
+        -Default ""
+
+    $calibreIds = Read-ToolkitInput `
+        -Prompt "Explicit Calibre IDs, comma-separated, blank to skip" `
         -Default ""
 
     $exactAwardProgram = Read-ToolkitInput `
         -Prompt "Exact Award Programs value, blank to skip" `
         -Default ""
 
-    if ([string]::IsNullOrWhiteSpace($search) -and [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
-        throw "Provide either a Calibre search string or an exact Award Programs value."
+    if ([string]::IsNullOrWhiteSpace($batchManifest) -and
+        [string]::IsNullOrWhiteSpace($search) -and
+        [string]::IsNullOrWhiteSpace($calibreIds) -and
+        [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
+        throw "Provide a batch manifest, Calibre search string, explicit Calibre IDs, or an exact Award Programs value."
     }
 
     $outputTsv = Read-ToolkitInput `
@@ -796,8 +813,16 @@ function Start-AuthorTitleExport {
         OutputTsv = $outputTsv
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($batchManifest)) {
+        $exportArgs.BatchManifest = $batchManifest
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($search)) {
         $exportArgs.Search = $search
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($calibreIds)) {
+        $exportArgs.CalibreIds = $calibreIds
     }
 
     if (-not [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
@@ -1577,6 +1602,8 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
+
 
 
 

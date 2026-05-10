@@ -24,6 +24,34 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.9.0 - Author/Title Batch Manifest Consumption
+
+### Added
+
+- Added `-BatchManifest` support to `scripts/Export-CalibreBatchForAuthorTitleCleanup.ps1`.
+- Updated launcher option:
+  - `A1. Author/Title: Export source TSV`
+
+### Behavior
+
+- Author / Title export can now consume a stable batch manifest created by:
+  - `B1. Batch: Create batch manifest`
+- Supports batch selection by:
+  - batch manifest CSV with a `CalibreId` column
+  - Calibre search string
+  - explicit comma-separated Calibre IDs
+  - optional exact Award Programs filter
+- If a Calibre search and manifest/IDs are both supplied, the manifest/IDs act as a local intersection filter.
+- Export remains read-only and does not modify Calibre metadata.
+
+### Validated
+
+- Successfully exported a 3-row Author / Title source TSV from `batch-idfile-smoketest.csv`.
+- Successfully exported an 86-row Author / Title source TSV from `batch-search-smoketest.csv`.
+- Confirmed launcher `A1` passes the batch manifest to the export script.
+- Confirmed exported TSV row counts match the source batch manifests.
+
+---
 ## v0.8.9 - Standard Batch Manifest Support
 
 ### Added
@@ -688,6 +716,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
