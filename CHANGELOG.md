@@ -24,6 +24,35 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.9.2 - MQG Status Batch Manifest UX
+
+### Added
+
+- Added `-BatchManifest` support to `scripts/Show-MqgBatchStatus.ps1`.
+- Updated launcher option:
+  - `13. MQG: Show batch status / readiness report`
+
+### Behavior
+
+- MQG status/readiness reporting can now consume a stable batch manifest created by:
+  - `B1. Batch: Create batch manifest`
+- Supports batch status selection by:
+  - batch manifest CSV with a `CalibreId` column
+  - existing input CSV with a `CalibreId` column
+  - explicit comma-separated Calibre IDs
+- Launcher option `13` now defaults the batch manifest path to:
+  - `.\input\batch-$batchSlug.csv`
+- Console preview is limited to the first 25 rows while the full report remains available in CSV.
+- Operation remains read-only and does not modify Calibre metadata.
+
+### Validated
+
+- Successfully generated a 3-row MQG batch status report from `batch-idfile-smoketest.csv`.
+- Successfully generated an 86-row MQG batch status report from `batch-search-smoketest.csv`.
+- Confirmed launcher option `13` passes the batch manifest to the MQG status script.
+- Confirmed generated report row counts match the source batch manifests.
+
+---
 ## v0.9.1 - LCC Batch Manifest Consumption
 
 ### Added
@@ -745,6 +774,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 

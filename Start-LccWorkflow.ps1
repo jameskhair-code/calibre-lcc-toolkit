@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.9.1" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.9.2" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -1370,14 +1370,30 @@ function Start-CommentsVerify {
                     Write-Host ""
                     Write-Host "This operation is read-only and does not modify Calibre metadata." -ForegroundColor Yellow
                     Write-Host ""
+                    Write-Host "Preferred workflow:" -ForegroundColor DarkGray
+                    Write-Host "1. Use B1 to create a stable batch manifest." -ForegroundColor DarkGray
+                    Write-Host "2. Use that manifest here to review current MQG readiness." -ForegroundColor DarkGray
+                    Write-Host ""
+                    Write-Host "You may use a batch manifest, another input CSV with CalibreId, explicit Calibre IDs, or a combination." -ForegroundColor DarkGray
+                    Write-Host ""
+
+                    $batchManifest = Read-ToolkitInput `
+                        -Prompt "Batch manifest CSV, blank to skip" `
+                        -Default ".\input\batch-$batchSlug.csv"
 
                     $calibreIds = Read-ToolkitInput `
-                        -Prompt "Comma-separated Calibre IDs, blank if using CSV" `
+                        -Prompt "Comma-separated Calibre IDs, blank to skip" `
                         -Default ""
 
                     $inputCsv = Read-ToolkitInput `
-                        -Prompt "Optional input CSV with CalibreId column" `
+                        -Prompt "Optional non-manifest input CSV with CalibreId column, blank to skip" `
                         -Default ""
+
+                    if ([string]::IsNullOrWhiteSpace($batchManifest) -and
+                        [string]::IsNullOrWhiteSpace($calibreIds) -and
+                        [string]::IsNullOrWhiteSpace($inputCsv)) {
+                        throw "Provide a batch manifest, explicit Calibre IDs, or an input CSV with a CalibreId column."
+                    }
 
                     $reportCsv = Read-ToolkitInput `
                         -Prompt "MQG batch status report CSV" `
@@ -1391,6 +1407,10 @@ function Start-CommentsVerify {
 
                     $statusArgs = @{
                         ReportCsv = $reportCsv
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($batchManifest)) {
+                        $statusArgs.BatchManifest = $batchManifest
                     }
 
                     if (-not [string]::IsNullOrWhiteSpace($calibreIds)) {
@@ -1631,6 +1651,8 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
+
 
 
 
