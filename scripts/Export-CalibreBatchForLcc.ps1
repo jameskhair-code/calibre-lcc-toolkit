@@ -6,14 +6,36 @@ Exports a Calibre batch to TSV for LCC lookup/enrichment.
 Uses calibredb list --for-machine to export selected fields from Calibre into a clean TSV.
 This is read-only and does not modify Calibre metadata.
 
+Supports batch selection by:
+- Calibre search string
+- explicit comma-separated Calibre IDs
+- stable toolkit batch manifest CSV with a CalibreId column
+
 Supports an optional exact local Award Programs filter. This is useful because Calibre
 search syntax can overmatch award fields when using broad text matching.
 
+Selection behavior:
+- Search only: exports all records matching the search.
+- BatchManifest / CalibreIds only: resolves those IDs directly.
+- Search plus BatchManifest / CalibreIds: applies the ID list as a local filter/intersection against
+  the search result.
+- ExactAwardProgram: optional local exact-match filter for Award Programs.
+
 .EXAMPLE
-powershell -ExecutionPolicy Bypass -File .\scripts\Export-CalibreBatchForLcc.ps1 `
+pwsh -ExecutionPolicy Bypass -File .\scripts\Export-CalibreBatchForLcc.ps1 `
   -Search '#award_programs:"AHA - J. Russell Major Prize" and #mqg_lcc:false' `
   -ExactAwardProgram "AHA - J. Russell Major Prize" `
   -OutputTsv ".\input\lcc-source-j-russell-major-prize.tsv"
+
+.EXAMPLE
+pwsh -ExecutionPolicy Bypass -File .\scripts\Export-CalibreBatchForLcc.ps1 `
+  -BatchManifest ".\input\batch-search-smoketest.csv" `
+  -OutputTsv ".\input\lcc-source-search-smoketest.tsv"
+
+.EXAMPLE
+pwsh -ExecutionPolicy Bypass -File .\scripts\Export-CalibreBatchForLcc.ps1 `
+  -CalibreIds "5374,5375,5376" `
+  -OutputTsv ".\input\lcc-source-leo-gershoy-smoketest.tsv"
 #>
 
 [CmdletBinding()]
@@ -23,6 +45,10 @@ param(
     [string]$Search = "",
 
     [string]$ExactAwardProgram = "",
+
+    [string]$CalibreIds = "",
+
+    [string]$BatchManifest = "",
 
     [string]$OutputTsv = ".\input\lcc-source-batch.tsv",
 
@@ -92,7 +118,13 @@ function Invoke-CalibreDb {
 
     $allArgs += $Arguments
 
-    & $CalibreDb @allArgs
+    $output = & $CalibreDb @allArgs 2>&1
+    $exitCode = $LASTEXITCODE
+
+    return [pscustomobject]@{
+        ExitCode = $exitCode
+        Output   = ($output | ForEach-Object { [string]$_ }) -join "`n"
+    }
 }
 
 function Get-CustomRawValue {
@@ -232,8 +264,153 @@ function Format-Authors {
     return [string]$Authors
 }
 
+function Add-CalibreIdToSet {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$IdSet,
+
+        [Parameter(Mandatory = $true)]
+        [string]$IdValue,
+
+        [string]$SourceLabel = "CalibreId"
+    )
+
+    $idText = ([string]$IdValue).Trim()
+
+    if ([string]::IsNullOrWhiteSpace($idText)) {
+        return
+    }
+
+    if ($idText -notmatch '^\d+$') {
+        throw "Invalid $SourceLabel value: $idText. Calibre IDs must be numeric."
+    }
+
+    $IdSet[$idText] = $true
+}
+
+function Get-CalibreIdSelectionSet {
+    param(
+        [string]$CalibreIds = "",
+
+        [string]$BatchManifest = ""
+    )
+
+    $idSet = @{}
+
+    if (-not [string]::IsNullOrWhiteSpace($CalibreIds)) {
+        foreach ($idValue in ($CalibreIds -split '[,\s;]+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+            Add-CalibreIdToSet -IdSet $idSet -IdValue $idValue -SourceLabel "CalibreIds"
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($BatchManifest)) {
+        if (-not (Test-Path $BatchManifest)) {
+            throw "BatchManifest was not found: $BatchManifest"
+        }
+
+        $manifestRows = @(Import-Csv -Path $BatchManifest)
+
+        if ($manifestRows.Count -eq 0) {
+            throw "BatchManifest contained no rows: $BatchManifest"
+        }
+
+        $firstRow = $manifestRows | Select-Object -First 1
+        $hasCalibreIdColumn = $false
+
+        foreach ($property in $firstRow.PSObject.Properties) {
+            if ($property.Name -eq "CalibreId") {
+                $hasCalibreIdColumn = $true
+                break
+            }
+        }
+
+        if (-not $hasCalibreIdColumn) {
+            throw "BatchManifest must contain a CalibreId column: $BatchManifest"
+        }
+
+        foreach ($row in $manifestRows) {
+            Add-CalibreIdToSet -IdSet $idSet -IdValue $row.CalibreId -SourceLabel "BatchManifest CalibreId"
+        }
+    }
+
+    return $idSet
+}
+
+function Get-CalibreBooksBySearch {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FieldList,
+
+        [string]$Search = ""
+    )
+
+    $arguments = @(
+        "list",
+        "--for-machine",
+        "--fields",
+        $FieldList
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Search)) {
+        $arguments += @("--search", $Search)
+    }
+
+    $result = Invoke-CalibreDb -Arguments $arguments
+
+    if ($result.ExitCode -ne 0) {
+        throw "calibredb list failed with exit code $($result.ExitCode): $($result.Output)"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($result.Output)) {
+        return @()
+    }
+
+    try {
+        $converted = $result.Output | ConvertFrom-Json
+        return @(Convert-ToFlatArray -Value $converted)
+    }
+    catch {
+        throw "Could not parse calibredb JSON output: $($_.Exception.Message)"
+    }
+}
+
+function Get-CalibreBooksByIdSet {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$IdSet,
+
+        [Parameter(Mandatory = $true)]
+        [string]$FieldList
+    )
+
+    $books = @()
+
+    foreach ($id in ($IdSet.Keys | Sort-Object {[int]$_})) {
+        $records = @(Get-CalibreBooksBySearch -FieldList $FieldList -Search "id:$id")
+
+        if ($records.Count -eq 0) {
+            Write-Warning "CalibreId was requested but not found: $id"
+            continue
+        }
+
+        if ($records.Count -gt 1) {
+            throw "CalibreId search returned more than one record for id:$id"
+        }
+
+        $books += $records[0]
+    }
+
+    return @($books)
+}
+
 if (-not (Test-Path $CalibreDb)) {
     throw "calibredb.exe was not found at: $CalibreDb"
+}
+
+if ([string]::IsNullOrWhiteSpace($Search) -and
+    [string]::IsNullOrWhiteSpace($CalibreIds) -and
+    [string]::IsNullOrWhiteSpace($BatchManifest)) {
+    throw "Provide a Calibre search string, explicit Calibre IDs, or a BatchManifest path."
 }
 
 $fieldList = @(
@@ -252,18 +429,19 @@ $fieldList = @(
     "*lcc_class_path"
 ) -join ","
 
-$args = @(
-    "list",
-    "--for-machine",
-    "--fields", $fieldList
-)
+$idSet = Get-CalibreIdSelectionSet -CalibreIds $CalibreIds -BatchManifest $BatchManifest
 
-if (-not [string]::IsNullOrWhiteSpace($Search)) {
-    $args += @("--search", $Search)
+Write-Host "Running calibredb export for LCC lookup/enrichment..."
+Write-Host "This operation is read-only and does not modify Calibre metadata."
+Write-Host "Search: $Search"
+
+if (-not [string]::IsNullOrWhiteSpace($BatchManifest)) {
+    Write-Host "Batch manifest: $BatchManifest"
 }
 
-Write-Host "Running calibredb export..."
-Write-Host "Search: $Search"
+if ($idSet.Count -gt 0) {
+    Write-Host "CalibreId selection count: $($idSet.Count)"
+}
 
 if (-not [string]::IsNullOrWhiteSpace($ExactAwardProgram)) {
     Write-Host "Exact Award Programs filter: $ExactAwardProgram"
@@ -271,15 +449,24 @@ if (-not [string]::IsNullOrWhiteSpace($ExactAwardProgram)) {
 
 Write-Host "Output: $OutputTsv"
 
-$jsonLines = Invoke-CalibreDb -Arguments $args
-$jsonText = ($jsonLines -join "`n").Trim()
+if (-not [string]::IsNullOrWhiteSpace($Search)) {
+    $books = @(Get-CalibreBooksBySearch -FieldList $fieldList -Search $Search)
+    Write-Host "Books found from Calibre search: $($books.Count)"
 
-if ([string]::IsNullOrWhiteSpace($jsonText)) {
-    throw "No output returned from calibredb."
+    if ($idSet.Count -gt 0) {
+        $books = @(
+            $books | Where-Object {
+                $idSet.ContainsKey(([string]$_.id).Trim())
+            }
+        )
+
+        Write-Host "Books found after CalibreId intersection: $($books.Count)"
+    }
 }
-
-$converted = $jsonText | ConvertFrom-Json
-$books = @(Convert-ToFlatArray -Value $converted)
+else {
+    $books = @(Get-CalibreBooksByIdSet -IdSet $idSet -FieldList $fieldList)
+    Write-Host "Books resolved by CalibreId selection: $($books.Count)"
+}
 
 Write-Host "Books found before local filters: $($books.Count)"
 
@@ -297,10 +484,17 @@ if (-not [string]::IsNullOrWhiteSpace($ExactAwardProgram)) {
 }
 
 if ($books.Count -eq 0) {
-    throw "No books matched the export criteria. Check the Calibre search string and/or exact Award Programs filter."
+    throw "No books matched the export criteria. Check the Calibre search string, batch manifest, explicit IDs, and/or exact Award Programs filter."
 }
 
-$exportRows = foreach ($book in $books) {
+$duplicateGroups = @($books | Group-Object id | Where-Object { $_.Count -gt 1 })
+
+if ($duplicateGroups.Count -gt 0) {
+    $duplicateIds = ($duplicateGroups | ForEach-Object { $_.Name }) -join ", "
+    throw "Duplicate Calibre IDs were found in the selected batch: $duplicateIds"
+}
+
+$exportRows = foreach ($book in ($books | Sort-Object id)) {
     [pscustomobject]@{
         CalibreId                          = $book.id
         Title                              = $book.title
