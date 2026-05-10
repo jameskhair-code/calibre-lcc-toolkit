@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.9.2" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.9.3" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -180,6 +180,11 @@ function Show-Menu {
     Write-Host "Batch Selection Module" -ForegroundColor Cyan
     Write-Host "B1. Batch: Create batch manifest"
     Write-Host ""
+
+    Write-Host "Guided Workflows" -ForegroundColor Cyan
+    Write-Host "G1. Guided Author/Title prep"
+    Write-Host ""
+
     Write-Host "Author / Title Cleanup Module" -ForegroundColor Cyan
     Write-Host "A1. Author/Title: Export source TSV"
     Write-Host "A2. Author/Title: Dry run cleanup TSV"
@@ -631,6 +636,346 @@ try {
 
 
 
+
+function Start-GuidedAuthorTitlePrep {
+    Write-Host ""
+    Write-Host "Guided Author/Title prep" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This guided workflow prepares an Author/Title cleanup batch." -ForegroundColor DarkGray
+    Write-Host "It creates or reuses a batch manifest, exports an Author/Title source TSV, writes an MQG status report, and writes an operation summary." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "This workflow is read-only against Calibre. It does not modify Calibre metadata." -ForegroundColor Yellow
+    Write-Host ""
+
+    $defaultBatchName = ""
+    if (-not [string]::IsNullOrWhiteSpace($script:CurrentBatchSlug)) {
+        $defaultBatchName = $script:CurrentBatchSlug
+    }
+
+    $batchName = Read-ToolkitInput `
+        -Prompt "Batch name, example andrew-carnegie-title-author" `
+        -Default $defaultBatchName
+
+    if ([string]::IsNullOrWhiteSpace($batchName)) {
+        throw "Batch name is required."
+    }
+
+    $batchName = $batchName.Trim()
+
+    if ($batchName -notmatch '^[a-z0-9][a-z0-9-]*$') {
+        throw "Batch name must use lowercase letters, numbers, and hyphens only. Example: andrew-carnegie-title-author"
+    }
+
+    $script:CurrentBatchSlug = $batchName
+
+    $defaultBatchManifest = ".\input\batch-$batchName.csv"
+    $defaultExistingManifest = ""
+
+    if (Test-Path $defaultBatchManifest) {
+        $defaultExistingManifest = $defaultBatchManifest
+    }
+
+    Write-Host ""
+    Write-Host "Batch selection" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Use an existing batch manifest, or provide a Calibre search string / explicit IDs so this workflow can create one." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $existingBatchManifest = Read-ToolkitInput `
+        -Prompt "Existing batch manifest CSV, blank to create a new one" `
+        -Default $defaultExistingManifest
+
+    $search = Read-ToolkitInput `
+        -Prompt "Calibre search string, blank if using existing manifest or IDs only" `
+        -Default ""
+
+    $calibreIds = Read-ToolkitInput `
+        -Prompt "Explicit Calibre IDs, comma-separated, blank to skip" `
+        -Default ""
+
+    $exactAwardProgram = Read-ToolkitInput `
+        -Prompt "Exact Award Programs filter, blank to skip" `
+        -Default ""
+
+    if ([string]::IsNullOrWhiteSpace($existingBatchManifest) -and
+        [string]::IsNullOrWhiteSpace($search) -and
+        [string]::IsNullOrWhiteSpace($calibreIds)) {
+        throw "Provide an existing batch manifest, a Calibre search string, or explicit Calibre IDs."
+    }
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $batchManifest = if (-not [string]::IsNullOrWhiteSpace($existingBatchManifest)) {
+        $existingBatchManifest
+    }
+    else {
+        $defaultBatchManifest
+    }
+
+    $batchSelectionSummaryCsv = ".\reports\batch-$batchName-selection-summary.csv"
+    $authorTitleSourceTsv = ".\input\author-title-cleanup-source-$batchName.tsv"
+    $mqgStatusReportCsv = ".\reports\mqg-batch-status-$batchName.csv"
+    $operationSummaryTxt = ".\reports\operation-summary-author-title-$batchName.txt"
+
+    $willCreateManifest = [string]::IsNullOrWhiteSpace($existingBatchManifest)
+
+    $plannedOutputs = @(
+        $authorTitleSourceTsv,
+        $mqgStatusReportCsv,
+        $operationSummaryTxt
+    )
+
+    if ($willCreateManifest) {
+        $plannedOutputs += $batchManifest
+        $plannedOutputs += $batchSelectionSummaryCsv
+    }
+
+    Write-Host ""
+    Write-Host "Plan preview" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This run will:" -ForegroundColor DarkGray
+
+    if ($willCreateManifest) {
+        Write-Host "1. Create a new batch manifest from the supplied search/IDs." -ForegroundColor DarkGray
+    }
+    else {
+        Write-Host "1. Reuse the existing batch manifest." -ForegroundColor DarkGray
+    }
+
+    Write-Host "2. Preview the selected books." -ForegroundColor DarkGray
+    Write-Host "3. Export an Author/Title source TSV." -ForegroundColor DarkGray
+    Write-Host "4. Generate an MQG status/readiness report." -ForegroundColor DarkGray
+    Write-Host "5. Write an operation summary." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "This run will NOT modify Calibre metadata." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Planned files:" -ForegroundColor DarkGray
+    Write-Host "- Batch manifest:          $batchManifest" -ForegroundColor DarkGray
+    Write-Host "- Author/Title source TSV: $authorTitleSourceTsv" -ForegroundColor DarkGray
+    Write-Host "- MQG status report CSV:   $mqgStatusReportCsv" -ForegroundColor DarkGray
+    Write-Host "- Operation summary TXT:   $operationSummaryTxt" -ForegroundColor DarkGray
+    Write-Host ""
+
+    $existingOutputs = @(
+        foreach ($outputPath in $plannedOutputs) {
+            if (-not [string]::IsNullOrWhiteSpace($outputPath) -and (Test-Path $outputPath)) {
+                $outputPath
+            }
+        }
+    )
+
+    if ($existingOutputs.Count -gt 0) {
+        Write-Host "Existing output files detected:" -ForegroundColor Yellow
+        foreach ($existingOutput in $existingOutputs) {
+            Write-Host "- $existingOutput" -ForegroundColor Yellow
+        }
+        Write-Host ""
+
+        $overwriteAnswer = Read-ToolkitInput `
+            -Prompt "Overwrite existing local output files? Type YES to overwrite" `
+            -Default "NO"
+
+        if ($overwriteAnswer -ne "YES") {
+            throw "Guided workflow cancelled because output files already exist."
+        }
+    }
+
+    $continueAnswer = Read-ToolkitInput `
+        -Prompt "Continue with this read-only guided prep? Type YES to continue" `
+        -Default "NO"
+
+    if ($continueAnswer -ne "YES") {
+        Write-Host "Guided Author/Title prep cancelled." -ForegroundColor Yellow
+        Pause-Toolkit
+        return
+    }
+
+    $manifestScriptPath = Get-ToolkitScriptPath -ScriptName "New-ToolkitBatchManifest.ps1"
+    $authorTitleExportScriptPath = Get-ToolkitScriptPath -ScriptName "Export-CalibreBatchForAuthorTitleCleanup.ps1"
+    $mqgStatusScriptPath = Get-ToolkitScriptPath -ScriptName "Show-MqgBatchStatus.ps1"
+
+    if ($willCreateManifest) {
+        $manifestArgs = @{
+            BatchSlug = $batchName
+            OutputCsv = $batchManifest
+            ReportCsv = $batchSelectionSummaryCsv
+            Overwrite = $true
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($search)) {
+            $manifestArgs.Search = $search
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($calibreIds)) {
+            $manifestArgs.CalibreIds = $calibreIds
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
+            $manifestArgs.ExactAwardProgram = $exactAwardProgram
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+            $manifestArgs.LibraryPath = $libraryPath
+        }
+
+        Write-Host ""
+        Write-Host "Step 1/4: Creating batch manifest" -ForegroundColor Cyan
+        Write-Host ""
+
+        & $manifestScriptPath @manifestArgs
+    }
+    else {
+        if (-not (Test-Path $batchManifest)) {
+            throw "Existing batch manifest was not found: $batchManifest"
+        }
+
+        Write-Host ""
+        Write-Host "Step 1/4: Reusing existing batch manifest" -ForegroundColor Cyan
+        Write-Host $batchManifest
+    }
+
+    $manifestRows = @(Import-Csv -Path $batchManifest)
+
+    if ($manifestRows.Count -eq 0) {
+        throw "Batch manifest contains no rows: $batchManifest"
+    }
+
+    Write-Host ""
+    Write-Host "Batch preview" -ForegroundColor Cyan
+    Write-Host "Books selected: $($manifestRows.Count)"
+    Write-Host ""
+
+    $manifestRows |
+        Select-Object -First 20 CalibreId,Title,Authors,MqgTitleAuthor,MqgLcc,MqgMetadataComplete |
+        Format-Table -AutoSize
+
+    if ($manifestRows.Count -gt 20) {
+        Write-Host "Preview limited to first 20 rows. Full batch is in: $batchManifest" -ForegroundColor DarkGray
+    }
+
+    Write-Host ""
+
+    $continueAfterPreview = Read-ToolkitInput `
+        -Prompt "Continue with Author/Title export and MQG status report? Type YES to continue" `
+        -Default "YES"
+
+    if ($continueAfterPreview -ne "YES") {
+        Write-Host "Guided Author/Title prep stopped after batch preview." -ForegroundColor Yellow
+        Pause-Toolkit
+        return
+    }
+
+    $authorTitleArgs = @{
+        BatchManifest = $batchManifest
+        OutputTsv = $authorTitleSourceTsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $authorTitleArgs.LibraryPath = $libraryPath
+    }
+
+    Write-Host ""
+    Write-Host "Step 2/4: Exporting Author/Title source TSV" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $authorTitleExportScriptPath @authorTitleArgs
+
+    $mqgArgs = @{
+        BatchManifest = $batchManifest
+        ReportCsv = $mqgStatusReportCsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $mqgArgs.LibraryPath = $libraryPath
+    }
+
+    Write-Host ""
+    Write-Host "Step 3/4: Writing MQG status report" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $mqgStatusScriptPath @mqgArgs
+
+    $authorTitleRows = @(Import-Csv -Path $authorTitleSourceTsv -Delimiter "`t")
+    $mqgRows = @(Import-Csv -Path $mqgStatusReportCsv)
+
+    $rowsBlocked = @($mqgRows | Where-Object { $_.StatusSummary -eq "Blocked" }).Count
+    $rowsInProgress = @($mqgRows | Where-Object { $_.StatusSummary -eq "In Progress" }).Count
+    $rowsReadyForMqg99 = @($mqgRows | Where-Object { $_.ReadyForMqg99 -eq "Yes" -and $_.MqgMetadataComplete -ne "Yes" }).Count
+    $rowsMetadataComplete = @($mqgRows | Where-Object { $_.MqgMetadataComplete -eq "Yes" }).Count
+
+    $summaryLines = @(
+        "Guided Author/Title Prep Operation Summary",
+        "===========================================",
+        "",
+        "Batch name: $batchName",
+        "Created at: $(Get-Date -Format s)",
+        "",
+        "Calibre metadata modified: No",
+        "Workflow type: Read-only guided prep",
+        "",
+        "Inputs",
+        "------",
+        "Existing batch manifest: $existingBatchManifest",
+        "Calibre search string: $search",
+        "Explicit Calibre IDs: $calibreIds",
+        "Exact Award Programs filter: $exactAwardProgram",
+        "Optional library path: $libraryPath",
+        "",
+        "Files",
+        "-----",
+        "Batch manifest: $batchManifest",
+        "Batch selection summary: $batchSelectionSummaryCsv",
+        "Author/Title source TSV: $authorTitleSourceTsv",
+        "MQG status report CSV: $mqgStatusReportCsv",
+        "Operation summary TXT: $operationSummaryTxt",
+        "",
+        "Counts",
+        "------",
+        "Manifest rows: $($manifestRows.Count)",
+        "Author/Title source rows: $($authorTitleRows.Count)",
+        "MQG status rows: $($mqgRows.Count)",
+        "Rows blocked: $rowsBlocked",
+        "Rows in progress: $rowsInProgress",
+        "Rows ready for MQG-99: $rowsReadyForMqg99",
+        "Rows already metadata complete: $rowsMetadataComplete",
+        "",
+        "Recommended next action",
+        "-----------------------",
+        "Review the Author/Title source TSV and populate ProposedTitle / ProposedAuthors only where changes are needed.",
+        "Then run A2 to perform a dry run before any Author/Title metadata is applied.",
+        "",
+        "Safety note",
+        "-----------",
+        "This guided prep did not modify Calibre metadata."
+    )
+
+    $summaryFolder = Split-Path -Path $operationSummaryTxt -Parent
+
+    if ($summaryFolder -and -not (Test-Path $summaryFolder)) {
+        New-Item -ItemType Directory -Force -Path $summaryFolder | Out-Null
+    }
+
+    $summaryLines | Set-Content -Path $operationSummaryTxt -Encoding utf8
+
+    Write-Host ""
+    Write-Host "Step 4/4: Operation summary written" -ForegroundColor Cyan
+    Write-Host $operationSummaryTxt
+    Write-Host ""
+    Write-Host "Guided Author/Title prep complete." -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Files used/created/updated:"
+    Write-Host "- $batchManifest"
+    Write-Host "- $authorTitleSourceTsv"
+    Write-Host "- $mqgStatusReportCsv"
+    Write-Host "- $operationSummaryTxt"
+    Write-Host ""
+    Write-Host "Recommended next action:"
+    Write-Host "Review the Author/Title source TSV, populate ProposedTitle / ProposedAuthors where needed, then run A2 for a dry run."
+
+    Pause-Toolkit
+}
 
 function Start-BatchManifest {
     $batchSlug = Read-BatchSlug
@@ -1433,6 +1778,7 @@ function Start-CommentsVerify {
 
                     Pause-Toolkit
                 }
+                "G1" { Start-GuidedAuthorTitlePrep }
                 "B1" { Start-BatchManifest }
                 "A1" { Start-AuthorTitleExport }
                 "A2" { Start-AuthorTitleDryRun }
@@ -1651,6 +1997,12 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
+
+
+
+
+
 
 
 
