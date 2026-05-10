@@ -24,6 +24,73 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.10.0 - Identifier Inventory and MQG-02 Rules Foundation
+
+### Added
+
+- Added read-only identifier inventory export script:
+  - `scripts/Export-IdentifierInventory.ps1`
+- Added read-only identifier diagnostics script:
+  - `scripts/Write-IdentifierInventoryDiagnostics.ps1`
+- Added MQG-02 Identifier rules documentation:
+  - `docs/Identifier-Normalization-Rules.md`
+- Added JSON rules profile:
+  - `config/identifier-normalization-rules.json`
+
+### Behavior
+
+- Identifier inventory exports one row per Calibre book.
+- Inventory captures:
+  - ISBN column value
+  - ISBN identifier value
+  - Amazon identifier
+  - ASIN identifier
+  - Goodreads identifier
+  - identifier type list
+  - raw identifier map
+  - core coverage flags
+- Diagnostics generate reports for:
+  - missing core identifiers
+  - suspicious identifier type names
+  - duplicate ISBN values
+  - duplicate Goodreads values
+  - duplicate Amazon/ASIN values
+  - MQG-02 candidate status summary
+- All identifier inventory and diagnostics behavior is read-only.
+
+### Design
+
+- Established first-pass MQG-02 identifier tiers:
+  - core identifiers
+  - useful identifiers to preserve
+  - derived/statistical identifiers
+  - suspicious identifier type patterns
+- Established initial rules for:
+  - ISBN selection
+  - Amazon/ASIN handling
+  - Goodreads handling
+  - duplicate identifier review
+  - suspicious identifier type review
+  - AI-assisted identifier proposals
+  - MQG-02 completion interpretation
+
+### Validated
+
+- Exported identifier inventory across 5,092 Calibre records.
+- Confirmed 4,836 books with at least one identifier.
+- Confirmed 4,498 books with ISBN.
+- Confirmed 3,275 books with Amazon/ASIN.
+- Confirmed 3,296 books with Goodreads.
+- Generated MQG-02 candidate summary.
+- Confirmed first-pass candidate spread:
+  - 3,023 Ready - Strong Core
+  - 1,169 Review - Missing External Link Targets
+  - 594 Review - Missing ISBN
+  - 238 Review - Missing One External Link Target
+  - 51 Review - Duplicate Identifier
+  - 17 Review - Suspicious Identifier Type
+
+---
 ## v0.9.9 - Author/Title Verify and MQG No-Change Completion Alignment
 
 ### Changed
@@ -1024,6 +1091,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
