@@ -40,9 +40,9 @@ param(
 )
 
 $AllowedConfidenceValues = @(
-    "High - Mechanical Cleanup",
-    "Medium - Evidence Based",
-    "Low - Manual Review Recommended"
+    "High",
+    "Medium",
+    "Low"
 )
 
 function Convert-ToFlatArray {
@@ -357,11 +357,12 @@ $reportRows = foreach ($row in $inputRows) {
 
     $hasAnyProposedChange = $titleChangeDetected -or $authorsChangeDetected
 
-    if (-not $hasAnyProposedChange) {
-        $blockingReasons += "No proposed title/author change"
+    if ($hasAnyProposedChange) {
+        $confidenceStatus = Get-ConfidenceStatus -Confidence $confidence
     }
-
-    $confidenceStatus = Get-ConfidenceStatus -Confidence $confidence
+    else {
+        $confidenceStatus = "NotRequired"
+    }
 
     if ($hasAnyProposedChange -and $confidenceStatus -ne "Expected") {
         $blockingReasons += "Confidence is missing or unexpected"
@@ -381,7 +382,7 @@ $reportRows = foreach ($row in $inputRows) {
 
     $applyEligible = "No"
 
-    if ($blockingReasons.Count -eq 0) {
+    if ($hasAnyProposedChange -and $blockingReasons.Count -eq 0) {
         $applyEligible = "Yes"
     }
 
@@ -416,15 +417,26 @@ if ($outputFolder -and -not (Test-Path $outputFolder)) {
 $reportRows | Export-Csv -Path $ReportCsv -NoTypeInformation -Encoding UTF8
 
 $eligibleCount = @($reportRows | Where-Object { $_.ApplyEligible -eq "Yes" }).Count
-$blockedCount = @($reportRows | Where-Object { $_.ApplyEligible -ne "Yes" }).Count
+$proposedChangeRows = @(
+    $reportRows | Where-Object {
+        $_.TitleChangeDetected -eq "Yes" -or $_.AuthorsChangeDetected -eq "Yes"
+    }
+)
+$noChangeCount = @(
+    $reportRows | Where-Object {
+        $_.TitleChangeDetected -ne "Yes" -and $_.AuthorsChangeDetected -ne "Yes"
+    }
+).Count
+$blockedCount = @($proposedChangeRows | Where-Object { $_.ApplyEligible -ne "Yes" }).Count
 $titleChangeCount = @($reportRows | Where-Object { $_.TitleChangeDetected -eq "Yes" }).Count
 $authorsChangeCount = @($reportRows | Where-Object { $_.AuthorsChangeDetected -eq "Yes" }).Count
-$manualReviewCount = @($reportRows | Where-Object { $_.ManualReviewRequired -eq "Yes" }).Count
-$unexpectedConfidenceCount = @($reportRows | Where-Object { $_.ConfidenceStatus -eq "Unexpected" }).Count
-$missingConfidenceCount = @($reportRows | Where-Object { $_.ConfidenceStatus -eq "Missing" }).Count
+$manualReviewCount = @($proposedChangeRows | Where-Object { $_.ManualReviewRequired -eq "Yes" }).Count
+$unexpectedConfidenceCount = @($proposedChangeRows | Where-Object { $_.ConfidenceStatus -eq "Unexpected" }).Count
+$missingConfidenceCount = @($proposedChangeRows | Where-Object { $_.ConfidenceStatus -eq "Missing" }).Count
 
 Write-Host "Dry run complete: $ReportCsv"
 Write-Host "Rows reviewed: $($reportRows.Count)"
+Write-Host "Rows with no proposed/effective changes: $noChangeCount"
 Write-Host "Rows eligible for apply: $eligibleCount"
 Write-Host "Rows blocked: $blockedCount"
 Write-Host "Rows with title changes: $titleChangeCount"

@@ -24,6 +24,44 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.9.6 - Author/Title Dry-Run Validation Alignment
+
+### Changed
+
+- Updated Author/Title dry-run validation to align with the active Author/Title normalization rules profile.
+- Updated accepted confidence values from older long-form labels to:
+  - `High`
+  - `Medium`
+  - `Low`
+- Changed no-change rows so they are no longer treated as blocked rows.
+- Added a dry-run summary count for rows with no proposed/effective changes.
+
+### Behavior
+
+- Rows with no `ProposedTitle` and no `ProposedAuthors` are treated as no-change rows.
+- No-change rows are not apply-eligible, but they are also not blocked.
+- Confidence is required only for rows with an actual proposed title or author change.
+- Blocking/confidence counts now evaluate proposed-change rows instead of all rows.
+- Apply eligibility now requires:
+  - an actual proposed title or author change
+  - valid confidence
+  - `ManualReviewRequired = No`
+  - matching current Calibre title/author values
+  - no duplicate CalibreId
+  - no blocking reasons
+
+### Validated
+
+- Re-ran the Andrew Carnegie Medal Author/Title dry run.
+- Confirmed 86 rows reviewed.
+- Confirmed 71 rows with no proposed/effective changes.
+- Confirmed 15 rows eligible for apply.
+- Confirmed 0 blocked rows.
+- Confirmed 13 title changes and 2 author changes.
+- Confirmed 0 unexpected confidence values.
+- Confirmed 0 missing confidence values.
+
+---
 ## v0.9.5 - Author/Title Normalization Rules Profile
 
 ### Added
@@ -885,6 +923,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
