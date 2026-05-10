@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 Interactive launcher for the Calibre LCC Toolkit.
 
@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.8.8" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.8.9" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -176,6 +176,9 @@ function Show-Menu {
     Write-Host "11. Show Git status"
     Write-Host "12. LCC: Mark verified MQG complete"
     Write-Host "13. MQG: Show batch status / readiness report"
+    Write-Host ""
+    Write-Host "Batch Selection Module" -ForegroundColor Cyan
+    Write-Host "B1. Batch: Create batch manifest"
     Write-Host ""
     Write-Host "Author / Title Cleanup Module" -ForegroundColor Cyan
     Write-Host "A1. Author/Title: Export source TSV"
@@ -598,6 +601,109 @@ try {
 
 
 
+
+
+function Start-BatchManifest {
+    $batchSlug = Read-BatchSlug
+
+    Write-Host ""
+    Write-Host "Batch: create batch manifest" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step reads Calibre and creates a stable batch manifest CSV." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "Recommended workflow:" -ForegroundColor DarkGray
+    Write-Host "1. Build/test the search in Calibre until the visible result set is correct." -ForegroundColor DarkGray
+    Write-Host "2. Paste that Calibre search string here." -ForegroundColor DarkGray
+    Write-Host "3. Reuse the manifest's CalibreId column for module runs." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "You may use a Calibre search string, explicit Calibre IDs, an ID file, or a combination." -ForegroundColor DarkGray
+    Write-Host "If search and IDs are both supplied, IDs are treated as a local filter/intersection." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $search = Read-ToolkitInput `
+        -Prompt "Calibre search string, blank if using IDs/file only" `
+        -Default ""
+
+    $calibreIds = Read-ToolkitInput `
+        -Prompt "Explicit Calibre IDs, comma-separated, blank to skip" `
+        -Default ""
+
+    $calibreIdFile = Read-ToolkitInput `
+        -Prompt "Optional Calibre ID file, blank to skip" `
+        -Default ""
+
+    $exactAwardProgram = Read-ToolkitInput `
+        -Prompt "Optional exact Award Programs filter, blank to skip" `
+        -Default ""
+
+    if ([string]::IsNullOrWhiteSpace($search) -and
+        [string]::IsNullOrWhiteSpace($calibreIds) -and
+        [string]::IsNullOrWhiteSpace($calibreIdFile)) {
+        throw "Provide a Calibre search string, explicit Calibre IDs, or an ID file."
+    }
+
+    $outputCsv = Read-ToolkitInput `
+        -Prompt "Output batch manifest CSV" `
+        -Default ".\input\batch-$batchSlug.csv"
+
+    $reportCsv = Read-ToolkitInput `
+        -Prompt "Batch selection summary CSV" `
+        -Default ".\reports\batch-$batchSlug-selection-summary.csv"
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $overwriteAnswer = Read-ToolkitInput `
+        -Prompt "Overwrite existing manifest/report? Type YES to overwrite" `
+        -Default "NO"
+
+    $manifestScriptPath = Get-ToolkitScriptPath -ScriptName "New-ToolkitBatchManifest.ps1"
+
+    $manifestArgs = @{
+        BatchSlug = $batchSlug
+        OutputCsv = $outputCsv
+        ReportCsv = $reportCsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($search)) {
+        $manifestArgs.Search = $search
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($calibreIds)) {
+        $manifestArgs.CalibreIds = $calibreIds
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($calibreIdFile)) {
+        $manifestArgs.CalibreIdFile = $calibreIdFile
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($exactAwardProgram)) {
+        $manifestArgs.ExactAwardProgram = $exactAwardProgram
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $manifestArgs.LibraryPath = $libraryPath
+    }
+
+    if ($overwriteAnswer -eq "YES") {
+        $manifestArgs.Overwrite = $true
+    }
+
+    Write-Host ""
+    Write-Host "Running: New-ToolkitBatchManifest.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $manifestScriptPath @manifestArgs
+
+    Write-Host ""
+    Write-Host "Next step:" -ForegroundColor Cyan
+    Write-Host "Use the manifest CSV as the stable record of this batch."
+    Write-Host "Current module scripts can use its CalibreId column manually until direct -BatchManifest support is added."
+
+    Pause-Toolkit
+}
 
 function Start-LccMqgComplete {
     $batchSlug = Read-BatchSlug
@@ -1253,6 +1359,7 @@ function Start-CommentsVerify {
 
                     Pause-Toolkit
                 }
+                "B1" { Start-BatchManifest }
                 "A1" { Start-AuthorTitleExport }
                 "A2" { Start-AuthorTitleDryRun }
                 "A3" { Start-AuthorTitleSummary }

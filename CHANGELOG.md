@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to the Calibre Metadata Toolkit are documented here.
 
@@ -20,6 +20,45 @@ This project uses lightweight version milestones rather than formal semantic ver
     v0.8.6 = Awards manual MQG completion
     v0.8.7 = Cover manual MQG completion
     v0.8.8 = MQG batch status readiness report
+    v0.8.9 = standard batch manifest support
+
+---
+
+## v0.8.9 - Standard Batch Manifest Support
+
+### Added
+
+- Added `scripts/New-ToolkitBatchManifest.ps1`.
+- Added launcher section:
+  - `Batch Selection Module`
+- Added launcher option:
+  - `B1. Batch: Create batch manifest`
+
+### Behavior
+
+- Creates a stable CSV batch manifest from one or more supported selection methods:
+  - Calibre search string
+  - explicit comma-separated Calibre IDs
+  - text file containing Calibre IDs
+  - optional exact local Award Programs filter
+- Treats search plus explicit IDs as an intersection/filter so a searched batch can be narrowed safely.
+- Writes the manifest to `./input` by default.
+- Writes a batch selection summary report to `./reports` by default.
+- Includes key human-review fields such as title, authors, ISBN, identifiers, publisher, publication date, award program, LCC fields, current MQG checkbox state, selection method, source search, and export timestamp.
+
+### Safety
+
+- Read-only operation.
+- Does not modify Calibre metadata.
+- Blocks empty selection requests.
+- Blocks duplicate Calibre IDs in the resolved batch.
+- Refuses to overwrite existing manifest/report files unless `-Overwrite` is supplied.
+- Reports requested IDs that were not included in the final manifest.
+
+### Notes
+
+- This milestone establishes the batch-selection foundation.
+- Direct `-BatchManifest` support in downstream module scripts is intentionally deferred to the next usability-hardening milestone.
 
 ---
 

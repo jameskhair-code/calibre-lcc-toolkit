@@ -1,5 +1,5 @@
-﻿{
-    "ToolkitVersion":  "0.8.8",
+{
+    "ToolkitVersion":  "0.8.9",
     "CalibreDbPath":  "C:\\Program Files\\Calibre2\\calibredb.exe",
     "DefaultLibraryPath":  "",
     "InputFolder":  ".\\input",
