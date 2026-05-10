@@ -24,6 +24,47 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.9.5 - Author/Title Normalization Rules Profile
+
+### Added
+
+- Added human-readable Author/Title normalization rules:
+  - `docs/Author-Title-Normalization-Rules.md`
+- Added machine-readable Author/Title rules config:
+  - `config/author-title-normalization-rules.json`
+- Added active rules profile reporting to:
+  - `G1. Guided Author/Title prep`
+
+### Behavior
+
+- G1 now loads the Author/Title normalization rules config during guided prep.
+- G1 operation summaries now record:
+  - rules profile name
+  - rules profile version
+  - rules profile status
+  - rules load status
+  - rules document path
+  - rules config path
+- Rules profile v0.1 establishes current Author/Title house-style preferences:
+  - normalize author diacritics to keyboard-friendly ASCII
+  - remove generic fiction subtitles such as `: A Novel`
+  - remove edition, award, and marketing parentheticals
+  - keep meaningful nonfiction subtitles
+  - keep memoir subtitles by default
+  - use ` & ` for multiple authors
+  - use First Last author order
+  - preserve commonly used initials and hyphenated names
+  - mark ambiguous cases for manual review
+- Guided Author/Title next-action wording now reflects the AI-assisted proposal workflow instead of implying manual TSV editing as the preferred path.
+
+### Validated
+
+- Confirmed `config/author-title-normalization-rules.json` parses successfully as JSON.
+- Confirmed G1 loads the active rules profile.
+- Confirmed G1 operation summary includes rules profile details.
+- Confirmed parser check passes after launcher updates.
+
+---
 ## v0.9.4 - Guided Workflow Large Batch Handling
 
 ### Added
@@ -844,6 +885,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
