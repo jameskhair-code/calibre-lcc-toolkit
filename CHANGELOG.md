@@ -24,6 +24,41 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.9.8 - Author/Title Apply Alignment
+
+### Changed
+
+- Updated Author/Title apply logic to align with the corrected A2/A3 no-change row model.
+- Changed apply blocking logic so only proposed-change rows can block apply.
+- No-change rows are now reported separately and ignored by apply.
+- Updated apply preview output to show:
+  - total dry-run rows
+  - no proposed/effective change rows
+  - eligible apply rows
+  - proposed-change rows blocked
+- Updated apply safety wording to clarify that proposed-change rows must be clean.
+
+### Behavior
+
+- A4 now applies rows where `ApplyEligible = Yes`.
+- A4 no longer blocks because unchanged rows are present in the dry-run CSV.
+- A4 still refuses to apply when any proposed-change row is blocked.
+- A4 still performs pre-apply Calibre metadata re-validation before writing.
+- A4 still requires the exact confirmation phrase before modifying metadata.
+
+### Validated
+
+- Re-ran A4 against the Andrew Carnegie Medal Author/Title batch.
+- Confirmed 86 dry-run rows.
+- Confirmed 71 rows with no proposed/effective changes.
+- Confirmed 15 rows eligible for apply.
+- Confirmed 0 proposed-change rows blocked.
+- Applied 15 Author/Title changes.
+- Confirmed 15 apply rows succeeded and 0 failed.
+- Ran A5 verification.
+- Confirmed 15 rows verified, 0 mismatched, 0 missing, and 71 skipped.
+
+---
 ## v0.9.7 - Author/Title Summary Alignment
 
 ### Changed
@@ -956,6 +991,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 

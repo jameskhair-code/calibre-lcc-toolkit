@@ -9,7 +9,7 @@ and/or author changes to Calibre using calibredb set_metadata.
 This script modifies Calibre metadata.
 
 Safety behavior:
-- Refuses to run if any row in the dry-run CSV is blocked.
+- Refuses to run if any proposed-change row in the dry-run CSV is blocked.
 - Refuses to run if zero rows are eligible for apply.
 - Refuses to run if any proposed value contains "DO NOT APPLY".
 - Re-checks current Calibre title/author values before writing.
@@ -204,17 +204,30 @@ if ($rows.Count -eq 0) {
     throw "Dry-run CSV has no data rows: $DryRunCsv"
 }
 
-$blockedRows = @($rows | Where-Object { $_.ApplyEligible -ne "Yes" })
+$proposedChangeRows = @(
+    $rows | Where-Object {
+        $_.TitleChangeDetected -eq "Yes" -or $_.AuthorsChangeDetected -eq "Yes"
+    }
+)
+
+$noChangeRows = @(
+    $rows | Where-Object {
+        $_.TitleChangeDetected -ne "Yes" -and $_.AuthorsChangeDetected -ne "Yes"
+    }
+)
+
+$blockedRows = @($proposedChangeRows | Where-Object { $_.ApplyEligible -ne "Yes" })
 $eligibleRows = @($rows | Where-Object { $_.ApplyEligible -eq "Yes" })
 
 if ($blockedRows.Count -gt 0) {
     Write-Host "Apply blocked."
     Write-Host "Rows in dry-run CSV: $($rows.Count)"
+    Write-Host "Rows with no proposed/effective changes: $($noChangeRows.Count)"
     Write-Host "Rows eligible for apply: $($eligibleRows.Count)"
-    Write-Host "Rows blocked: $($blockedRows.Count)"
+    Write-Host "Proposed-change rows blocked: $($blockedRows.Count)"
     Write-Host ""
-    Write-Host "This script requires a fully clean dry-run CSV. Fix blocked rows, rerun dry run, then rerun apply."
-    throw "Apply refused because the dry-run CSV contains blocked rows."
+    Write-Host "This script requires all proposed-change rows to be clean. No-change rows are ignored by apply."
+    throw "Apply refused because the dry-run CSV contains blocked proposed-change rows."
 }
 
 if ($eligibleRows.Count -eq 0) {
@@ -238,7 +251,10 @@ if ($markerRows.Count -gt 0 -and -not $AllowDoNotApplyText) {
     throw "Apply refused because DO NOT APPLY marker text was found."
 }
 
+Write-Host "Rows in dry-run CSV: $($rows.Count)"
+Write-Host "Rows with no proposed/effective changes: $($noChangeRows.Count)"
 Write-Host "Rows eligible for apply: $($eligibleRows.Count)"
+Write-Host "Proposed-change rows blocked: $($blockedRows.Count)"
 Write-Host ""
 Write-Host "Planned changes:"
 Write-Host ""
