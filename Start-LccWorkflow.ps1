@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.9.3" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.9.4" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -719,6 +719,10 @@ function Start-GuidedAuthorTitlePrep {
     $mqgStatusReportCsv = ".\reports\mqg-batch-status-$batchName.csv"
     $operationSummaryTxt = ".\reports\operation-summary-author-title-$batchName.txt"
 
+    $reviewChunksFolder = ".\input\review-chunks"
+    $reviewChunkFiles = @()
+    $createReviewChunksAnswer = "NO"
+    $reviewChunkSize = 0
     $willCreateManifest = [string]::IsNullOrWhiteSpace($existingBatchManifest)
 
     $plannedOutputs = @(
@@ -857,6 +861,40 @@ function Start-GuidedAuthorTitlePrep {
 
     Write-Host ""
 
+    if ($manifestRows.Count -ge 101) {
+        Write-Host "Large batch detected: $($manifestRows.Count) books." -ForegroundColor Yellow
+        Write-Host "Recommended handling: keep the full batch manifest, but review Author/Title rows in smaller chunks." -ForegroundColor Yellow
+        Write-Host ""
+
+        $createReviewChunksAnswer = Read-ToolkitInput `
+            -Prompt "Create Author/Title review chunk TSV files after export? YES or NO" `
+            -Default "YES"
+
+        $createReviewChunksAnswer = $createReviewChunksAnswer.Trim().ToUpperInvariant()
+
+        if ($createReviewChunksAnswer -eq "YES") {
+            $chunkSizeInput = Read-ToolkitInput `
+                -Prompt "Review chunk size" `
+                -Default "50"
+
+            $parsedChunkSize = 0
+
+            if (-not [int]::TryParse($chunkSizeInput, [ref]$parsedChunkSize)) {
+                throw "Review chunk size must be a whole number."
+            }
+
+            if ($parsedChunkSize -lt 1) {
+                throw "Review chunk size must be greater than zero."
+            }
+
+            $reviewChunkSize = $parsedChunkSize
+        }
+    }
+    elseif ($manifestRows.Count -ge 26) {
+        Write-Host "Medium batch detected: $($manifestRows.Count) books." -ForegroundColor DarkGray
+        Write-Host "Read-only prep can continue safely. Consider reviewing the output TSV in smaller passes." -ForegroundColor DarkGray
+        Write-Host ""
+    }
     $continueAfterPreview = Read-ToolkitInput `
         -Prompt "Continue with Author/Title export and MQG status report? Type YES to continue" `
         -Default "YES"
@@ -882,6 +920,39 @@ function Start-GuidedAuthorTitlePrep {
 
     & $authorTitleExportScriptPath @authorTitleArgs
 
+    $authorTitleRows = @(Import-Csv -Path $authorTitleSourceTsv -Delimiter "`t")
+
+    if ($createReviewChunksAnswer -eq "YES" -and $reviewChunkSize -gt 0) {
+        Write-Host ""
+        Write-Host "Creating Author/Title review chunks" -ForegroundColor Cyan
+        Write-Host "Chunk size: $reviewChunkSize"
+        Write-Host ""
+
+        if (-not (Test-Path $reviewChunksFolder)) {
+            New-Item -ItemType Directory -Force -Path $reviewChunksFolder | Out-Null
+        }
+
+        Get-ChildItem -Path $reviewChunksFolder -Filter "author-title-$batchName-*.tsv" -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+
+        for ($startIndex = 0; $startIndex -lt $authorTitleRows.Count; $startIndex += $reviewChunkSize) {
+            $endIndex = [Math]::Min($startIndex + $reviewChunkSize - 1, $authorTitleRows.Count - 1)
+
+            $startRowNumber = $startIndex + 1
+            $endRowNumber = $endIndex + 1
+
+            $chunkPath = Join-Path $reviewChunksFolder ("author-title-$batchName-{0:D3}-{1:D3}.tsv" -f $startRowNumber, $endRowNumber)
+
+            $chunkRows = @($authorTitleRows[$startIndex..$endIndex])
+
+            $chunkRows |
+                Export-Csv -Path $chunkPath -Delimiter "`t" -NoTypeInformation -Encoding UTF8
+
+            $reviewChunkFiles += $chunkPath
+        }
+
+        Write-Host "Review chunk files created: $($reviewChunkFiles.Count)"
+    }
     $mqgArgs = @{
         BatchManifest = $batchManifest
         ReportCsv = $mqgStatusReportCsv
@@ -905,6 +976,10 @@ function Start-GuidedAuthorTitlePrep {
     $rowsReadyForMqg99 = @($mqgRows | Where-Object { $_.ReadyForMqg99 -eq "Yes" -and $_.MqgMetadataComplete -ne "Yes" }).Count
     $rowsMetadataComplete = @($mqgRows | Where-Object { $_.MqgMetadataComplete -eq "Yes" }).Count
 
+    $rowCountWarning = ""
+    if ($manifestRows.Count -ne $authorTitleRows.Count) {
+        $rowCountWarning = "Author/Title source row count differs from manifest row count. This usually means the manifest contains duplicate Calibre IDs or unresolved records."
+    }
     $summaryLines = @(
         "Guided Author/Title Prep Operation Summary",
         "===========================================",
@@ -940,7 +1015,10 @@ function Start-GuidedAuthorTitlePrep {
         "Rows in progress: $rowsInProgress",
         "Rows ready for MQG-99: $rowsReadyForMqg99",
         "Rows already metadata complete: $rowsMetadataComplete",
-        "",
+        "Review chunks created: $($reviewChunkFiles.Count)",
+        "Review chunk size: $reviewChunkSize",
+        "Review chunk folder: $reviewChunksFolder",
+        "Row count warning: $rowCountWarning",
         "Recommended next action",
         "-----------------------",
         "Review the Author/Title source TSV and populate ProposedTitle / ProposedAuthors only where changes are needed.",
@@ -951,8 +1029,18 @@ function Start-GuidedAuthorTitlePrep {
         "This guided prep did not modify Calibre metadata."
     )
 
-    $summaryFolder = Split-Path -Path $operationSummaryTxt -Parent
+    if ($reviewChunkFiles.Count -gt 0) {
+        $summaryLines += @(
+            "",
+            "Review chunks",
+            "-------------"
+        )
 
+        foreach ($reviewChunkFile in $reviewChunkFiles) {
+            $summaryLines += $reviewChunkFile
+        }
+    }
+    $summaryFolder = Split-Path -Path $operationSummaryTxt -Parent
     if ($summaryFolder -and -not (Test-Path $summaryFolder)) {
         New-Item -ItemType Directory -Force -Path $summaryFolder | Out-Null
     }
@@ -970,6 +1058,9 @@ function Start-GuidedAuthorTitlePrep {
     Write-Host "- $authorTitleSourceTsv"
     Write-Host "- $mqgStatusReportCsv"
     Write-Host "- $operationSummaryTxt"
+    if ($reviewChunkFiles.Count -gt 0) {
+        Write-Host "- $reviewChunksFolder ($($reviewChunkFiles.Count) review chunk files)"
+    }
     Write-Host ""
     Write-Host "Recommended next action:"
     Write-Host "Review the Author/Title source TSV, populate ProposedTitle / ProposedAuthors where needed, then run A2 for a dry run."
@@ -1997,6 +2088,9 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
+
+
 
 
 
