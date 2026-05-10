@@ -24,6 +24,39 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.10.1 - Identifier Launcher Wiring
+
+### Added
+
+- Added Identifier Module options to the interactive launcher:
+  - `I1. Identifiers: Export inventory`
+  - `I2. Identifiers: Write diagnostics`
+
+### Behavior
+
+- `I1` runs the read-only identifier inventory export workflow.
+- `I2` runs the read-only identifier diagnostics workflow.
+- Both identifier workflows are accessible from `ctk`.
+- Both workflows use default paths for the inventory and diagnostics reports.
+- Both workflows remain read-only and do not modify Calibre metadata.
+
+### Validated
+
+- Confirmed launcher displays `Calibre LCC Toolkit v0.10.1`.
+- Confirmed Identifier Module appears in the launcher menu.
+- Ran `I1` through the launcher and confirmed:
+  - 5,092 rows exported
+  - 67 identifier types found
+  - 261 potential weird rows
+- Ran `I2` through the launcher and confirmed:
+  - 5,092 rows reviewed
+  - 2,020 missing core rows
+  - 24 suspicious identifier type rows
+  - 47 duplicate ISBN rows
+  - 25 duplicate Goodreads rows
+  - 29 duplicate Amazon/ASIN rows
+
+---
 ## v0.10.0 - Identifier Inventory and MQG-02 Rules Foundation
 
 ### Added
@@ -1091,6 +1124,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 

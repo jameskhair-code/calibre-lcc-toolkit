@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.10.0" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.10.1" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -202,6 +202,12 @@ function Show-Menu {
     Write-Host "C6. Comments: Verify comments apply report"
     Write-Host "C7. Comments: Mark verified MQG complete"
     Write-Host ""
+
+    Write-Host "Identifier Module" -ForegroundColor Cyan
+    Write-Host "I1. Identifiers: Export inventory"
+    Write-Host "I2. Identifiers: Write diagnostics"
+    Write-Host ""
+
     Write-Host "Manual MQG Completion Module" -ForegroundColor Cyan
     Write-Host "W1. Awards: Mark reviewed MQG complete"
     Write-Host "W2. Cover: Mark reviewed MQG complete"
@@ -1570,6 +1576,108 @@ function Start-AuthorTitleMqgComplete {
     Pause-Toolkit
 }
 
+function Start-IdentifierInventoryExport {
+    Write-Host ""
+    Write-Host "Identifiers: export inventory" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step reads Calibre and creates a read-only identifier inventory." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $outputTsv = Read-ToolkitInput `
+        -Prompt "Output inventory TSV" `
+        -Default ".\input\identifier-inventory-source.tsv"
+
+    $coverageSummaryCsv = Read-ToolkitInput `
+        -Prompt "Coverage summary CSV" `
+        -Default ".\reports\identifier-coverage-summary.csv"
+
+    $identifierTypeCountsCsv = Read-ToolkitInput `
+        -Prompt "Identifier type counts CSV" `
+        -Default ".\reports\identifier-type-counts.csv"
+
+    $weirdValuesCsv = Read-ToolkitInput `
+        -Prompt "Weird values CSV" `
+        -Default ".\reports\identifier-weird-values.csv"
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $scriptPath = Get-ToolkitScriptPath -ScriptName "Export-IdentifierInventory.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Export-IdentifierInventory.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $scriptPath `
+        -OutputTsv $outputTsv `
+        -CoverageSummaryCsv $coverageSummaryCsv `
+        -IdentifierTypeCountsCsv $identifierTypeCountsCsv `
+        -WeirdValuesCsv $weirdValuesCsv `
+        -LibraryPath $libraryPath
+
+    Pause-Toolkit
+}
+
+function Start-IdentifierInventoryDiagnostics {
+    Write-Host ""
+    Write-Host "Identifiers: write diagnostics" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step reads the identifier inventory files and writes focused MQG-02 diagnostic reports." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $inventoryTsv = Read-ToolkitInput `
+        -Prompt "Inventory TSV" `
+        -Default ".\input\identifier-inventory-source.tsv"
+
+    $identifierTypeCountsCsv = Read-ToolkitInput `
+        -Prompt "Identifier type counts CSV" `
+        -Default ".\reports\identifier-type-counts.csv"
+
+    $missingCoreCsv = Read-ToolkitInput `
+        -Prompt "Missing core report CSV" `
+        -Default ".\reports\identifier-missing-core.csv"
+
+    $suspiciousTypesCsv = Read-ToolkitInput `
+        -Prompt "Suspicious types report CSV" `
+        -Default ".\reports\identifier-suspicious-types.csv"
+
+    $duplicateIsbnCsv = Read-ToolkitInput `
+        -Prompt "Duplicate ISBN report CSV" `
+        -Default ".\reports\identifier-duplicate-isbn.csv"
+
+    $duplicateGoodreadsCsv = Read-ToolkitInput `
+        -Prompt "Duplicate Goodreads report CSV" `
+        -Default ".\reports\identifier-duplicate-goodreads.csv"
+
+    $duplicateAmazonCsv = Read-ToolkitInput `
+        -Prompt "Duplicate Amazon/ASIN report CSV" `
+        -Default ".\reports\identifier-duplicate-amazon.csv"
+
+    $mqg02CandidateSummaryCsv = Read-ToolkitInput `
+        -Prompt "MQG-02 candidate summary CSV" `
+        -Default ".\reports\identifier-mqg02-candidate-summary.csv"
+
+    $scriptPath = Get-ToolkitScriptPath -ScriptName "Write-IdentifierInventoryDiagnostics.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Write-IdentifierInventoryDiagnostics.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $scriptPath `
+        -InventoryTsv $inventoryTsv `
+        -IdentifierTypeCountsCsv $identifierTypeCountsCsv `
+        -MissingCoreCsv $missingCoreCsv `
+        -SuspiciousTypesCsv $suspiciousTypesCsv `
+        -DuplicateIsbnCsv $duplicateIsbnCsv `
+        -DuplicateGoodreadsCsv $duplicateGoodreadsCsv `
+        -DuplicateAmazonCsv $duplicateAmazonCsv `
+        -Mqg02CandidateSummaryCsv $mqg02CandidateSummaryCsv
+
+    Pause-Toolkit
+}
 function Start-CommentsExport {
     $batchSlug = Read-BatchSlug
 
@@ -1973,6 +2081,8 @@ function Start-CommentsVerify {
 
                     Pause-Toolkit
                 }
+                "I1" { Start-IdentifierInventoryExport }
+                "I2" { Start-IdentifierInventoryDiagnostics }
                 "W1" {
                     $batchSlug = Read-BatchSlug
 
@@ -2129,6 +2239,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 
