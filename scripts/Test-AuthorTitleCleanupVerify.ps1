@@ -1,14 +1,16 @@
 <#
 .SYNOPSIS
-Verifies Calibre author/title cleanup results after apply.
+Verifies Calibre author/title cleanup results after apply, including clean no-change rows.
 
 .DESCRIPTION
 Reads the CSV produced by Test-AuthorTitleCleanupDryRun.ps1 and compares expected
-post-apply title/author values against current Calibre metadata.
+title/author values against current Calibre metadata.
 
 This script is read-only and does not modify Calibre metadata.
 
-Rows that were not apply-eligible in the dry-run report are skipped.
+Rows with ApplyEligible = Yes are verified as post-apply changes.
+Rows with no proposed/effective changes are verified as Clean No-Change when current
+Calibre title/author values already match expected values.
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File .\scripts\Test-AuthorTitleCleanupVerify.ps1 `
@@ -74,6 +76,24 @@ function Normalize-ComparableValue {
     }
 
     return (($Value.Trim()) -replace '\s+', ' ')
+}
+
+function Get-RowValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Row,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $property = $Row.PSObject.Properties[$Name]
+
+    if ($null -eq $property) {
+        return ""
+    }
+
+    return [string]$property.Value
 }
 
 function Invoke-CalibreDb {
@@ -150,6 +170,32 @@ function Get-CurrentBookMap {
     return $bookMap
 }
 
+function Test-CleanNoChangeCandidate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Row
+    )
+
+    $titleChangeDetected = Get-RowValue -Row $Row -Name "TitleChangeDetected"
+    $authorsChangeDetected = Get-RowValue -Row $Row -Name "AuthorsChangeDetected"
+    $applyEligible = Get-RowValue -Row $Row -Name "ApplyEligible"
+    $blockingReasons = Get-RowValue -Row $Row -Name "BlockingReasons"
+
+    if ($applyEligible -eq "Yes") {
+        return $false
+    }
+
+    if ($titleChangeDetected -eq "Yes" -or $authorsChangeDetected -eq "Yes") {
+        return $false
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($blockingReasons)) {
+        return $false
+    }
+
+    return $true
+}
+
 if (-not (Test-Path $CalibreDb)) {
     throw "calibredb.exe was not found at: $CalibreDb"
 }
@@ -198,13 +244,12 @@ $verifyRows = foreach ($row in $rows) {
     $authorsVerified = "No"
     $verificationStatus = "Mismatch"
 
-    if ($row.ApplyEligible -ne "Yes") {
-        $titleVerified = "Skipped"
-        $authorsVerified = "Skipped"
-        $verificationStatus = "Skipped - Not Apply Eligible"
-        $notes += "Row was not apply-eligible in dry-run report."
-    }
-    elseif ([string]::IsNullOrWhiteSpace($calibreId)) {
+    $titleChangeDetected = Get-RowValue -Row $row -Name "TitleChangeDetected"
+    $authorsChangeDetected = Get-RowValue -Row $row -Name "AuthorsChangeDetected"
+    $blockingReasons = Get-RowValue -Row $row -Name "BlockingReasons"
+    $isCleanNoChangeCandidate = Test-CleanNoChangeCandidate -Row $row
+
+    if ([string]::IsNullOrWhiteSpace($calibreId)) {
         $verificationStatus = "Missing"
         $notes += "Missing CalibreId."
     }
@@ -232,21 +277,34 @@ $verifyRows = foreach ($row in $rows) {
         }
 
         if ($titleVerified -eq "Yes" -and $authorsVerified -eq "Yes") {
-            $verificationStatus = "Verified"
+            if ($row.ApplyEligible -eq "Yes") {
+                $verificationStatus = "Verified"
+            }
+            elseif ($isCleanNoChangeCandidate) {
+                $verificationStatus = "Clean No-Change"
+                $notes += "No proposed/effective title or author change; current metadata already matches expected values."
+            }
+            else {
+                $verificationStatus = "Skipped - Not Apply Eligible"
+                $notes += "Row was not apply-eligible and was not a clean no-change candidate."
+            }
         }
     }
 
     [pscustomobject]@{
-        CalibreId          = $calibreId
-        ApplyEligible      = $row.ApplyEligible
-        ExpectedTitle      = $expectedTitle
-        ActualTitle        = $actualTitle
-        TitleVerified      = $titleVerified
-        ExpectedAuthors    = $expectedAuthors
-        ActualAuthors      = $actualAuthors
-        AuthorsVerified    = $authorsVerified
-        VerificationStatus = $verificationStatus
-        VerificationNotes  = ($notes -join "; ")
+        CalibreId              = $calibreId
+        ApplyEligible          = $row.ApplyEligible
+        TitleChangeDetected    = $titleChangeDetected
+        AuthorsChangeDetected  = $authorsChangeDetected
+        BlockingReasons        = $blockingReasons
+        ExpectedTitle          = $expectedTitle
+        ActualTitle            = $actualTitle
+        TitleVerified          = $titleVerified
+        ExpectedAuthors        = $expectedAuthors
+        ActualAuthors          = $actualAuthors
+        AuthorsVerified        = $authorsVerified
+        VerificationStatus     = $verificationStatus
+        VerificationNotes      = ($notes -join "; ")
     }
 }
 
@@ -259,6 +317,7 @@ if ($outputFolder -and -not (Test-Path $outputFolder)) {
 $verifyRows | Export-Csv -Path $VerifyReportCsv -NoTypeInformation -Encoding UTF8
 
 $verifiedCount = @($verifyRows | Where-Object { $_.VerificationStatus -eq "Verified" }).Count
+$cleanNoChangeCount = @($verifyRows | Where-Object { $_.VerificationStatus -eq "Clean No-Change" }).Count
 $mismatchCount = @($verifyRows | Where-Object { $_.VerificationStatus -eq "Mismatch" }).Count
 $missingCount = @($verifyRows | Where-Object { $_.VerificationStatus -eq "Missing" }).Count
 $skippedCount = @($verifyRows | Where-Object { $_.VerificationStatus -like "Skipped*" }).Count
@@ -266,6 +325,7 @@ $skippedCount = @($verifyRows | Where-Object { $_.VerificationStatus -like "Skip
 Write-Host "Verification complete: $VerifyReportCsv"
 Write-Host "Rows reviewed: $($verifyRows.Count)"
 Write-Host "Rows verified: $verifiedCount"
+Write-Host "Rows clean no-change: $cleanNoChangeCount"
 Write-Host "Rows mismatched: $mismatchCount"
 Write-Host "Rows missing: $missingCount"
 Write-Host "Rows skipped: $skippedCount"

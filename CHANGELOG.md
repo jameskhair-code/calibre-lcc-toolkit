@@ -24,6 +24,39 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.9.9 - Author/Title Verify and MQG No-Change Completion Alignment
+
+### Changed
+
+- Updated Author/Title verification to validate clean no-change rows instead of skipping them.
+- Added `Clean No-Change` verification status for rows with no proposed/effective title or author changes where current Calibre metadata matches expected values.
+- Updated Author/Title MQG completion to mark both:
+  - `Verified` rows
+  - `Clean No-Change` rows
+- Added completion basis reporting to the MQG completion report.
+
+### Behavior
+
+- A5 now reads current Calibre metadata for no-change rows.
+- A5 reports clean reviewed no-change rows as `Clean No-Change`.
+- A6 now treats `Verified` and `Clean No-Change` rows as eligible for `MQG-01 Title & Author` completion.
+- A6 still skips mismatched, missing, duplicate, blocked, or otherwise unsafe rows.
+- A6 still requires confirmation before modifying Calibre metadata.
+
+### Validated
+
+- Re-ran A5 against the Andrew Carnegie Medal Author/Title batch.
+- Confirmed 86 rows reviewed.
+- Confirmed 15 verified changed rows.
+- Confirmed 71 clean no-change rows.
+- Confirmed 0 mismatched, 0 missing, and 0 skipped rows.
+- Re-ran A6 against the v0.9.9 verification report.
+- Confirmed 86 rows marked complete.
+- Confirmed 0 failed and 0 skipped rows.
+- Re-ran MQG batch status.
+- Confirmed 0 rows still missing `MQG-01 Title & Author`.
+
+---
 ## v0.9.8 - Author/Title Apply Alignment
 
 ### Changed
@@ -991,6 +1024,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
