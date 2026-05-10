@@ -1,0 +1,102 @@
+{
+  "ProfileName": "Keith Identifier Normalization Rules",
+  "ProfileVersion": "v0.1",
+  "Scope": "MQG-02 Identifiers",
+  "Status": "ActiveDraft",
+  "LastUpdated": "2026-05-10",
+  "CoreIdentifierTypes": [
+    "isbn",
+    "amazon",
+    "asin",
+    "mobi-asin",
+    "goodreads"
+  ],
+  "UsefulIdentifierTypesToPreserve": [
+    "google",
+    "barnesnoble",
+    "fictiondb",
+    "ff",
+    "kobo",
+    "lccn",
+    "oclc",
+    "oclc-worldcat",
+    "doi",
+    "isfdb",
+    "isfdb-title",
+    "librarything",
+    "ltid",
+    "uri",
+    "url",
+    "url2",
+    "url3"
+  ],
+  "DerivedStatisticalIdentifierTypes": [
+    "grrating",
+    "grvotes"
+  ],
+  "SuspiciousIdentifierTypePatterns": [
+    "^(97[89][0-9]{10})$",
+    "^isbn97[89]",
+    "^urnisbn/",
+    "^p978",
+    "^urnuuid"
+  ],
+  "IsbnRules": {
+    "PreferIsbn13": true,
+    "AllowIsbn10WhenOnlyReliableValue": true,
+    "RequireReviewWhenMultipleIsbnsConflict": true,
+    "TreatIsbnAsTitleAsAnomaly": true
+  },
+  "AmazonRules": {
+    "AcceptedTypes": [
+      "amazon",
+      "asin",
+      "mobi-asin"
+    ],
+    "ExpectedPattern": "^[A-Z0-9]{10}$",
+    "PreserveExistingUnlessClearlyWrong": true,
+    "MissingCanBeAcceptedAsIs": true
+  },
+  "GoodreadsRules": {
+    "AcceptedTypes": [
+      "goodreads"
+    ],
+    "ExpectedPattern": "^[0-9]+$",
+    "PreserveExistingUnlessClearlyWrong": true,
+    "MissingCanBeAcceptedAsIs": true
+  },
+  "CandidateStatuses": [
+    "Ready - Strong Core",
+    "Review - Missing ISBN",
+    "Review - Missing External Link Targets",
+    "Review - Missing One External Link Target",
+    "Review - Duplicate Identifier",
+    "Review - Suspicious Identifier Type",
+    "Accepted As-Is",
+    "Blocked - Conflicting Evidence"
+  ],
+  "ProposalActions": [
+    "Keep Existing",
+    "Add Missing",
+    "Replace Existing",
+    "Remove Suspect",
+    "Normalize Suspect",
+    "Flag Review",
+    "Accept As-Is"
+  ],
+  "ApprovalStatuses": [
+    "Proposed - Auto Eligible",
+    "Proposed - Needs Human Review",
+    "Approved",
+    "Rejected",
+    "Accepted As-Is",
+    "Do Not Apply"
+  ],
+  "Mqg02CompletionRule": {
+    "RequiresValidIsbnOrReviewedException": true,
+    "RequiresNoUnresolvedSuspiciousIdentifierType": true,
+    "RequiresNoUnresolvedDuplicateIdentifierConflict": true,
+    "AllowsMissingAmazonWhenAcceptedAsIs": true,
+    "AllowsMissingGoodreadsWhenAcceptedAsIs": true
+  }
+}
