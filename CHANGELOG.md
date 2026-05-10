@@ -24,6 +24,56 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.10.2 - Identifier MQG-02 Proposal Framework
+
+### Added
+
+- Added read-only identifier proposal worksheet generator:
+  - `scripts/New-IdentifierProposalWorksheet.ps1`
+
+### Behavior
+
+- Reads the MQG-02 candidate diagnostics report:
+  - `.\reports\identifier-mqg02-candidate-summary.csv`
+- Writes a proposal worksheet:
+  - `.\input\identifier-proposal-worksheet.tsv`
+- Writes a proposal summary:
+  - `.\reports\identifier-proposal-summary.csv`
+- Classifies records into proposal actions:
+  - `Accept As-Is`
+  - `Research Missing ISBN`
+  - `Review Missing External Link Targets`
+  - `Review Missing One External Link Target`
+  - `Review Duplicate Identifier`
+  - `Review Suspicious Identifier Type`
+- Adds review-oriented proposal fields:
+  - `ApprovalStatus`
+  - `ManualReviewRequired`
+  - `Confidence`
+  - `Mqg02CompletionCandidate`
+  - `MissingCoreFields`
+  - `ProposalBasis`
+  - `EvidenceUsed`
+  - `ChangeReason`
+  - `ReviewerDecision`
+  - `ReviewerNotes`
+- Workflow remains read-only and does not modify Calibre metadata.
+
+### Validated
+
+- Generated identifier proposal worksheet across 5,092 Calibre records.
+- Confirmed 3,023 auto-eligible proposals.
+- Confirmed 2,069 manual-review proposals.
+- Confirmed 3,023 MQG-02 completion candidates.
+- Confirmed proposal action counts:
+  - 3,023 `Accept As-Is`
+  - 1,169 `Review Missing External Link Targets`
+  - 594 `Research Missing ISBN`
+  - 238 `Review Missing One External Link Target`
+  - 51 `Review Duplicate Identifier`
+  - 17 `Review Suspicious Identifier Type`
+
+---
 ## v0.10.1 - Identifier Launcher Wiring
 
 ### Added
@@ -1124,6 +1174,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
