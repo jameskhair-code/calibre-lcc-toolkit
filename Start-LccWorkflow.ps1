@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.9.4" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.9.5" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -718,7 +718,12 @@ function Start-GuidedAuthorTitlePrep {
     $authorTitleSourceTsv = ".\input\author-title-cleanup-source-$batchName.tsv"
     $mqgStatusReportCsv = ".\reports\mqg-batch-status-$batchName.csv"
     $operationSummaryTxt = ".\reports\operation-summary-author-title-$batchName.txt"
-
+    $authorTitleRulesDocPath = ".\docs\Author-Title-Normalization-Rules.md"
+    $authorTitleRulesConfigPath = ".\config\author-title-normalization-rules.json"
+    $authorTitleRulesProfileName = ""
+    $authorTitleRulesProfileVersion = ""
+    $authorTitleRulesProfileStatus = ""
+    $authorTitleRulesLoadStatus = "Not loaded"
     $reviewChunksFolder = ".\input\review-chunks"
     $reviewChunkFiles = @()
     $createReviewChunksAnswer = "NO"
@@ -737,6 +742,33 @@ function Start-GuidedAuthorTitlePrep {
     }
 
     Write-Host ""
+    if (Test-Path $authorTitleRulesConfigPath) {
+        try {
+            $authorTitleRules = Get-Content -Path $authorTitleRulesConfigPath -Raw | ConvertFrom-Json
+            $authorTitleRulesProfileName = [string]$authorTitleRules.ProfileName
+            $authorTitleRulesProfileVersion = [string]$authorTitleRules.ProfileVersion
+            $authorTitleRulesProfileStatus = [string]$authorTitleRules.Status
+            $authorTitleRulesLoadStatus = "Loaded"
+        }
+        catch {
+            $authorTitleRulesLoadStatus = "Error loading rules config: " + $_.Exception.Message
+        }
+    }
+    else {
+        $authorTitleRulesLoadStatus = "Rules config not found"
+    }
+
+    Write-Host ""
+    Write-Host "Loading Author/Title rules profile" -ForegroundColor Cyan
+    Write-Host "Rules config: $authorTitleRulesConfigPath" -ForegroundColor DarkGray
+    Write-Host "Rules doc:    $authorTitleRulesDocPath" -ForegroundColor DarkGray
+
+    if ($authorTitleRulesLoadStatus -eq "Loaded") {
+        Write-Host "Active rules: $authorTitleRulesProfileName $authorTitleRulesProfileVersion ($authorTitleRulesProfileStatus)" -ForegroundColor DarkGray
+    }
+    else {
+        Write-Host "Rules profile status: $authorTitleRulesLoadStatus" -ForegroundColor Yellow
+    }
     Write-Host "Plan preview" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "This run will:" -ForegroundColor DarkGray
@@ -990,6 +1022,15 @@ function Start-GuidedAuthorTitlePrep {
         "Calibre metadata modified: No",
         "Workflow type: Read-only guided prep",
         "",
+        "Rules profile",
+        "-------------",
+        "Rules profile name: $authorTitleRulesProfileName",
+        "Rules profile version: $authorTitleRulesProfileVersion",
+        "Rules profile status: $authorTitleRulesProfileStatus",
+        "Rules load status: $authorTitleRulesLoadStatus",
+        "Rules doc: $authorTitleRulesDocPath",
+        "Rules config: $authorTitleRulesConfigPath",
+        "",
         "Inputs",
         "------",
         "Existing batch manifest: $existingBatchManifest",
@@ -1021,8 +1062,8 @@ function Start-GuidedAuthorTitlePrep {
         "Row count warning: $rowCountWarning",
         "Recommended next action",
         "-----------------------",
-        "Review the Author/Title source TSV and populate ProposedTitle / ProposedAuthors only where changes are needed.",
-        "Then run A2 to perform a dry run before any Author/Title metadata is applied.",
+        "Use the Author/Title source TSV as the AI review input, generate proposed changes according to the active rules profile, then run A2 to perform a dry run before any Author/Title metadata is applied.",
+        "Only apply changes after reviewing the A2/A3 dry-run output.",
         "",
         "Safety note",
         "-----------",
@@ -1063,7 +1104,7 @@ function Start-GuidedAuthorTitlePrep {
     }
     Write-Host ""
     Write-Host "Recommended next action:"
-    Write-Host "Review the Author/Title source TSV, populate ProposedTitle / ProposedAuthors where needed, then run A2 for a dry run."
+    Write-Host "Use the Author/Title source TSV as AI review input, generate proposed changes using the active rules profile, then run A2/A3 for dry-run review."
 
     Pause-Toolkit
 }
@@ -2088,6 +2129,9 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
+
+
 
 
 

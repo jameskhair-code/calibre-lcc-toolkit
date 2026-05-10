@@ -1,0 +1,116 @@
+{
+  "ProfileName": "Keith Author/Title Normalization Rules",
+  "ProfileVersion": "v0.1",
+  "Scope": "AuthorTitleCleanup",
+  "Status": "ActiveDraft",
+  "LastUpdated": "2026-05-10",
+  "Purpose": "House-style rules for AI-assisted Author/Title cleanup proposals in the Calibre Metadata Toolkit.",
+  "AuthorRules": {
+    "PreferAsciiNames": true,
+    "AuthorNameOrder": "FirstLast",
+    "MultipleAuthorSeparator": " & ",
+    "PreserveCommonMiddleInitials": true,
+    "PreserveHyphenatedNames": true,
+    "RemoveDuplicateAuthorFragments": true,
+    "AvoidContributorRoleLabels": true,
+    "LeaveCorporateAuthorsUnlessMalformed": true,
+    "PreferSimpleSearchableAuthorForms": true
+  },
+  "TitleRules": {
+    "RemoveGenericFictionFormatSubtitles": true,
+    "GenericFictionFormatSubtitles": [
+      ": A Novel",
+      ": A Story"
+    ],
+    "RemoveAwardMarketingParentheticals": true,
+    "RemoveEditionAnniversaryText": true,
+    "KeepMeaningfulNonfictionSubtitles": true,
+    "KeepMemoirSubtitlesByDefault": true,
+    "FixObviousNameParticleCapitalization": true,
+    "DoNotShortenMeaningfulLongTitles": true,
+    "RemoveSeriesEditionPackagingClutter": true,
+    "RequireManualReviewWhenUncertain": true
+  },
+  "ProposalFields": {
+    "ConfidenceValues": [
+      "High",
+      "Medium",
+      "Low"
+    ],
+    "ManualReviewRequiredValues": [
+      "Yes",
+      "No"
+    ],
+    "PopulateProposedFieldsOnlyWhenChanged": true
+  },
+  "RecommendedChangeReasons": [
+    "Removed generic fiction format subtitle.",
+    "Removed award/marketing parenthetical from title.",
+    "Removed edition text while preserving meaningful subtitle.",
+    "Corrected title capitalization for historical name particle.",
+    "Removed duplicate/erroneous author fragment.",
+    "Normalized author name to keyboard-friendly ASCII."
+  ],
+  "Examples": {
+    "TitleChanges": [
+      {
+        "Source": "Matrix: A Novel",
+        "Preferred": "Matrix",
+        "Rule": "T01",
+        "Reason": "Removed generic fiction format subtitle."
+      },
+      {
+        "Source": "The Goldfinch (Pulitzer Prize Winner)",
+        "Preferred": "The Goldfinch",
+        "Rule": "T02",
+        "Reason": "Removed award/marketing parenthetical from title."
+      },
+      {
+        "Source": "The Sixth Extinction (10th Anniversary Edition): An Unnatural History",
+        "Preferred": "The Sixth Extinction: An Unnatural History",
+        "Rule": "T03",
+        "Reason": "Removed edition text while preserving meaningful subtitle."
+      }
+    ],
+    "AuthorChanges": [
+      {
+        "Source": "Francisco Cantú & Francisco",
+        "Preferred": "Francisco Cantu",
+        "Rule": "A01,A06",
+        "Reason": "Removed duplicate author fragment and normalized to ASCII."
+      },
+      {
+        "Source": "Mélikah Abdelmoumen",
+        "Preferred": "Melikah Abdelmoumen",
+        "Rule": "A01",
+        "Reason": "Normalized author name to keyboard-friendly ASCII."
+      }
+    ],
+    "DoNotChange": [
+      {
+        "Source": "Junot Diaz",
+        "Reason": "Already matches keyboard-friendly ASCII preference."
+      },
+      {
+        "Source": "Colm Toibin",
+        "Reason": "Already matches keyboard-friendly ASCII preference."
+      },
+      {
+        "Source": "Hold Still: A Memoir With Photographs",
+        "Reason": "Meaningful memoir subtitle."
+      },
+      {
+        "Source": "An Immense World: How Animal Senses Reveal the Hidden Realms Around Us",
+        "Reason": "Meaningful nonfiction subtitle."
+      }
+    ]
+  },
+  "FutureRulesetScopes": [
+    "LccClassification",
+    "TagsNormalization",
+    "CommentsGeneration",
+    "AwardsMetadataCleanup",
+    "IdentifierCleanup",
+    "CoverMetadataWorkflow"
+  ]
+}
