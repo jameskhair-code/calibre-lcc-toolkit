@@ -24,6 +24,38 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.10.3 - Identifier Proposal Launcher Wiring
+
+### Added
+
+- Added Identifier Module launcher option:
+  - `I3. Identifiers: Generate proposal worksheet`
+
+### Behavior
+
+- `I3` runs the read-only identifier proposal worksheet generator:
+  - `scripts/New-IdentifierProposalWorksheet.ps1`
+- `I3` reads:
+  - `.\reports\identifier-mqg02-candidate-summary.csv`
+- `I3` writes:
+  - `.\input\identifier-proposal-worksheet.tsv`
+  - `.\reports\identifier-proposal-summary.csv`
+- Workflow remains read-only and does not modify Calibre metadata.
+
+### Validated
+
+- Confirmed launcher displays `Calibre LCC Toolkit v0.10.3`.
+- Confirmed Identifier Module now shows:
+  - `I1. Identifiers: Export inventory`
+  - `I2. Identifiers: Write diagnostics`
+  - `I3. Identifiers: Generate proposal worksheet`
+- Ran `I3` through the launcher and confirmed:
+  - 5,092 rows reviewed
+  - 3,023 auto-eligible proposals
+  - 2,069 manual-review proposals
+  - 3,023 MQG-02 completion candidates
+
+---
 ## v0.10.2 - Identifier MQG-02 Proposal Framework
 
 ### Added
@@ -1174,6 +1206,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
