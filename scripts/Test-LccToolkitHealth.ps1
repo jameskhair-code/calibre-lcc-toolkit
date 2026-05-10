@@ -265,6 +265,7 @@ $requiredScripts = @(
     ".\scripts\Convert-LccImportToCanonical.ps1",
     ".\scripts\Write-LccBatchSummary.ps1",
     ".\scripts\Show-LccLatestReports.ps1",
+    ".\scripts\New-ToolkitBatchManifest.ps1",
     ".\scripts\Test-LccToolkitHealth.ps1"
 )
 
