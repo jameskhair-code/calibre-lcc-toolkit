@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 Writes a human-readable summary for an author/title cleanup dry-run report.
 
@@ -41,6 +41,7 @@ function Add-Line {
 function Count-Rows {
     param(
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [object[]]$Rows,
 
         [Parameter(Mandatory = $true)]
@@ -53,6 +54,7 @@ function Count-Rows {
 function Get-TopBlockingReasons {
     param(
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [object[]]$Rows
     )
 
@@ -96,32 +98,43 @@ if ($rows.Count -eq 0) {
 }
 
 $totalRows = $rows.Count
-$eligibleRows = Count-Rows -Rows $rows -Predicate { $_.ApplyEligible -eq "Yes" }
-$blockedRows = Count-Rows -Rows $rows -Predicate { $_.ApplyEligible -ne "Yes" }
 
-$titleChangeRows = Count-Rows -Rows $rows -Predicate { $_.TitleChangeDetected -eq "Yes" }
-$authorsChangeRows = Count-Rows -Rows $rows -Predicate { $_.AuthorsChangeDetected -eq "Yes" }
-$bothChangeRows = Count-Rows -Rows $rows -Predicate {
-    $_.TitleChangeDetected -eq "Yes" -and $_.AuthorsChangeDetected -eq "Yes"
-}
-$titleOnlyRows = Count-Rows -Rows $rows -Predicate {
-    $_.TitleChangeDetected -eq "Yes" -and $_.AuthorsChangeDetected -ne "Yes"
-}
-$authorsOnlyRows = Count-Rows -Rows $rows -Predicate {
-    $_.TitleChangeDetected -ne "Yes" -and $_.AuthorsChangeDetected -eq "Yes"
-}
+$proposedChangeRows = @(
+    $rows | Where-Object {
+        $_.TitleChangeDetected -eq "Yes" -or $_.AuthorsChangeDetected -eq "Yes"
+    }
+)
+
 $noChangeRows = Count-Rows -Rows $rows -Predicate {
     $_.TitleChangeDetected -ne "Yes" -and $_.AuthorsChangeDetected -ne "Yes"
 }
 
-$manualReviewRows = Count-Rows -Rows $rows -Predicate { $_.ManualReviewRequired -eq "Yes" }
-$confidenceExpectedRows = Count-Rows -Rows $rows -Predicate { $_.ConfidenceStatus -eq "Expected" }
-$confidenceMissingRows = Count-Rows -Rows $rows -Predicate { $_.ConfidenceStatus -eq "Missing" }
-$confidenceUnexpectedRows = Count-Rows -Rows $rows -Predicate { $_.ConfidenceStatus -eq "Unexpected" }
+$eligibleRows = Count-Rows -Rows $rows -Predicate { $_.ApplyEligible -eq "Yes" }
+$blockedRows = Count-Rows -Rows $proposedChangeRows -Predicate { $_.ApplyEligible -ne "Yes" }
 
-$titleMismatchRows = Count-Rows -Rows $rows -Predicate { $_.TitleOriginalMatchesCurrent -ne "Yes" }
-$authorsMismatchRows = Count-Rows -Rows $rows -Predicate { $_.AuthorsOriginalMatchesCurrent -ne "Yes" }
-$duplicateIdRows = Count-Rows -Rows $rows -Predicate { $_.DuplicateCalibreId -eq "Yes" }
+$titleChangeRows = Count-Rows -Rows $rows -Predicate { $_.TitleChangeDetected -eq "Yes" }
+$authorsChangeRows = Count-Rows -Rows $rows -Predicate { $_.AuthorsChangeDetected -eq "Yes" }
+
+$bothChangeRows = Count-Rows -Rows $rows -Predicate {
+    $_.TitleChangeDetected -eq "Yes" -and $_.AuthorsChangeDetected -eq "Yes"
+}
+
+$titleOnlyRows = Count-Rows -Rows $rows -Predicate {
+    $_.TitleChangeDetected -eq "Yes" -and $_.AuthorsChangeDetected -ne "Yes"
+}
+
+$authorsOnlyRows = Count-Rows -Rows $rows -Predicate {
+    $_.TitleChangeDetected -ne "Yes" -and $_.AuthorsChangeDetected -eq "Yes"
+}
+
+$manualReviewRows = Count-Rows -Rows $proposedChangeRows -Predicate { $_.ManualReviewRequired -eq "Yes" }
+$confidenceExpectedRows = Count-Rows -Rows $proposedChangeRows -Predicate { $_.ConfidenceStatus -eq "Expected" }
+$confidenceMissingRows = Count-Rows -Rows $proposedChangeRows -Predicate { $_.ConfidenceStatus -eq "Missing" }
+$confidenceUnexpectedRows = Count-Rows -Rows $proposedChangeRows -Predicate { $_.ConfidenceStatus -eq "Unexpected" }
+
+$titleMismatchRows = Count-Rows -Rows $proposedChangeRows -Predicate { $_.TitleOriginalMatchesCurrent -ne "Yes" }
+$authorsMismatchRows = Count-Rows -Rows $proposedChangeRows -Predicate { $_.AuthorsOriginalMatchesCurrent -ne "Yes" }
+$duplicateIdRows = Count-Rows -Rows $proposedChangeRows -Predicate { $_.DuplicateCalibreId -eq "Yes" }
 
 $eligiblePreviewRows = @(
     $rows |
@@ -130,12 +143,12 @@ $eligiblePreviewRows = @(
 )
 
 $blockedPreviewRows = @(
-    $rows |
+    $proposedChangeRows |
         Where-Object { $_.ApplyEligible -ne "Yes" } |
         Select-Object -First 20
 )
 
-$topBlockingReasons = @(Get-TopBlockingReasons -Rows $rows)
+$topBlockingReasons = @(Get-TopBlockingReasons -Rows $proposedChangeRows)
 
 $lines = [System.Collections.Generic.List[string]]::new()
 
@@ -153,6 +166,7 @@ Add-Line -Lines $lines
 Add-Line -Lines $lines -Text "Batch Totals"
 Add-Line -Lines $lines -Text "------------"
 Add-Line -Lines $lines -Text "Rows reviewed: $totalRows"
+Add-Line -Lines $lines -Text "Rows with no proposed/effective changes: $noChangeRows"
 Add-Line -Lines $lines -Text "Rows eligible for apply: $eligibleRows"
 Add-Line -Lines $lines -Text "Rows blocked: $blockedRows"
 Add-Line -Lines $lines
@@ -163,7 +177,7 @@ Add-Line -Lines $lines -Text "Rows with author changes: $authorsChangeRows"
 Add-Line -Lines $lines -Text "Rows with both title and author changes: $bothChangeRows"
 Add-Line -Lines $lines -Text "Rows with title-only changes: $titleOnlyRows"
 Add-Line -Lines $lines -Text "Rows with author-only changes: $authorsOnlyRows"
-Add-Line -Lines $lines -Text "Rows with no proposed changes: $noChangeRows"
+Add-Line -Lines $lines -Text "Rows with no proposed/effective changes: $noChangeRows"
 Add-Line -Lines $lines
 Add-Line -Lines $lines -Text "Review / Confidence"
 Add-Line -Lines $lines -Text "-------------------"
@@ -174,9 +188,9 @@ Add-Line -Lines $lines -Text "Rows with unexpected confidence: $confidenceUnexpe
 Add-Line -Lines $lines
 Add-Line -Lines $lines -Text "Safety Checks"
 Add-Line -Lines $lines -Text "-------------"
-Add-Line -Lines $lines -Text "Rows where OriginalTitle does not match current title: $titleMismatchRows"
-Add-Line -Lines $lines -Text "Rows where OriginalAuthors does not match current authors: $authorsMismatchRows"
-Add-Line -Lines $lines -Text "Rows with duplicate CalibreId: $duplicateIdRows"
+Add-Line -Lines $lines -Text "Proposed rows where OriginalTitle does not match current title: $titleMismatchRows"
+Add-Line -Lines $lines -Text "Proposed rows where OriginalAuthors does not match current authors: $authorsMismatchRows"
+Add-Line -Lines $lines -Text "Proposed rows with duplicate CalibreId: $duplicateIdRows"
 Add-Line -Lines $lines
 
 Add-Line -Lines $lines -Text "Top Blocking Reasons"
@@ -218,7 +232,7 @@ Add-Line -Lines $lines -Text "Blocked Rows Preview"
 Add-Line -Lines $lines -Text "--------------------"
 
 if ($blockedPreviewRows.Count -eq 0) {
-    Add-Line -Lines $lines -Text "No rows are currently blocked."
+    Add-Line -Lines $lines -Text "No proposed-change rows are currently blocked."
 }
 else {
     foreach ($row in $blockedPreviewRows) {
@@ -229,7 +243,7 @@ else {
 Add-Line -Lines $lines
 Add-Line -Lines $lines -Text "Operating Reminder"
 Add-Line -Lines $lines -Text "------------------"
-Add-Line -Lines $lines -Text "If rows are blocked, fix the TSV and dry run again."
+Add-Line -Lines $lines -Text "If proposed-change rows are blocked, fix the TSV and dry run again."
 Add-Line -Lines $lines -Text "Do not apply title/author changes until the dry-run report and summary are clean."
 
 $outputFolder = Split-Path -Path $SummaryTxt -Parent
@@ -242,10 +256,8 @@ $lines | Set-Content -Path $SummaryTxt -Encoding UTF8
 
 Write-Host "Summary complete: $SummaryTxt"
 Write-Host "Rows reviewed: $totalRows"
+Write-Host "Rows with no proposed/effective changes: $noChangeRows"
 Write-Host "Rows eligible for apply: $eligibleRows"
 Write-Host "Rows blocked: $blockedRows"
 Write-Host ""
 Write-Host "This was a summary operation only. No Calibre metadata was modified."
-
-
-

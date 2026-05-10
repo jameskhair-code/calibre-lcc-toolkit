@@ -24,6 +24,39 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.9.7 - Author/Title Summary Alignment
+
+### Changed
+
+- Updated Author/Title dry-run summary logic to align with the corrected A2 dry-run validation model.
+- Changed summary blocked-row counts so only proposed-change rows can count as blocked.
+- Changed blocked-row preview so it only shows proposed-change rows with blockers.
+- Changed top blocking reasons so no-change rows do not affect blocker reporting.
+- Added no-change row count to the summary console output and batch totals.
+- Clarified summary wording from no proposed changes to no proposed/effective changes.
+
+### Behavior
+
+- Rows with no proposed/effective title or author change are counted separately.
+- No-change rows are not treated as blocked.
+- Summary confidence counts evaluate proposed-change rows only.
+- Summary manual-review counts evaluate proposed-change rows only.
+- Safety mismatch counts now focus on proposed-change rows.
+- Blocked preview reports only proposed-change rows that are actually blocked.
+
+### Validated
+
+- Re-ran the Andrew Carnegie Medal Author/Title summary.
+- Confirmed 86 rows reviewed.
+- Confirmed 71 rows with no proposed/effective changes.
+- Confirmed 15 rows eligible for apply.
+- Confirmed 0 blocked rows.
+- Confirmed 13 title changes and 2 author changes.
+- Confirmed 0 missing confidence values.
+- Confirmed 0 unexpected confidence values.
+- Confirmed no top blocking reasons.
+
+---
 ## v0.9.6 - Author/Title Dry-Run Validation Alignment
 
 ### Changed
@@ -923,6 +956,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
