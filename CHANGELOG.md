@@ -24,6 +24,43 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.10.4 - Identifier Proposal Validation
+
+### Added
+
+- Added read-only identifier proposal worksheet validation script:
+  - `scripts/Test-IdentifierProposalWorksheet.ps1`
+
+### Behavior
+
+- Reads the identifier proposal worksheet:
+  - `.\input\identifier-proposal-worksheet.tsv`
+- Writes validation report:
+  - `.\reports\identifier-proposal-validation.csv`
+- Writes validation summary:
+  - `.\reports\identifier-proposal-validation-summary.csv`
+- Classifies proposal rows as:
+  - `Ready - MQG-02 Completion Preflight`
+  - `Manual Review Required`
+  - `Blocked - Validation Error`
+- Validates required columns, expected status values, yes/no flags, duplicate Calibre IDs, readiness criteria, and strong-core completion eligibility.
+- Workflow remains read-only and does not modify Calibre metadata.
+
+### Validated
+
+- Validated identifier proposal worksheet across 5,092 Calibre records.
+- Confirmed 3,023 rows ready for MQG-02 completion preflight.
+- Confirmed 2,069 rows require manual review.
+- Confirmed 0 blocked / validation-error rows.
+- Confirmed validation summary preserves proposal action counts:
+  - 3,023 `Accept As-Is`
+  - 1,169 `Review Missing External Link Targets`
+  - 594 `Research Missing ISBN`
+  - 238 `Review Missing One External Link Target`
+  - 51 `Review Duplicate Identifier`
+  - 17 `Review Suspicious Identifier Type`
+
+---
 ## v0.10.3 - Identifier Proposal Launcher Wiring
 
 ### Added
@@ -1206,6 +1243,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
