@@ -24,6 +24,54 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.11.0 - MQG Core Loop Review and Identifier I6 Launcher Wiring
+
+### Added
+
+- Added MQG core-loop review document:
+  - `docs/MQG-Core-Loop-Review.md`
+- Wired Identifier I6 into the launcher:
+  - `I6. Identifiers: Mark preflight-approved MQG-02 complete`
+
+### Decision
+
+- Identifier I6 is now launcher-accessible because the MQG-02 apply path was successfully validated in `v0.10.9`.
+- Identifier I7 is deferred.
+- Broader launcher redesign is deferred.
+- Comments, Tags, Awards, Covers, and AI-assisted expansion remain out of scope for this release.
+
+### Behavior
+
+- `I6` runs:
+  - `scripts/Invoke-IdentifierMqgComplete.ps1`
+- `I6` defaults to read-only mode:
+  - `PreflightOnly = YES`
+- Read-only launcher runs default to:
+  - `.\reports\identifier-mqg02-completion-apply-preflightonly.csv`
+- Apply-mode launcher runs default to:
+  - `.\reports\identifier-mqg02-completion-apply.csv`
+- This prevents read-only launcher checks from overwriting the real apply audit report by default.
+- The apply script still requires the explicit confirmation phrase before writing:
+  - `MARK MQG-02 COMPLETE`
+
+### Validation
+
+- Parser check passed for:
+  - `Start-LccWorkflow.ps1`
+- Launcher I6 read-only test confirmed:
+  - Rows reviewed: 5,092
+  - Rows passing evidence/current-state checks: 124
+  - Ready to mark complete: 0
+  - Already complete: 4,134
+  - Skipped/manual review: 958
+- No Calibre metadata was modified during the launcher read-only test.
+
+### Notes
+
+- This release ties off the current MQG-02 Identifier core loop.
+- After this release lands, pause for broader project-level review before selecting the next development target.
+
+---
 ## v0.10.9 - Identifier MQG-02 Apply Validation
 
 ### Changed
