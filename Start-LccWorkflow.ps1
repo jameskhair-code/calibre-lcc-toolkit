@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.10.4" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.10.5" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -207,6 +207,7 @@ function Show-Menu {
     Write-Host "I1. Identifiers: Export inventory"
     Write-Host "I2. Identifiers: Write diagnostics"
     Write-Host "I3. Identifiers: Generate proposal worksheet"
+    Write-Host "I4. Identifiers: Validate proposal worksheet"
     Write-Host ""
 
     Write-Host "Manual MQG Completion Module" -ForegroundColor Cyan
@@ -1712,6 +1713,39 @@ function Start-IdentifierProposalWorksheet {
 
     Pause-Toolkit
 }
+function Start-IdentifierProposalValidation {
+    Write-Host ""
+    Write-Host "Identifiers: validate proposal worksheet" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step validates the identifier proposal worksheet and writes MQG-02 completion preflight reports." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $proposalTsv = Read-ToolkitInput `
+        -Prompt "Proposal worksheet TSV" `
+        -Default ".\input\identifier-proposal-worksheet.tsv"
+
+    $validationCsv = Read-ToolkitInput `
+        -Prompt "Validation report CSV" `
+        -Default ".\reports\identifier-proposal-validation.csv"
+
+    $validationSummaryCsv = Read-ToolkitInput `
+        -Prompt "Validation summary CSV" `
+        -Default ".\reports\identifier-proposal-validation-summary.csv"
+
+    $scriptPath = Get-ToolkitScriptPath -ScriptName "Test-IdentifierProposalWorksheet.ps1"
+
+    Write-Host ""
+    Write-Host "Running: Test-IdentifierProposalWorksheet.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $scriptPath `
+        -ProposalTsv $proposalTsv `
+        -ValidationCsv $validationCsv `
+        -ValidationSummaryCsv $validationSummaryCsv
+
+    Pause-Toolkit
+}
 function Start-CommentsExport {
     $batchSlug = Read-BatchSlug
 
@@ -2118,6 +2152,7 @@ function Start-CommentsVerify {
                 "I1" { Start-IdentifierInventoryExport }
                 "I2" { Start-IdentifierInventoryDiagnostics }
                 "I3" { Start-IdentifierProposalWorksheet }
+                "I4" { Start-IdentifierProposalValidation }
                 "W1" {
                     $batchSlug = Read-BatchSlug
 
@@ -2274,6 +2309,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 
