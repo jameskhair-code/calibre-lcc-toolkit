@@ -24,6 +24,37 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.10.9 - Identifier MQG-02 Apply Validation
+
+### Changed
+
+- Clarified the Identifier MQG-02 apply script console summary wording:
+  - `Rows passing evidence/current-state checks`
+- This avoids implying that already-complete rows are still write-eligible after a successful apply.
+
+### Validation
+
+- Successfully ran the Identifier MQG-02 completion apply path against the I5 preflight artifact.
+- Apply mode reviewed 5,092 rows and produced:
+  - Newly marked complete: 124
+  - Already complete: 4,010
+  - Failed: 0
+  - Skipped/manual review: 958
+- Post-apply read-only check confirmed the ready set was drained:
+  - Ready to mark complete: 0
+  - Already complete: 4,134
+  - Skipped/manual review: 958
+
+### Notes
+
+- I6 remains intentionally not wired into the launcher in this release.
+- The first Identifier write-capable path is now validated with successful Calibre readback evidence.
+- Next recommended decision point:
+  - wire I6 into the launcher,
+  - add a dedicated I7 verification option,
+  - or pause for MQG-01 / MQG-02 / MQG-03 core-loop review.
+
+---
 ## v0.10.8 - Identifier MQG-02 Completion Apply Script
 
 ### Added

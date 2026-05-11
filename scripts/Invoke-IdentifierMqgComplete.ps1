@@ -527,7 +527,7 @@ $alreadyCompleteRows = @($preApplyRows | Where-Object { $_.MarkStatus -eq "Alrea
 $skippedRows = @($preApplyRows | Where-Object { $_.MarkStatus -eq "Skipped" })
 
 Write-Host "Rows reviewed: $($preApplyRows.Count)"
-Write-Host "Rows eligible after current-state recheck: $($eligibleRows.Count)"
+Write-Host "Rows passing evidence/current-state checks: $($eligibleRows.Count)"
 Write-Host "Rows ready to mark complete: $($readyRows.Count)"
 Write-Host "Rows already complete: $($alreadyCompleteRows.Count)"
 Write-Host "Rows skipped: $($skippedRows.Count)"
