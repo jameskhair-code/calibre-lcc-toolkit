@@ -57,39 +57,6 @@ This project uses lightweight version milestones rather than formal semantic ver
   - 0 blocked / validation-error rows
 
 ---
-## v0.10.5 - Identifier Proposal Validation Launcher Wiring
-
-### Added
-
-- Added Identifier Module launcher option:
-  - `I4. Identifiers: Validate proposal worksheet`
-
-### Behavior
-
-- `I4` runs the read-only identifier proposal worksheet validation script:
-  - `scripts/Test-IdentifierProposalWorksheet.ps1`
-- `I4` reads:
-  - `.\input\identifier-proposal-worksheet.tsv`
-- `I4` writes:
-  - `.\reports\identifier-proposal-validation.csv`
-  - `.\reports\identifier-proposal-validation-summary.csv`
-- Workflow remains read-only and does not modify Calibre metadata.
-
-### Validated
-
-- Confirmed launcher displays `Calibre LCC Toolkit v0.10.5`.
-- Confirmed Identifier Module now shows:
-  - `I1. Identifiers: Export inventory`
-  - `I2. Identifiers: Write diagnostics`
-  - `I3. Identifiers: Generate proposal worksheet`
-  - `I4. Identifiers: Validate proposal worksheet`
-- Ran `I4` through the launcher and confirmed:
-  - 5,092 rows reviewed
-  - 3,023 ready for MQG-02 completion preflight
-  - 2,069 manual-review rows
-  - 0 blocked / validation-error rows
-
----
 ## v0.10.4 - Identifier Proposal Validation
 
 ### Added
@@ -1309,7 +1276,6 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
-
 
 
 
