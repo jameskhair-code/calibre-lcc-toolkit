@@ -24,6 +24,50 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.10.8 - Identifier MQG-02 Completion Apply Script
+
+### Added
+
+- Added conservative Identifier MQG-02 completion apply script:
+  - `scripts/Invoke-IdentifierMqgComplete.ps1`
+- Added Identifier I6/I7 design decision record:
+  - `docs/Identifier-I6-I7-Decision.md`
+
+### Behavior
+
+- The new apply script reads the I5 preflight artifact:
+  - `.\reports\identifier-mqg02-completion-preflight.csv`
+- The script writes an apply/report artifact:
+  - `.\reports\identifier-mqg02-completion-apply.csv`
+- The script supports `-PreflightOnly` mode for read-only validation before any write attempt.
+- The script only marks MQG-02 complete for rows still safe after current-state recheck:
+  - `PreflightStatus = Ready - Future MQG-02 Apply`
+  - `FutureApplyEligible = Yes`
+  - `PreflightIssueCount = 0`
+  - current `#mqg_identifiers` is still false/no
+  - current title/authors still match the preflight evidence
+- The script does not repair, normalize, add, delete, or rewrite identifier values.
+- Apply mode requires the explicit confirmation phrase:
+  - `MARK MQG-02 COMPLETE`
+- Apply mode writes only:
+  - `#mqg_identifiers:true`
+- Apply mode performs Calibre readback verification using `show_metadata`.
+
+### Validation
+
+- Parser check passed for:
+  - `scripts/Invoke-IdentifierMqgComplete.ps1`
+- Read-only `-PreflightOnly` test reviewed 5,092 rows and produced:
+  - Ready to mark complete: 124
+  - Already complete: 4,010
+  - Skipped/manual review: 958
+
+### Notes
+
+- I6 is not wired into the launcher in this release.
+- This keeps the first Identifier write-capable script available for controlled testing without increasing launcher/operator complexity.
+
+---
 ## v0.10.7 - Identifier MQG-02 Preflight Launcher Wiring
 
 ### Added
