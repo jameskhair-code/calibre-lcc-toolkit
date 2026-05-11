@@ -24,6 +24,43 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.10.6 - Identifier MQG-02 Completion Preflight
+
+### Added
+
+- Added read-only Identifier MQG-02 completion preflight script:
+  - `scripts/New-IdentifierMqgCompletionPreflight.ps1`
+
+### Behavior
+
+- Reads identifier proposal validation report:
+  - `.\reports\identifier-proposal-validation.csv`
+- Reads current Calibre metadata and MQG status.
+- Writes MQG-02 completion preflight report:
+  - `.\reports\identifier-mqg02-completion-preflight.csv`
+- Writes MQG-02 completion preflight summary:
+  - `.\reports\identifier-mqg02-completion-preflight-summary.csv`
+- Classifies rows as:
+  - `Ready - Future MQG-02 Apply`
+  - `Already MQG-02 Complete`
+  - `Manual Review Required`
+  - `Blocked - Preflight Error`
+- Checks current title/author drift, current MQG-01 status, current MQG-02 status, duplicate Calibre IDs, validation readiness, and missing current records.
+- Workflow remains read-only and does not modify Calibre metadata.
+
+### Validated
+
+- Ran MQG-02 completion preflight across 5,092 Calibre records.
+- Confirmed 124 rows ready for future MQG-02 apply.
+- Confirmed 4,010 rows already MQG-02 complete.
+- Confirmed 958 rows require manual review.
+- Confirmed 0 blocked / preflight-error rows.
+- Confirmed MQG-02 field mapping:
+  - `#mqg_identifiers`
+  - `*mqg_identifiers`
+  - `MQG-02 Identifiers`
+
+---
 ## v0.10.5 - Identifier Proposal Validation Launcher Wiring
 
 ### Added
@@ -1276,6 +1313,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
