@@ -324,15 +324,57 @@ For write-capable workflows:
 9. Produce an audit report.
 10. Stop on exceptions and inspect output before continuing.
 
+## v0.11.0 Decision
+
+Decision:
+
+Wire Identifier I6 into the current launcher and defer I7.
+
+Chosen launcher label:
+
+- `I6. Identifiers: Mark preflight-approved MQG-02 complete`
+
+Why:
+
+- The Identifier MQG-02 apply path has been validated successfully.
+- The script still requires I5 preflight evidence and current-state recheck.
+- The script defaults to read-only launcher behavior unless the operator explicitly chooses apply mode.
+- The script itself still requires the explicit confirmation phrase before writing:
+  - `MARK MQG-02 COMPLETE`
+- The label "preflight-approved" makes the I5 dependency visible to the operator.
+- A separate I7 option is deferred because I6 already performs readback verification and the launcher is already crowded.
+
+Safety adjustment made during launcher testing:
+
+- I6 now asks whether the run is preflight-only before asking for the report path.
+- Read-only launcher runs default to:
+  - `.\reports\identifier-mqg02-completion-apply-preflightonly.csv`
+- Apply-mode launcher runs default to:
+  - `.\reports\identifier-mqg02-completion-apply.csv`
+- This prevents preflight-only checks from overwriting the real apply audit report by default.
+
+Deferred:
+
+- Dedicated I7 verification option.
+- Identifier repair or normalization.
+- Broader launcher redesign.
+- Comments, Tags, Awards, Covers, or AI-assisted expansion.
+
+Next project-level action:
+
+Pause for a broader project review before adding more feature work.
 ## Review Status
 
-Status: Draft for v0.11.0 development discussion.
+Status: Decision captured for v0.11.0.
 
 Next action:
 
-Review this document, then decide whether v0.11.0 should:
+After v0.11.0 lands, pause for broader project-level review before selecting the next development target.
 
-1. wire Identifier I6 into the launcher,
-2. add a separate I7 verification option,
-3. document manual I6 usage and defer launcher changes,
-4. or pivot into launcher simplification planning.
+Potential next review topics:
+
+1. launcher simplification planning,
+2. MQG-01 / MQG-02 / MQG-03 status/readiness improvements,
+3. handling the remaining MQG-02 manual-review Identifier rows,
+4. deciding when Comments/Tags should resume,
+5. clarifying the broader Calibre Metadata Toolkit roadmap.
