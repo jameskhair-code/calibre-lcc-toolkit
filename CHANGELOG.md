@@ -24,6 +24,41 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.10.7 - Identifier MQG-02 Preflight Launcher Wiring
+
+### Added
+
+- Added Identifier Module launcher option:
+  - `I5. Identifiers: MQG-02 completion preflight`
+
+### Behavior
+
+- `I5` runs the read-only Identifier MQG-02 completion preflight script:
+  - `scripts/New-IdentifierMqgCompletionPreflight.ps1`
+- `I5` reads:
+  - `.\reports\identifier-proposal-validation.csv`
+- `I5` writes:
+  - `.\reports\identifier-mqg02-completion-preflight.csv`
+  - `.\reports\identifier-mqg02-completion-preflight-summary.csv`
+- Workflow remains read-only and does not modify Calibre metadata.
+
+### Validated
+
+- Confirmed launcher displays `Calibre LCC Toolkit v0.10.7`.
+- Confirmed Identifier Module now shows:
+  - `I1. Identifiers: Export inventory`
+  - `I2. Identifiers: Write diagnostics`
+  - `I3. Identifiers: Generate proposal worksheet`
+  - `I4. Identifiers: Validate proposal worksheet`
+  - `I5. Identifiers: MQG-02 completion preflight`
+- Ran `I5` through the launcher and confirmed:
+  - 5,092 rows reviewed
+  - 124 ready for future MQG-02 apply
+  - 4,010 already MQG-02 complete
+  - 958 manual-review rows
+  - 0 blocked / preflight-error rows
+
+---
 ## v0.10.6 - Identifier MQG-02 Completion Preflight
 
 ### Added
@@ -1313,6 +1348,7 @@ This prevents low-confidence or malformed-confidence LCC enrichment rows from be
 
 - v0.1 was a working baseline, but still required more manual command knowledge.
 - v0.2 built on this by adding a launcher, health checks, canonicalization, and stronger safeguards.
+
 
 
 
