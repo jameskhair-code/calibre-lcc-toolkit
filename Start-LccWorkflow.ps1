@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.10.6" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.10.7" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -208,6 +208,7 @@ function Show-Menu {
     Write-Host "I2. Identifiers: Write diagnostics"
     Write-Host "I3. Identifiers: Generate proposal worksheet"
     Write-Host "I4. Identifiers: Validate proposal worksheet"
+    Write-Host "I5. Identifiers: MQG-02 completion preflight"
     Write-Host ""
 
     Write-Host "Manual MQG Completion Module" -ForegroundColor Cyan
@@ -1746,6 +1747,44 @@ function Start-IdentifierProposalValidation {
 
     Pause-Toolkit
 }
+function Start-IdentifierMqgCompletionPreflight {
+    Write-Host ""
+    Write-Host "Identifiers: MQG-02 completion preflight" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This step reads identifier proposal validation results and creates a read-only MQG-02 completion preflight report." -ForegroundColor DarkGray
+    Write-Host "It does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $validationCsv = Read-ToolkitInput `
+        -Prompt "Validation CSV" `
+        -Default ".\reports\identifier-proposal-validation.csv"
+
+    $preflightCsv = Read-ToolkitInput `
+        -Prompt "MQG-02 completion preflight CSV" `
+        -Default ".\reports\identifier-mqg02-completion-preflight.csv"
+
+    $preflightSummaryCsv = Read-ToolkitInput `
+        -Prompt "MQG-02 completion preflight summary CSV" `
+        -Default ".\reports\identifier-mqg02-completion-preflight-summary.csv"
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $scriptPath = Get-ToolkitScriptPath -ScriptName "New-IdentifierMqgCompletionPreflight.ps1"
+
+    Write-Host ""
+    Write-Host "Running: New-IdentifierMqgCompletionPreflight.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $scriptPath `
+        -ValidationCsv $validationCsv `
+        -PreflightCsv $preflightCsv `
+        -PreflightSummaryCsv $preflightSummaryCsv `
+        -LibraryPath $libraryPath
+
+    Pause-Toolkit
+}
 function Start-CommentsExport {
     $batchSlug = Read-BatchSlug
 
@@ -2153,6 +2192,7 @@ function Start-CommentsVerify {
                 "I2" { Start-IdentifierInventoryDiagnostics }
                 "I3" { Start-IdentifierProposalWorksheet }
                 "I4" { Start-IdentifierProposalValidation }
+                "I5" { Start-IdentifierMqgCompletionPreflight }
                 "W1" {
                     $batchSlug = Read-BatchSlug
 
@@ -2309,6 +2349,7 @@ function Start-CommentsVerify {
 finally {
     Pop-Location
 }
+
 
 
 
