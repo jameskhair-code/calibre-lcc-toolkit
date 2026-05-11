@@ -209,6 +209,7 @@ function Show-Menu {
     Write-Host "I3. Identifiers: Generate proposal worksheet"
     Write-Host "I4. Identifiers: Validate proposal worksheet"
     Write-Host "I5. Identifiers: MQG-02 completion preflight"
+    Write-Host "I6. Identifiers: Mark preflight-approved MQG-02 complete"
     Write-Host ""
 
     Write-Host "Manual MQG Completion Module" -ForegroundColor Cyan
@@ -1785,6 +1786,63 @@ function Start-IdentifierMqgCompletionPreflight {
 
     Pause-Toolkit
 }
+function Start-IdentifierMqgComplete {
+    Write-Host ""
+    Write-Host "Identifiers: mark preflight-approved MQG-02 complete" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "This step can modify the Calibre custom field #mqg_identifiers." -ForegroundColor Yellow
+    Write-Host "It only marks MQG-02 complete for rows approved by the I5 preflight and still safe at apply time." -ForegroundColor DarkGray
+    Write-Host "It does not repair, normalize, add, delete, or rewrite identifier values." -ForegroundColor DarkGray
+    Write-Host "Run I5 before this step unless you are intentionally using an existing preflight artifact." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $preflightCsv = Read-ToolkitInput `
+        -Prompt "MQG-02 completion preflight CSV" `
+        -Default ".\reports\identifier-mqg02-completion-preflight.csv"
+
+    $preflightOnlyAnswer = Read-ToolkitInput `
+        -Prompt "Preflight only? YES = no write, NO = mark complete" `
+        -Default "YES"
+
+    if ($preflightOnlyAnswer -eq "NO") {
+        $defaultMqgReportCsv = ".\reports\identifier-mqg02-completion-apply.csv"
+    }
+    else {
+        $defaultMqgReportCsv = ".\reports\identifier-mqg02-completion-apply-preflightonly.csv"
+    }
+
+    $mqgReportCsv = Read-ToolkitInput `
+        -Prompt "MQG-02 report CSV" `
+        -Default $defaultMqgReportCsv
+
+    $libraryPath = Read-ToolkitInput `
+        -Prompt "Optional Calibre library path, blank for default" `
+        -Default ""
+
+    $scriptPath = Get-ToolkitScriptPath -ScriptName "Invoke-IdentifierMqgComplete.ps1"
+
+    $mqgArgs = @{
+        PreflightCsv = $preflightCsv
+        MqgReportCsv = $mqgReportCsv
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($libraryPath)) {
+        $mqgArgs.LibraryPath = $libraryPath
+    }
+
+    if ($preflightOnlyAnswer -ne "NO") {
+        $mqgArgs.PreflightOnly = $true
+    }
+
+    Write-Host ""
+    Write-Host "Running: Invoke-IdentifierMqgComplete.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $scriptPath @mqgArgs
+
+    Pause-Toolkit
+}
+
 function Start-CommentsExport {
     $batchSlug = Read-BatchSlug
 
@@ -2193,6 +2251,7 @@ function Start-CommentsVerify {
                 "I3" { Start-IdentifierProposalWorksheet }
                 "I4" { Start-IdentifierProposalValidation }
                 "I5" { Start-IdentifierMqgCompletionPreflight }
+                "I6" { Start-IdentifierMqgComplete }
                 "W1" {
                     $batchSlug = Read-BatchSlug
 
