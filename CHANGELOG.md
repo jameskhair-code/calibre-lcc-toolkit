@@ -24,6 +24,46 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.12.2 - Shared Target Selection Helper
+
+### Added
+
+- Added shared Productive Launcher target-selection helper:
+  - `Select-ProductiveTargetScope`
+- Wired Productive Launcher workflow shells to collect target scope before future processing.
+- Added target-selection modes:
+  - Paste Calibre search string
+  - All books where this MQG is not complete
+  - Use existing batch manifest
+
+### Behavior
+
+- Productive Launcher workflows now prompt for target scope after selecting an MQG workflow.
+- Each active MQG workflow passes its corresponding MQG field:
+  - MQG-01: `#mqg_title_author`
+  - MQG-02: `#mqg_identifiers`
+  - MQG-03: `#mqg_lcc`
+  - MQG-05: `#mqg_description`
+  - MQG-06: `#mqg_tags`
+- Target selection is shell-only in this release.
+- No batch export, report generation, AI processing, or Calibre metadata changes are performed.
+
+### Validation
+
+- Parser check passed for:
+  - `Start-LccWorkflow.ps1`
+- Manual launcher testing confirmed:
+  - pasted Calibre search string mode works,
+  - all-missing-MQG conceptual selector mode works,
+  - existing batch manifest mode works.
+
+### Notes
+
+- The generated all-missing-MQG selector remains conceptual until exact Calibre checkbox search syntax is validated.
+- Recommended next implementation target:
+  - `v0.12.3 - Target Selection Batch Manifest Creation`
+
+---
 ## v0.12.1 - Productive Launcher Shell
 
 ### Added
