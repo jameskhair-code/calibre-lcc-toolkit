@@ -101,11 +101,11 @@ function Read-BatchSlug {
     $defaultBatchSlug = $script:CurrentBatchSlug
 
     if ([string]::IsNullOrWhiteSpace($defaultBatchSlug)) {
-        $batchSlug = Read-RequiredInput "Batch file slug, example j-russell-major-prize"
+        $batchSlug = Read-RequiredInput "Batch name, example j-russell-major-prize"
     }
     else {
         $batchSlug = Read-ToolkitInput `
-            -Prompt "Batch file slug" `
+            -Prompt "Batch name" `
             -Default $defaultBatchSlug
     }
 
@@ -146,16 +146,16 @@ function Show-Header {
     Write-Host ""
 
     if ([string]::IsNullOrWhiteSpace($script:CurrentBatchSlug)) {
-        Write-Host "Current batch file slug: <not set>" -ForegroundColor DarkGray
+        Write-Host "Current batch name: <not set>" -ForegroundColor DarkGray
     }
     else {
-        Write-Host "Current batch file slug: $script:CurrentBatchSlug" -ForegroundColor Green
+        Write-Host "Current batch name: $script:CurrentBatchSlug" -ForegroundColor Green
     }
 
     Write-Host ""
     Write-Host "LCC Workflow: Preflight -> Export -> Enrich -> Prepare -> Validate -> Apply -> Verify" -ForegroundColor DarkGray
     Write-Host "Comments Workflow: Export -> Generate -> Dry Run -> Summary -> HTML Review -> Apply -> Verify" -ForegroundColor DarkGray
-    Write-Host "Tip: The batch file slug is only used for default filenames." -ForegroundColor DarkGray
+    Write-Host "Tip: The batch name is used for default filenames." -ForegroundColor DarkGray
     Write-Host "Tip: Press Enter at prompts to accept the default value shown in brackets." -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -352,6 +352,193 @@ function Select-ProductiveTargetScope {
         }
     }
 }
+function Get-ProductiveDefaultBatchSlug {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$MqgLabel,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WorkflowName
+    )
+
+    $mqgNumber = ($MqgLabel -replace '[^0-9]', '')
+
+    if ([string]::IsNullOrWhiteSpace($mqgNumber)) {
+        $mqgNumber = "xx"
+    }
+
+    $workflowSlug = $WorkflowName.ToLowerInvariant()
+    $workflowSlug = $workflowSlug -replace '[^a-z0-9]+', '-'
+    $workflowSlug = $workflowSlug.Trim('-')
+
+    if ([string]::IsNullOrWhiteSpace($workflowSlug)) {
+        $workflowSlug = "workflow"
+    }
+
+    return "mqg$mqgNumber-$workflowSlug"
+}
+
+function Resolve-ProductiveTargetManifest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$TargetScope,
+
+        [Parameter(Mandatory = $true)]
+        [string]$MqgLabel,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WorkflowName
+    )
+
+    $defaultBatchName = Get-ProductiveDefaultBatchSlug `
+        -MqgLabel $MqgLabel `
+        -WorkflowName $WorkflowName
+
+    if ($TargetScope.TargetMode -eq "Existing Batch Manifest") {
+        $batchManifest = $TargetScope.BatchManifest
+
+        if (-not (Test-Path $batchManifest)) {
+            throw "Existing batch manifest was not found: $batchManifest"
+        }
+
+        $manifestRows = @(Import-Csv -Path $batchManifest)
+
+        if ($manifestRows.Count -eq 0) {
+            throw "Existing batch manifest contains no rows: $batchManifest"
+        }
+
+        $manifestColumns = @($manifestRows[0].PSObject.Properties.Name)
+
+        if ($manifestColumns -notcontains "CalibreId") {
+            throw "Existing batch manifest does not contain a CalibreId column: $batchManifest"
+        }
+
+        $batchName = $defaultBatchName
+
+        if ($manifestColumns -contains "BatchSlug") {
+            $manifestBatchName = @(
+                $manifestRows |
+                    Select-Object -ExpandProperty BatchSlug -ErrorAction SilentlyContinue |
+                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                    Select-Object -First 1
+            )
+
+            if ($manifestBatchName.Count -gt 0) {
+                $batchName = [string]$manifestBatchName[0]
+            }
+        }
+
+        return [pscustomobject]@{
+            BatchSlug       = $batchName
+            BatchManifest   = $batchManifest
+            SummaryReport   = ""
+            RowCount        = $manifestRows.Count
+            CreatedManifest = "No"
+            TargetMode      = $TargetScope.TargetMode
+            SearchString    = $TargetScope.SearchString
+            Notes           = "Reused existing batch manifest."
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($TargetScope.SearchString)) {
+        throw "Target scope does not contain a search string and is not an existing manifest."
+    }
+
+    if ($TargetScope.TargetMode -eq "All Missing MQG") {
+        Write-Host ""
+        Write-Host "All-missing-MQG mode will create a manifest using the generated search string:" -ForegroundColor Yellow
+        Write-Host $TargetScope.SearchString
+        Write-Host ""
+        Write-Host "The exact Calibre checkbox search syntax is still being validated." -ForegroundColor DarkGray
+
+        $continueAnswer = Read-ToolkitInput `
+            -Prompt "Continue creating manifest from this search? Type YES to continue" `
+            -Default "NO"
+
+        if ($continueAnswer -ne "YES") {
+            Write-Host ""
+            Write-Host "Manifest creation cancelled." -ForegroundColor Yellow
+
+            return $null
+        }
+    }
+
+    $batchName = Read-ToolkitInput `
+        -Prompt "Batch name" `
+        -Default $defaultBatchName
+
+    if ([string]::IsNullOrWhiteSpace($batchName)) {
+        throw "Batch name is required."
+    }
+
+    if ($batchName -notmatch '^[a-z0-9][a-z0-9-]*$') {
+        throw "Batch name must use lowercase letters, numbers, and hyphens only. Example: mqg06-build-tags"
+    }
+
+    $outputCsv = ".\input\batch-$batchName.csv"
+    $reportCsv = ".\reports\batch-$batchName-selection-summary.csv"
+
+    Write-Host ""
+    Write-Host "Planned batch artifacts" -ForegroundColor Cyan
+    Write-Host "-----------------------"
+    Write-Host "Batch manifest:    $outputCsv"
+    Write-Host "Selection summary: $reportCsv"
+
+    $overwriteAnswer = "NO"
+
+    if ((Test-Path $outputCsv) -or (Test-Path $reportCsv)) {
+        Write-Host ""
+        Write-Host "One or more planned batch artifacts already exists." -ForegroundColor Yellow
+
+        $overwriteAnswer = Read-ToolkitInput `
+            -Prompt "Overwrite existing manifest/report? Type YES to overwrite" `
+            -Default "NO"
+    }
+
+    $manifestScriptPath = Get-ToolkitScriptPath -ScriptName "New-ToolkitBatchManifest.ps1"
+
+    $manifestArgs = @{
+        BatchSlug = $batchName
+        Search    = $TargetScope.SearchString
+        OutputCsv = $outputCsv
+        ReportCsv = $reportCsv
+    }
+
+    if ($overwriteAnswer -eq "YES") {
+        $manifestArgs.Overwrite = $true
+    }
+
+    Write-Host ""
+    Write-Host "Creating productive workflow batch manifest" -ForegroundColor Cyan
+    Write-Host "------------------------------------------"
+    Write-Host "This operation is read-only and does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "Running: New-ToolkitBatchManifest.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $manifestScriptPath @manifestArgs
+
+    if (-not (Test-Path $outputCsv)) {
+        throw "Expected batch manifest was not created: $outputCsv"
+    }
+
+    $manifestRows = @(Import-Csv -Path $outputCsv)
+
+    if ($manifestRows.Count -eq 0) {
+        throw "Created batch manifest contains no rows: $outputCsv"
+    }
+
+    return [pscustomobject]@{
+        BatchSlug       = $batchName
+        BatchManifest   = $outputCsv
+        SummaryReport   = $reportCsv
+        RowCount        = $manifestRows.Count
+        CreatedManifest = "Yes"
+        TargetMode      = $TargetScope.TargetMode
+        SearchString    = $TargetScope.SearchString
+        Notes           = "Created batch manifest from target selection."
+    }
+}
 function Start-ProductiveMqgWorkflow {
     param(
         [Parameter(Mandatory = $true)]
@@ -374,8 +561,8 @@ function Start-ProductiveMqgWorkflow {
     Write-Host ""
     Write-Host "Status: $Status" -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "This release adds shared target selection only." -ForegroundColor DarkGray
-    Write-Host "No batch export, report generation, AI processing, or Calibre metadata changes are performed." -ForegroundColor DarkGray
+    Write-Host "This release creates or reuses a stable batch manifest from target selection." -ForegroundColor DarkGray
+    Write-Host "No downstream module processing, AI processing, or Calibre metadata changes are performed." -ForegroundColor DarkGray
 
     $targetScope = Select-ProductiveTargetScope `
         -MqgLabel $MqgLabel `
@@ -404,12 +591,39 @@ function Start-ProductiveMqgWorkflow {
     }
 
     Write-Host "Notes:          $($targetScope.Notes)"
+
+    $manifestResult = Resolve-ProductiveTargetManifest `
+        -TargetScope $targetScope `
+        -MqgLabel $MqgLabel `
+        -WorkflowName $WorkflowName
+
+    if ($null -eq $manifestResult) {
+        Write-Host ""
+        Write-Host "No manifest was created or selected." -ForegroundColor Yellow
+        Pause-Toolkit
+        return
+    }
+
     Write-Host ""
-    Write-Host "v0.12.2 target selection is shell-only. No batch export, report generation, AI processing, or Calibre metadata changes are performed." -ForegroundColor DarkGray
+    Write-Host "Productive target manifest ready" -ForegroundColor Green
+    Write-Host "--------------------------------"
+    Write-Host "Workflow:          $MqgLabel - $WorkflowName"
+    Write-Host "Batch name:        $($manifestResult.BatchSlug)"
+    Write-Host "Target mode:       $($manifestResult.TargetMode)"
+    Write-Host "Manifest:          $($manifestResult.BatchManifest)"
+    Write-Host "Rows selected:     $($manifestResult.RowCount)"
+    Write-Host "Created manifest:  $($manifestResult.CreatedManifest)"
+
+    if (-not [string]::IsNullOrWhiteSpace($manifestResult.SummaryReport)) {
+        Write-Host "Summary report:    $($manifestResult.SummaryReport)"
+    }
+
+    Write-Host ""
+    Write-Host "v0.12.3 stops here intentionally. Future releases will use this manifest for guided MQG processing." -ForegroundColor DarkGray
+    Write-Host "No Calibre metadata was modified." -ForegroundColor DarkGray
 
     Pause-Toolkit
 }
-
 function Start-HealthCheck {
     $defaultReport = ".\reports\lcc-toolkit-health.txt"
 
@@ -846,35 +1060,35 @@ try {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-01" `
                         -WorkflowName "Clean Title & Author" `
-                        -Status "Guided shell only in v0.12.2. Existing tools remain available under Advanced Tools." `
+                        -Status "Guided shell only in v0.12.3. Existing tools remain available under Advanced Tools." `
                         -MqgField "#mqg_title_author"
                 }
                 "2" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-02" `
                         -WorkflowName "Fix / Confirm Identifiers" `
-                        -Status "Guided shell only in v0.12.2. Use Advanced Tools for I1-I6." `
+                        -Status "Guided shell only in v0.12.3. Use Advanced Tools for I1-I6." `
                         -MqgField "#mqg_identifiers"
                 }
                 "3" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-03" `
                         -WorkflowName "Add LCC Classification" `
-                        -Status "Guided shell only in v0.12.2. Existing LCC tools remain under Advanced Tools." `
+                        -Status "Guided shell only in v0.12.3. Existing LCC tools remain under Advanced Tools." `
                         -MqgField "#mqg_lcc"
                 }
                 "4" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-05" `
                         -WorkflowName "Build Comments" `
-                        -Status "Guided shell only in v0.12.2. Existing Comments tools remain under Advanced Tools." `
+                        -Status "Guided shell only in v0.12.3. Existing Comments tools remain under Advanced Tools." `
                         -MqgField "#mqg_description"
                 }
                 "5" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-06" `
                         -WorkflowName "Build Tags" `
-                        -Status "Guided shell only in v0.12.2. Tag ruleset and proposal engine are not implemented yet." `
+                        -Status "Guided shell only in v0.12.3. Tag ruleset and proposal engine are not implemented yet." `
                         -MqgField "#mqg_tags"
                 }
                 "A" {

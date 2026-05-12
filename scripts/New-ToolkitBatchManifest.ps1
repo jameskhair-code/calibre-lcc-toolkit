@@ -479,7 +479,7 @@ $exportedAt = $startedAt.ToString("s")
 
 Write-Host "Creating toolkit batch manifest..."
 Write-Host "This operation is read-only and does not modify Calibre metadata."
-Write-Host "Batch slug: $BatchSlug"
+Write-Host "Batch name: $BatchSlug"
 Write-Host "Search: $Search"
 
 if ($idSet.Count -gt 0) {
