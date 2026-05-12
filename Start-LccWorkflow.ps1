@@ -246,6 +246,112 @@ function Show-Menu {
     }
 }
 
+function Select-ProductiveTargetScope {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$MqgLabel,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WorkflowName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$MqgField
+    )
+
+    Write-Host ""
+    Write-Host "Target selection" -ForegroundColor Cyan
+    Write-Host "----------------"
+    Write-Host ""
+    Write-Host "Which books should be processed?"
+    Write-Host ""
+    Write-Host "1. Paste Calibre search string"
+    Write-Host "2. All books where this MQG is not complete"
+    Write-Host "3. Use existing batch manifest"
+    Write-Host "0. Back"
+    Write-Host ""
+
+    $targetChoice = Read-ToolkitInput `
+        -Prompt "Select target option" `
+        -Default "1"
+
+    $targetChoice = $targetChoice.Trim().ToUpperInvariant()
+
+    switch ($targetChoice) {
+        "1" {
+            $searchString = Read-ToolkitInput `
+                -Prompt "Paste Calibre search string" `
+                -Default ""
+
+            if ([string]::IsNullOrWhiteSpace($searchString)) {
+                Write-Host ""
+                Write-Host "No search string entered. Returning to launcher." -ForegroundColor Yellow
+
+                return $null
+            }
+
+            return [pscustomobject]@{
+                MqgLabel      = $MqgLabel
+                WorkflowName  = $WorkflowName
+                TargetMode    = "Calibre Search"
+                SearchString  = $searchString
+                BatchManifest = ""
+                Notes         = "User-provided Calibre search string."
+            }
+        }
+
+        "2" {
+            $incompleteSearch = "not $MqgField`:true"
+
+            Write-Host ""
+            Write-Host "Conceptual incomplete-MQG selector:" -ForegroundColor Yellow
+            Write-Host $incompleteSearch
+            Write-Host ""
+            Write-Host "Note: exact Calibre checkbox search syntax still needs implementation validation." -ForegroundColor DarkGray
+
+            return [pscustomobject]@{
+                MqgLabel      = $MqgLabel
+                WorkflowName  = $WorkflowName
+                TargetMode    = "All Missing MQG"
+                SearchString  = $incompleteSearch
+                BatchManifest = ""
+                Notes         = "Conceptual selector for records where $MqgField is not complete."
+            }
+        }
+
+        "3" {
+            $batchManifest = Read-ToolkitInput `
+                -Prompt "Existing batch manifest CSV" `
+                -Default ""
+
+            if ([string]::IsNullOrWhiteSpace($batchManifest)) {
+                Write-Host ""
+                Write-Host "No batch manifest entered. Returning to launcher." -ForegroundColor Yellow
+
+                return $null
+            }
+
+            return [pscustomobject]@{
+                MqgLabel      = $MqgLabel
+                WorkflowName  = $WorkflowName
+                TargetMode    = "Existing Batch Manifest"
+                SearchString  = ""
+                BatchManifest = $batchManifest
+                Notes         = "User-provided existing batch manifest."
+            }
+        }
+
+        "0" {
+            return $null
+        }
+
+        default {
+            Write-Host ""
+            Write-Host "Unknown target option: $targetChoice" -ForegroundColor Yellow
+
+            return $null
+        }
+    }
+}
 function Start-ProductiveMqgWorkflow {
     param(
         [Parameter(Mandatory = $true)]
@@ -255,7 +361,10 @@ function Start-ProductiveMqgWorkflow {
         [string]$WorkflowName,
 
         [Parameter(Mandatory = $true)]
-        [string]$Status
+        [string]$Status,
+
+        [Parameter(Mandatory = $true)]
+        [string]$MqgField
     )
 
     Write-Host ""
@@ -265,15 +374,42 @@ function Start-ProductiveMqgWorkflow {
     Write-Host ""
     Write-Host "Status: $Status" -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "The next implementation phase will add shared target selection:" -ForegroundColor DarkGray
-    Write-Host "1. Paste a Calibre search string" -ForegroundColor DarkGray
-    Write-Host "2. Process all books missing this MQG" -ForegroundColor DarkGray
-    Write-Host "3. Use an existing batch manifest" -ForegroundColor DarkGray
+    Write-Host "This release adds shared target selection only." -ForegroundColor DarkGray
+    Write-Host "No batch export, report generation, AI processing, or Calibre metadata changes are performed." -ForegroundColor DarkGray
+
+    $targetScope = Select-ProductiveTargetScope `
+        -MqgLabel $MqgLabel `
+        -WorkflowName $WorkflowName `
+        -MqgField $MqgField
+
+    if ($null -eq $targetScope) {
+        Write-Host ""
+        Write-Host "No target scope selected." -ForegroundColor Yellow
+        Pause-Toolkit
+        return
+    }
+
     Write-Host ""
-    Write-Host "For now, use Advanced Tools for the existing script-level workflows." -ForegroundColor DarkGray
+    Write-Host "Selected target scope" -ForegroundColor Cyan
+    Write-Host "---------------------"
+    Write-Host "Workflow:       $($targetScope.MqgLabel) - $($targetScope.WorkflowName)"
+    Write-Host "Target mode:    $($targetScope.TargetMode)"
+
+    if (-not [string]::IsNullOrWhiteSpace($targetScope.SearchString)) {
+        Write-Host "Search string:  $($targetScope.SearchString)"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($targetScope.BatchManifest)) {
+        Write-Host "Batch manifest: $($targetScope.BatchManifest)"
+    }
+
+    Write-Host "Notes:          $($targetScope.Notes)"
+    Write-Host ""
+    Write-Host "v0.12.2 target selection is shell-only. No batch export, report generation, AI processing, or Calibre metadata changes are performed." -ForegroundColor DarkGray
 
     Pause-Toolkit
 }
+
 function Start-HealthCheck {
     $defaultReport = ".\reports\lcc-toolkit-health.txt"
 
@@ -710,31 +846,36 @@ try {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-01" `
                         -WorkflowName "Clean Title & Author" `
-                        -Status "Guided shell only in v0.12.1. Existing tools remain available under Advanced Tools."
+                        -Status "Guided shell only in v0.12.2. Existing tools remain available under Advanced Tools." `
+                        -MqgField "#mqg_title_author"
                 }
                 "2" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-02" `
                         -WorkflowName "Fix / Confirm Identifiers" `
-                        -Status "Guided shell only in v0.12.1. Use Advanced Tools for I1-I6."
+                        -Status "Guided shell only in v0.12.2. Use Advanced Tools for I1-I6." `
+                        -MqgField "#mqg_identifiers"
                 }
                 "3" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-03" `
                         -WorkflowName "Add LCC Classification" `
-                        -Status "Guided shell only in v0.12.1. Existing LCC tools remain under Advanced Tools."
+                        -Status "Guided shell only in v0.12.2. Existing LCC tools remain under Advanced Tools." `
+                        -MqgField "#mqg_lcc"
                 }
                 "4" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-05" `
                         -WorkflowName "Build Comments" `
-                        -Status "Guided shell only in v0.12.1. Existing Comments tools remain under Advanced Tools."
+                        -Status "Guided shell only in v0.12.2. Existing Comments tools remain under Advanced Tools." `
+                        -MqgField "#mqg_description"
                 }
                 "5" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-06" `
                         -WorkflowName "Build Tags" `
-                        -Status "Planned workflow. Tag ruleset and proposal engine are not implemented yet."
+                        -Status "Guided shell only in v0.12.2. Tag ruleset and proposal engine are not implemented yet." `
+                        -MqgField "#mqg_tags"
                 }
                 "A" {
                     $script:LauncherMode = "Advanced"
