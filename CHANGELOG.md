@@ -24,6 +24,48 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.12.0 - Productive Launcher, Target Selection, and Project Identity Design
+
+### Added
+
+- Added productive launcher and target-selection design document:
+  - `docs/Productive-Launcher-and-Target-Selection.md`
+- Added project identity and rename decision document:
+  - `docs/Project-Identity-Rename-Decision.md`
+- Added lightweight Calibre Metadata Toolkit orientation document:
+  - `docs/Calibre-Metadata-Toolkit-Orientation.md`
+
+### Design Direction
+
+- The toolkit should move from a script-list launcher toward a productive MQG workflow launcher.
+- The normal launcher should eventually expose one meaningful workflow per active MQG:
+  - MQG-01: Clean Title & Author
+  - MQG-02: Fix / Confirm Identifiers
+  - MQG-03: Add LCC Classification
+  - MQG-05: Build Comments
+  - MQG-06: Build Tags
+- Routine plumbing such as validation, diagnostics, reports, and status checks should be hidden unless needed for review, approval, troubleshooting, or recovery.
+- Each productive workflow should begin with target selection:
+  - pasted Calibre search string,
+  - all books missing the selected MQG,
+  - existing batch manifest.
+
+### Project Identity
+
+- The visible product identity is moving toward:
+  - Calibre Metadata Toolkit
+- The repo, folder, launcher filename, and configuration filenames remain unchanged for compatibility in this release.
+- No big-bang rename is performed.
+
+### Notes
+
+- This is a design-only release.
+- No productive launcher implementation is included yet.
+- No new AI metadata behavior is included yet.
+- Recommended next implementation target:
+  - `v0.12.1 - Productive Launcher Shell`
+
+---
 ## v0.11.0 - MQG Core Loop Review and Identifier I6 Launcher Wiring
 
 ### Added
