@@ -24,6 +24,61 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.12.3 - Target Selection Batch Manifest Creation
+
+### Added
+
+- Productive Launcher workflows now create or reuse stable batch manifests from target selection.
+- Added Productive Launcher helper functions:
+  - `Get-ProductiveDefaultBatchSlug`
+  - `Resolve-ProductiveTargetManifest`
+- Search-based target selection now calls:
+  - `scripts/New-ToolkitBatchManifest.ps1`
+- Existing batch manifest target selection now validates and reuses the supplied manifest.
+- Productive workflow completion summary now reports:
+  - workflow,
+  - batch name,
+  - target mode,
+  - manifest path,
+  - selected row count,
+  - created/reused status,
+  - summary report path when applicable.
+
+### Behavior
+
+- Productive Launcher workflows now convert selected targets into a reusable manifest.
+- Productive search mode prompts only for:
+  - Calibre search string,
+  - batch name.
+- Manifest and summary report paths are auto-generated from the batch name.
+- Overwrite confirmation is only requested when the planned manifest or summary report already exists.
+- User-facing Productive Launcher wording now uses `batch name` instead of `batch slug`.
+- Internal `BatchSlug` parameter/column naming remains unchanged for compatibility.
+- No downstream MQG module processing is performed yet.
+- No AI processing is performed yet.
+- No Calibre metadata changes are performed.
+
+### Validation
+
+- Parser check passed for:
+  - `Start-LccWorkflow.ps1`
+  - `scripts/New-ToolkitBatchManifest.ps1`
+- Manual smoke test confirmed:
+  - MQG-06 Productive workflow accepted search `id:4058`,
+  - generated a stable batch manifest,
+  - generated a selection summary report,
+  - selected 1 row,
+  - reused the generated manifest successfully,
+  - performed no Calibre metadata writes.
+
+### Notes
+
+- This is the first Productive Launcher release that turns target selection into a reusable workflow artifact.
+- The generated all-missing-MQG selector remains guarded until exact Calibre checkbox search syntax is validated.
+- Recommended next implementation target:
+  - `v0.12.4 - Productive MQG-01 Author/Title Prep`
+
+---
 ## v0.12.2 - Shared Target Selection Helper
 
 ### Added
