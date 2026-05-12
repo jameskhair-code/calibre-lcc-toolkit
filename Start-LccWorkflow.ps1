@@ -160,7 +160,7 @@ function Show-Header {
     Write-Host ""
 }
 
-function Show-Menu {
+function Show-AdvancedMenu {
     Show-Header
 
     Write-Host "1. Preflight: Run toolkit health check"
@@ -216,10 +216,64 @@ function Show-Menu {
     Write-Host "W1. Awards: Mark reviewed MQG complete"
     Write-Host "W2. Cover: Mark reviewed MQG complete"
     Write-Host ""
+    Write-Host "B. Back to Productive Launcher"
     Write-Host "0. Exit"
     Write-Host ""
 }
 
+function Show-ProductiveMenu {
+    Show-Header
+
+    Write-Host "What do you want to work on?" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "1. MQG-01: Clean Title & Author"
+    Write-Host "2. MQG-02: Fix / Confirm Identifiers"
+    Write-Host "3. MQG-03: Add LCC Classification"
+    Write-Host "4. MQG-05: Build Comments"
+    Write-Host "5. MQG-06: Build Tags"
+    Write-Host ""
+    Write-Host "A. Advanced Tools"
+    Write-Host "0. Exit"
+    Write-Host ""
+}
+
+function Show-Menu {
+    if ($script:LauncherMode -eq "Advanced") {
+        Show-AdvancedMenu
+    }
+    else {
+        Show-ProductiveMenu
+    }
+}
+
+function Start-ProductiveMqgWorkflow {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$MqgLabel,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WorkflowName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Status
+    )
+
+    Write-Host ""
+    Write-Host "${MqgLabel}: $WorkflowName" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Productive workflow shell selected." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Status: $Status" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "The next implementation phase will add shared target selection:" -ForegroundColor DarkGray
+    Write-Host "1. Paste a Calibre search string" -ForegroundColor DarkGray
+    Write-Host "2. Process all books missing this MQG" -ForegroundColor DarkGray
+    Write-Host "3. Use an existing batch manifest" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "For now, use Advanced Tools for the existing script-level workflows." -ForegroundColor DarkGray
+
+    Pause-Toolkit
+}
 function Start-HealthCheck {
     $defaultReport = ".\reports\lcc-toolkit-health.txt"
 
@@ -627,6 +681,7 @@ function Show-GitStatus {
 
 $script:ToolkitRoot = Get-ToolkitRoot
 $script:CurrentBatchSlug = ""
+$script:LauncherMode = "Productive"
 
 Push-Location $script:ToolkitRoot
 
@@ -642,6 +697,64 @@ try {
     do {
         Show-Menu
         $choice = Read-Host "Select an option"
+
+        if ($null -eq $choice) {
+            $choice = ""
+        }
+
+        $choice = $choice.Trim().ToUpperInvariant()
+
+        if ($script:LauncherMode -ne "Advanced") {
+            switch ($choice) {
+                "1" {
+                    Start-ProductiveMqgWorkflow `
+                        -MqgLabel "MQG-01" `
+                        -WorkflowName "Clean Title & Author" `
+                        -Status "Guided shell only in v0.12.1. Existing tools remain available under Advanced Tools."
+                }
+                "2" {
+                    Start-ProductiveMqgWorkflow `
+                        -MqgLabel "MQG-02" `
+                        -WorkflowName "Fix / Confirm Identifiers" `
+                        -Status "Guided shell only in v0.12.1. Use Advanced Tools for I1-I6."
+                }
+                "3" {
+                    Start-ProductiveMqgWorkflow `
+                        -MqgLabel "MQG-03" `
+                        -WorkflowName "Add LCC Classification" `
+                        -Status "Guided shell only in v0.12.1. Existing LCC tools remain under Advanced Tools."
+                }
+                "4" {
+                    Start-ProductiveMqgWorkflow `
+                        -MqgLabel "MQG-05" `
+                        -WorkflowName "Build Comments" `
+                        -Status "Guided shell only in v0.12.1. Existing Comments tools remain under Advanced Tools."
+                }
+                "5" {
+                    Start-ProductiveMqgWorkflow `
+                        -MqgLabel "MQG-06" `
+                        -WorkflowName "Build Tags" `
+                        -Status "Planned workflow. Tag ruleset and proposal engine are not implemented yet."
+                }
+                "A" {
+                    $script:LauncherMode = "Advanced"
+                }
+                "0" {
+                    Write-Host "Exiting Calibre Metadata Toolkit."
+                }
+                default {
+                    Write-Host "Unknown option: $choice" -ForegroundColor Yellow
+                    Pause-Toolkit
+                }
+            }
+
+            continue
+        }
+
+        if ($choice -eq "B") {
+            $script:LauncherMode = "Productive"
+            continue
+        }
 
 
 
@@ -2389,7 +2502,7 @@ function Start-CommentsVerify {
                     Pause-Toolkit
                 }
                 "0"  {
-                    Write-Host "Exiting Calibre LCC Toolkit."
+                    Write-Host "Exiting Calibre Metadata Toolkit."
                     break
                 }
                 default {
