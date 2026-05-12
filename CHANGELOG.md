@@ -24,6 +24,47 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.12.1 - Productive Launcher Shell
+
+### Added
+
+- Added simplified Productive Launcher shell.
+- Added top-level workflow options:
+  - `1. MQG-01: Clean Title & Author`
+  - `2. MQG-02: Fix / Confirm Identifiers`
+  - `3. MQG-03: Add LCC Classification`
+  - `4. MQG-05: Build Comments`
+  - `5. MQG-06: Build Tags`
+- Added `A. Advanced Tools` entry for the existing script-level launcher.
+- Added `B. Back to Productive Launcher` from the Advanced Tools menu.
+- Added placeholder productive workflow shell messaging for MQG-01, MQG-02, MQG-03, MQG-05, and MQG-06.
+
+### Behavior
+
+- The default launcher view is now the simplified Productive Launcher.
+- Existing script-level functionality is preserved under Advanced Tools.
+- Productive workflow options currently show guided placeholder messaging only.
+- No shared target-selection implementation is included yet.
+- No metadata write behavior was changed.
+- No new AI metadata behavior was added.
+
+### Validation
+
+- Parser check passed for:
+  - `Start-LccWorkflow.ps1`
+- Manual launcher test confirmed:
+  - `1` opens the MQG-01 placeholder workflow shell.
+  - `A` opens Advanced Tools.
+  - `B` returns to the Productive Launcher.
+  - `0` exits cleanly.
+
+### Notes
+
+- This release installs the new launcher cockpit while preserving the old engine bay.
+- Recommended next implementation target:
+  - `v0.12.2 - Shared Target Selection Helper`
+
+---
 ## v0.12.0 - Productive Launcher, Target Selection, and Project Identity Design
 
 ### Added
