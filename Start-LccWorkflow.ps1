@@ -138,7 +138,7 @@ function Get-DefaultImportPath {
 
 function Show-Header {
     Clear-Host
-    Write-Host "Calibre LCC Toolkit v0.12.4" -ForegroundColor Cyan
+    Write-Host "Calibre LCC Toolkit v0.12.5" -ForegroundColor Cyan
     Write-Host "========================"
     Write-Host ""
     Write-Host "Toolkit root:"
@@ -539,6 +539,230 @@ function Resolve-ProductiveTargetManifest {
         Notes           = "Created batch manifest from target selection."
     }
 }
+function Start-ProductiveMqg01AnalyzePreview {
+    $mqgLabel = "MQG-01"
+    $workflowName = "Clean Title & Author"
+    $mqgField = "#mqg_title_author"
+
+    Write-Host ""
+    Write-Host "${mqgLabel}: $workflowName" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "MQG-01 Analyze/Preview Shell" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "This workflow prepares an Author/Title review set and shows basic counts." -ForegroundColor DarkGray
+    Write-Host "It does not generate proposals yet, does not apply changes, and does not modify Calibre metadata." -ForegroundColor DarkGray
+
+    $targetScope = Select-ProductiveTargetScope `
+        -MqgLabel $mqgLabel `
+        -WorkflowName $workflowName `
+        -MqgField $mqgField
+
+    if ($null -eq $targetScope) {
+        Write-Host ""
+        Write-Host "No target scope selected." -ForegroundColor Yellow
+        Pause-Toolkit
+        return
+    }
+
+    Write-Host ""
+    Write-Host "Preparing MQG-01 review set" -ForegroundColor Cyan
+    Write-Host "---------------------------"
+    Write-Host "Target mode: $($targetScope.TargetMode)"
+
+    if (-not [string]::IsNullOrWhiteSpace($targetScope.SearchString)) {
+        Write-Host "Search:      $($targetScope.SearchString)"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($targetScope.BatchManifest)) {
+        Write-Host "Manifest:    $($targetScope.BatchManifest)"
+    }
+
+    $manifestResult = Resolve-ProductiveTargetManifest `
+        -TargetScope $targetScope `
+        -MqgLabel $mqgLabel `
+        -WorkflowName $workflowName
+
+    if ($null -eq $manifestResult) {
+        Write-Host ""
+        Write-Host "No review set was created or selected." -ForegroundColor Yellow
+        Pause-Toolkit
+        return
+    }
+
+    $batchName = $manifestResult.BatchSlug
+    $batchManifest = $manifestResult.BatchManifest
+    $authorTitleSourceTsv = ".\input\author-title-cleanup-source-$batchName.tsv"
+    $previewSummaryTxt = ".\reports\mqg01-analyze-preview-$batchName.txt"
+
+    Write-Host ""
+    Write-Host "Planned MQG-01 artifacts" -ForegroundColor Cyan
+    Write-Host "------------------------"
+    Write-Host "Author/Title source: $authorTitleSourceTsv"
+    Write-Host "Preview summary:     $previewSummaryTxt"
+
+    $existingOutputs = @()
+
+    if (Test-Path $authorTitleSourceTsv) {
+        $existingOutputs += $authorTitleSourceTsv
+    }
+
+    if (Test-Path $previewSummaryTxt) {
+        $existingOutputs += $previewSummaryTxt
+    }
+
+    $overwriteAnswer = "NO"
+
+    if ($existingOutputs.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Existing MQG-01 output files detected:" -ForegroundColor Yellow
+
+        foreach ($existingOutput in $existingOutputs) {
+            Write-Host "- $existingOutput" -ForegroundColor Yellow
+        }
+
+        $overwriteAnswer = Read-ToolkitInput `
+            -Prompt "Overwrite existing MQG-01 output files? Type YES to overwrite" `
+            -Default "NO"
+
+        if ($overwriteAnswer -ne "YES") {
+            Write-Host ""
+            Write-Host "MQG-01 Analyze/Preview cancelled because output files already exist." -ForegroundColor Yellow
+            Pause-Toolkit
+            return
+        }
+    }
+
+    $authorTitleExportScriptPath = Get-ToolkitScriptPath -ScriptName "Export-CalibreBatchForAuthorTitleCleanup.ps1"
+
+    $authorTitleArgs = @{
+        BatchManifest = $batchManifest
+        OutputTsv     = $authorTitleSourceTsv
+    }
+
+    Write-Host ""
+    Write-Host "Exporting Author/Title review source" -ForegroundColor Cyan
+    Write-Host "------------------------------------"
+    Write-Host "This operation is read-only and does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "Running: Export-CalibreBatchForAuthorTitleCleanup.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $authorTitleExportScriptPath @authorTitleArgs
+
+    if (-not (Test-Path $authorTitleSourceTsv)) {
+        throw "Expected Author/Title source TSV was not created: $authorTitleSourceTsv"
+    }
+
+    $manifestRows = @(Import-Csv -Path $batchManifest)
+    $authorTitleRows = @(Import-Csv -Path $authorTitleSourceTsv -Delimiter "`t")
+
+    if ($manifestRows.Count -eq 0) {
+        throw "Batch manifest contains no rows: $batchManifest"
+    }
+
+    if ($authorTitleRows.Count -eq 0) {
+        throw "Author/Title source TSV contains no rows: $authorTitleSourceTsv"
+    }
+
+    $alreadyComplete = @($manifestRows | Where-Object { $_.MqgTitleAuthor -eq "Yes" }).Count
+    $notComplete = $manifestRows.Count - $alreadyComplete
+    $missingTitle = @($authorTitleRows | Where-Object { [string]::IsNullOrWhiteSpace($_.OriginalTitle) }).Count
+    $missingAuthors = @($authorTitleRows | Where-Object { [string]::IsNullOrWhiteSpace($_.OriginalAuthors) }).Count
+    $withIdentifiers = @($authorTitleRows | Where-Object { -not [string]::IsNullOrWhiteSpace($_.Identifiers) }).Count
+    $withSeries = @($authorTitleRows | Where-Object { -not [string]::IsNullOrWhiteSpace($_.Series) }).Count
+
+    $rowCountWarning = ""
+
+    if ($manifestRows.Count -ne $authorTitleRows.Count) {
+        $rowCountWarning = "WARNING: Author/Title source row count differs from manifest row count."
+    }
+
+    Write-Host ""
+    Write-Host "MQG-01 Analyze/Preview Results" -ForegroundColor Green
+    Write-Host "------------------------------"
+    Write-Host "Batch name:              $batchName"
+    Write-Host "Books selected:          $($manifestRows.Count)"
+    Write-Host "Author/Title rows:       $($authorTitleRows.Count)"
+    Write-Host "Already MQG-01 complete: $alreadyComplete"
+    Write-Host "Need MQG-01 review:      $notComplete"
+    Write-Host "Missing title:           $missingTitle"
+    Write-Host "Missing authors:         $missingAuthors"
+    Write-Host "Rows with identifiers:   $withIdentifiers"
+    Write-Host "Rows with series:        $withSeries"
+
+    if (-not [string]::IsNullOrWhiteSpace($rowCountWarning)) {
+        Write-Host $rowCountWarning -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+    Write-Host "Preview: first 20 Author/Title rows" -ForegroundColor Cyan
+    Write-Host ""
+
+    $authorTitleRows |
+        Select-Object -First 20 CalibreId,OriginalTitle,OriginalAuthors,Series,ISBN |
+        Format-Table -AutoSize
+
+    if ($authorTitleRows.Count -gt 20) {
+        Write-Host "Preview limited to first 20 rows. Full source file: $authorTitleSourceTsv" -ForegroundColor DarkGray
+    }
+
+    $summaryLines = @(
+        "MQG-01 Analyze/Preview Summary",
+        "==============================",
+        "",
+        "Calibre metadata modified: No",
+        "Workflow type: Read-only Productive MQG-01 Analyze/Preview",
+        "",
+        "Batch",
+        "-----",
+        "Batch name: $batchName",
+        "Target mode: $($manifestResult.TargetMode)",
+        "Batch manifest: $batchManifest",
+        "Author/Title source TSV: $authorTitleSourceTsv",
+        "Preview summary: $previewSummaryTxt",
+        "",
+        "Counts",
+        "------",
+        "Books selected: $($manifestRows.Count)",
+        "Author/Title source rows: $($authorTitleRows.Count)",
+        "Already MQG-01 complete: $alreadyComplete",
+        "Need MQG-01 review: $notComplete",
+        "Missing title: $missingTitle",
+        "Missing authors: $missingAuthors",
+        "Rows with identifiers: $withIdentifiers",
+        "Rows with series: $withSeries",
+        "Row count warning: $rowCountWarning",
+        "",
+        "Recommended next action",
+        "-----------------------",
+        "Use the Author/Title source TSV as the base review set for MQG-01 rule evaluation.",
+        "Future MQG-01 releases will add proposal statuses, reasons, review packets, dry-run, and apply/verify behavior.",
+        "",
+        "Safety note",
+        "-----------",
+        "This workflow did not modify Calibre metadata."
+    )
+
+    $summaryFolder = Split-Path -Path $previewSummaryTxt -Parent
+
+    if ($summaryFolder -and -not (Test-Path $summaryFolder)) {
+        New-Item -ItemType Directory -Force -Path $summaryFolder | Out-Null
+    }
+
+    $summaryLines | Set-Content -Path $previewSummaryTxt -Encoding UTF8
+
+    Write-Host ""
+    Write-Host "MQG-01 Analyze/Preview complete." -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Files prepared:"
+    Write-Host "- $batchManifest"
+    Write-Host "- $authorTitleSourceTsv"
+    Write-Host "- $previewSummaryTxt"
+    Write-Host ""
+    Write-Host "v0.12.5 stops here intentionally. No proposals were generated and no Calibre metadata was modified." -ForegroundColor DarkGray
+
+    Pause-Toolkit
+}
 function Start-ProductiveMqgWorkflow {
     param(
         [Parameter(Mandatory = $true)]
@@ -619,7 +843,7 @@ function Start-ProductiveMqgWorkflow {
     }
 
     Write-Host ""
-    Write-Host "v0.12.3 stops here intentionally. Future releases will use this manifest for guided MQG processing." -ForegroundColor DarkGray
+    Write-Host "This productive shell stops here intentionally. Future releases will use this manifest for guided MQG processing." -ForegroundColor DarkGray
     Write-Host "No Calibre metadata was modified." -ForegroundColor DarkGray
 
     Pause-Toolkit
@@ -1056,39 +1280,33 @@ try {
 
         if ($script:LauncherMode -ne "Advanced") {
             switch ($choice) {
-                "1" {
-                    Start-ProductiveMqgWorkflow `
-                        -MqgLabel "MQG-01" `
-                        -WorkflowName "Clean Title & Author" `
-                        -Status "Guided shell only in v0.12.3. Existing tools remain available under Advanced Tools." `
-                        -MqgField "#mqg_title_author"
-                }
+                "1" { Start-ProductiveMqg01AnalyzePreview }
                 "2" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-02" `
                         -WorkflowName "Fix / Confirm Identifiers" `
-                        -Status "Guided shell only in v0.12.3. Use Advanced Tools for I1-I6." `
+                        -Status "Guided shell only. Use Advanced Tools for I1-I6." `
                         -MqgField "#mqg_identifiers"
                 }
                 "3" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-03" `
                         -WorkflowName "Add LCC Classification" `
-                        -Status "Guided shell only in v0.12.3. Existing LCC tools remain under Advanced Tools." `
+                        -Status "Guided shell only. Existing LCC tools remain under Advanced Tools." `
                         -MqgField "#mqg_lcc"
                 }
                 "4" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-05" `
                         -WorkflowName "Build Comments" `
-                        -Status "Guided shell only in v0.12.3. Existing Comments tools remain under Advanced Tools." `
+                        -Status "Guided shell only. Existing Comments tools remain under Advanced Tools." `
                         -MqgField "#mqg_description"
                 }
                 "5" {
                     Start-ProductiveMqgWorkflow `
                         -MqgLabel "MQG-06" `
                         -WorkflowName "Build Tags" `
-                        -Status "Guided shell only in v0.12.3. Tag ruleset and proposal engine are not implemented yet." `
+                        -Status "Guided shell only. Tag ruleset and proposal engine are not implemented yet." `
                         -MqgField "#mqg_tags"
                 }
                 "A" {
