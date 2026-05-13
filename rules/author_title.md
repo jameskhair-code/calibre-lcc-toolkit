@@ -131,6 +131,8 @@ T-EDT-03: Remove delivery-format indicators — these describe how the same
            Removing an adaptation marker could make the title identical to the
            source work, causing a collision in the library. Use "medium"
            confidence if unsure whether a marker is a format or an adaptation.
+           WRONG: "The Handmaid's Tale (Graphic Novel)"  →  "The Handmaid's Tale"
+           RIGHT: "The Handmaid's Tale (Graphic Novel)"  →  "The Handmaid's Tale (Graphic Novel)"
 
 T-EDT-04: Remove "With a New Introduction by [Name]" and similar additions.
 

@@ -110,7 +110,13 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
 
         # What the AI returned (before code normalization)
         raw_title = item.get("title", book.title).strip()
-        raw_authors = [a.strip() for a in item.get("authors", book.authors)]
+        # AI sometimes collapses multiple authors into one semicolon-separated string
+        raw_authors = []
+        for a in item.get("authors", book.authors):
+            if ";" in a:
+                raw_authors.extend(x.strip() for x in a.split(";") if x.strip())
+            else:
+                raw_authors.append(a.strip())
 
         # Apply code normalization (diacritics, dashes) on top of AI suggestion
         suggested_title = normalize_text(raw_title)
