@@ -112,7 +112,8 @@ T-EDT-02: EXCEPTION — keep edition language if it is genuinely part of the
            Contemporary Prose" — "Annotated" is integral).
            Use "medium" confidence when unsure.
 
-T-EDT-03: Remove format indicators appended to the title:
+T-EDT-03: Remove delivery-format indicators — these describe how the same
+           content is packaged, not a distinct work:
              "(Audiobook)"
              "(Unabridged)"
              "(Abridged)"
@@ -120,6 +121,16 @@ T-EDT-03: Remove format indicators appended to the title:
              "(Kindle Edition)"
              "(eBook)"
              "(Trade Paperback)"
+           EXCEPTION — do NOT remove adaptation markers that identify a
+           genuinely different creative work. Keep these as-is:
+             "(Graphic Novel)"
+             "(Illustrated Edition)"
+             "(Film Tie-In)"
+             "(Manga)"
+             "(Comic)"
+           Removing an adaptation marker could make the title identical to the
+           source work, causing a collision in the library. Use "medium"
+           confidence if unsure whether a marker is a format or an adaptation.
 
 T-EDT-04: Remove "With a New Introduction by [Name]" and similar additions.
 
