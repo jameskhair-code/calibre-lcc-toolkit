@@ -50,6 +50,30 @@ def remove_diacritics(text: str) -> str:
     return ''.join(c for c in decomposed if not unicodedata.combining(c))
 
 
+# Dash characters to normalize to plain hyphen-minus
+_DASH_MAP = {
+    '—': '-',   # em-dash —
+    '–': '-',   # en-dash –
+    '‒': '-',   # figure dash ‒
+    '‑': '-',   # non-breaking hyphen ‑
+    '‐': '-',   # hyphen ‐
+    '―': '-',   # horizontal bar ―
+    '−': '-',   # minus sign −
+    '﹘': '-',   # small em-dash ﹘
+    '﹣': '-',   # small hyphen-minus ﹣
+    '－': '-',   # fullwidth hyphen-minus －
+}
+
+
+def normalize_dashes(text: str) -> str:
+    """Convert all dash variants to a plain hyphen-minus (-)."""
+    for dash, replacement in _DASH_MAP.items():
+        text = text.replace(dash, replacement)
+    return text
+
+
 def normalize_text(text: str) -> str:
     """Full normalization pipeline for a title or author string."""
-    return remove_diacritics(text)
+    text = normalize_dashes(text)
+    text = remove_diacritics(text)
+    return text

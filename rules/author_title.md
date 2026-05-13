@@ -219,14 +219,23 @@ T-FMT-07: Remove trademark (™) and registered (®) symbols.
 
 T-FMT-08: Remove copyright symbols (©).
 
-T-FMT-09: Normalize dashes: a single hyphen between words with spaces around
-           it (" - ") that functions as an em-dash should be converted to
-           " — " (em-dash with spaces), UNLESS it is a date range
-           (e.g. "1963-68") or a hyphenated compound.
+T-FMT-09: Convert all dash variants to a plain hyphen-minus (-).
+           Em-dashes (—), en-dashes (–), and any other dash characters
+           should become a simple hyphen. Apply to all occurrences in the
+           title including between words and in date ranges.
+           NOTE: the code will also enforce this automatically after your
+           response, so focus on correctness rather than dash characters.
+           EXCEPTION: if an em-dash is functioning as a subtitle separator
+           (e.g. "Title — Subtitle"), apply T-SUB-06 first and convert it
+           to a colon instead.
 
-T-FMT-10: Year ranges in titles (e.g. "1963-65", "1965–68") — retain the
-           comma before the range only if the published title uses it.
-           Do not add or remove commas from date ranges unless clearly erroneous.
+T-FMT-10: Do NOT add or remove commas before years or date ranges.
+           Leave whatever punctuation is already there exactly as-is.
+           WRONG (removing a comma that exists): "King Years 1963-65"
+             when original was "King Years, 1963-65"
+           WRONG (adding a comma that doesn't exist): "King Years, 1954-63"
+             when original was "King Years 1954-63"
+           RIGHT: leave the comma (or its absence) exactly as found.
 
 T-FMT-11: If the title field contains a filing form with the article moved
            to the end (e.g. "Road, The" or "Remains of the Day, The"),
