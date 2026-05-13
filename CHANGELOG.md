@@ -24,6 +24,53 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.12.5 - MQG-01 Analyze/Preview Shell
+
+### Added
+
+- Added dedicated Productive Launcher MQG-01 handler:
+  - `Start-ProductiveMqg01AnalyzePreview`
+- Productive option `1. MQG-01: Clean Title & Author` now opens the MQG-01 Analyze/Preview shell instead of the generic productive placeholder.
+- MQG-01 Analyze/Preview now:
+  - accepts target selection,
+  - creates or reuses the internal batch manifest,
+  - exports an Author/Title source TSV,
+  - shows selected row counts,
+  - shows MQG-01 complete vs needs-review counts,
+  - reports missing title / missing author counts,
+  - reports identifier and series presence counts,
+  - previews the first 20 Author/Title rows,
+  - writes a read-only preview summary.
+
+### Behavior
+
+- MQG-01 Productive workflow now prepares a real Author/Title review set.
+- The workflow remains read-only.
+- No title/author proposals are generated yet.
+- No dry-run or apply behavior is included yet.
+- No Calibre metadata changes are performed.
+- Generic Productive shell wording no longer hardcodes stale `v0.12.3` references for MQG-02 through MQG-06.
+
+### Validation
+
+- Parser check passed for:
+  - `Start-LccWorkflow.ps1`
+- Manual smoke test confirmed:
+  - Productive option `1` opened MQG-01 Analyze/Preview,
+  - search `id:4058` created a batch manifest,
+  - Author/Title source TSV was exported,
+  - preview summary was written,
+  - selected 1 row,
+  - showed MQG-01 review counts,
+  - performed no Calibre metadata writes.
+
+### Notes
+
+- This is the first Productive MQG-01 workbench implementation release.
+- Recommended next implementation target:
+  - `v0.12.6 - MQG-01 Rule Evaluation Report`
+
+---
 ## v0.12.4 - MQG-01 Author/Title Workbench Design
 
 ### Added
