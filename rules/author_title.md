@@ -222,20 +222,29 @@ T-SER-02: Series identifiers in parentheses or brackets containing a series
            the number. Do NOT retain the number or convert it to "Volume N".
            The whole parenthetical is gone; nothing replaces it.
            A "series-name parenthetical" is any parenthetical that contains:
-             • a multi-word series name (e.g. "Kithamar Trilogy", "Omega War")
+             • any series name — short or long, one word or many
+               (e.g. "Dune", "The Way", "Kithamar Trilogy", "Omega War")
              • followed by "Book N", "#N", or "Volume N"
+           The series name does NOT need to be multi-word. Even a single word
+           or short article+word ("The Way") qualifies if followed by Book N.
            ALL of the following patterns must be removed entirely:
              "(Jao Empire Book 3)"        → remove
              "(The Omega War Book 11)"    → remove
              "(The Neapolitan Novels #2)" → remove
              "[A Song of Ice and Fire, Book 1]" → remove
              "(Kithamar Trilogy #1)"      → remove
+             "(The Way Book 1)"           → remove
+             "(Dune Book 2)"              → remove
            WRONG: "The Span of Empire (Jao Empire Book 3)" → "The Span of Empire, Volume 3"
            RIGHT: "The Span of Empire (Jao Empire Book 3)" → "The Span of Empire"
            WRONG: "Sons of the Lion (The Omega War Book 11)" → "Sons of the Lion, Volume 11"
            RIGHT: "Sons of the Lion (The Omega War Book 11)" → "Sons of the Lion"
            WRONG: "Age of Ash (Kithamar Trilogy #1)" → "Age of Ash, Volume 1"
            RIGHT: "Age of Ash (Kithamar Trilogy #1)" → "Age of Ash"
+           WRONG: "Eon (The Way Book 1)" → "Eon"  [leaving unchanged is also wrong]
+           RIGHT: "Eon (The Way Book 1)" → "Eon"
+           NOTE: leaving a series parenthetical unchanged is NOT correct —
+           it must always be removed, even if the series name is short.
            The "#1" or "Book 1" inside the parenthetical is the series book
            position — it is NOT the same as a standalone volume number.
            Do NOT convert it to ", Volume 1". Remove the entire parenthetical.
