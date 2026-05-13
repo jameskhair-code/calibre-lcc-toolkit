@@ -141,3 +141,7 @@ def clean_titles(
 def main(ctx: typer.Context):
     if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
+
+
+if __name__ == "__main__":
+    app()
