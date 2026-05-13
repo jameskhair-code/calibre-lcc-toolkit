@@ -178,16 +178,19 @@ T-SER-01: RETAIN volume and part numbers in titles — do not remove them.
              "Volume 2 of 3"     → ", Volume 2"
            Use "high" confidence for mechanical format standardization.
 
-T-SER-02: Series identifiers in parentheses containing a series name AND a
-           book/volume number should be removed entirely. These are retailer
-           metadata artifacts (Amazon, etc.) that belong in Calibre's Series
-           field, not the title.
-           REMOVE: "(Jao Empire Book 3)", "(The Omega War Book 11)",
-                   "(The Neapolitan Novels #2)", "[A Song of Ice and Fire, Book 1]"
-           EXAMPLE: "The Span of Empire (Jao Empire Book 3)" → "The Span of Empire"
-           EXAMPLE: "Sons of the Lion (The Omega War Book 11)" → "Sons of the Lion"
-           NOTE: Plain volume numbers without a series name are handled by
-           T-SER-01 and should be retained.
+T-SER-02: Series identifiers in parentheses or brackets containing a series
+           name AND a book/volume number must be removed ENTIRELY — including
+           the number. Do NOT retain the number or convert it to "Volume N".
+           The whole parenthetical is gone; nothing replaces it.
+           REMOVE completely: "(Jao Empire Book 3)", "(The Omega War Book 11)",
+                              "(The Neapolitan Novels #2)", "[A Song of Ice and Fire, Book 1]"
+           WRONG: "The Span of Empire (Jao Empire Book 3)" → "The Span of Empire, Volume 3"
+           RIGHT: "The Span of Empire (Jao Empire Book 3)" → "The Span of Empire"
+           WRONG: "Sons of the Lion (The Omega War Book 11)" → "Sons of the Lion, Volume 11"
+           RIGHT: "Sons of the Lion (The Omega War Book 11)" → "Sons of the Lion"
+           NOTE: T-SER-01 applies only to standalone volume numbers that are
+           NOT inside a series-name parenthetical (e.g. "Title, Volume 2" or
+           "Title (Volume 2)" with no series name present).
 
 T-SER-03: Do not add series information that is not already present in
            the title field. If series data appears only in the Calibre
