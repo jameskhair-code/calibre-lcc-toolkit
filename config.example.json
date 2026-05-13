@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy this file to config.json and fill in your values.",
+
+  "library_path": "/path/to/your/Calibre Library/Collection - Literary Awards and Nominees",
+
+  "calibredb_path": "calibredb",
+
+  "ai": {
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "api_key": ""
+  }
+}
