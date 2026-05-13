@@ -547,10 +547,10 @@ function Start-ProductiveMqg01AnalyzePreview {
     Write-Host ""
     Write-Host "${mqgLabel}: $workflowName" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "MQG-01 Analyze/Preview Shell" -ForegroundColor Yellow
+    Write-Host "MQG-01 Analyze/Preview + Rule Evaluation" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "This workflow prepares an Author/Title review set and shows basic counts." -ForegroundColor DarkGray
-    Write-Host "It does not generate proposals yet, does not apply changes, and does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host "This workflow prepares an Author/Title review set, runs conservative rule evaluation, and shows review counts." -ForegroundColor DarkGray
+    Write-Host "It does not dry run changes, does not apply changes, and does not modify Calibre metadata." -ForegroundColor DarkGray
 
     $targetScope = Select-ProductiveTargetScope `
         -MqgLabel $mqgLabel `
@@ -592,12 +592,14 @@ function Start-ProductiveMqg01AnalyzePreview {
     $batchName = $manifestResult.BatchSlug
     $batchManifest = $manifestResult.BatchManifest
     $authorTitleSourceTsv = ".\input\author-title-cleanup-source-$batchName.tsv"
+    $ruleEvaluationTsv = ".\reports\mqg01-rule-evaluation-$batchName.tsv"
     $previewSummaryTxt = ".\reports\mqg01-analyze-preview-$batchName.txt"
 
     Write-Host ""
     Write-Host "Planned MQG-01 artifacts" -ForegroundColor Cyan
     Write-Host "------------------------"
     Write-Host "Author/Title source: $authorTitleSourceTsv"
+    Write-Host "Rule evaluation:     $ruleEvaluationTsv"
     Write-Host "Preview summary:     $previewSummaryTxt"
 
     $existingOutputs = @()
@@ -606,11 +608,13 @@ function Start-ProductiveMqg01AnalyzePreview {
         $existingOutputs += $authorTitleSourceTsv
     }
 
+    if (Test-Path $ruleEvaluationTsv) {
+        $existingOutputs += $ruleEvaluationTsv
+    }
+
     if (Test-Path $previewSummaryTxt) {
         $existingOutputs += $previewSummaryTxt
     }
-
-    $overwriteAnswer = "NO"
 
     if ($existingOutputs.Count -gt 0) {
         Write-Host ""
@@ -677,6 +681,43 @@ function Start-ProductiveMqg01AnalyzePreview {
         $rowCountWarning = "WARNING: Author/Title source row count differs from manifest row count."
     }
 
+    $ruleEvaluationScriptPath = Get-ToolkitScriptPath -ScriptName "Test-AuthorTitleRuleEvaluation.ps1"
+
+    $ruleEvaluationArgs = @{
+        InputTsv    = $authorTitleSourceTsv
+        OutputTsv   = $ruleEvaluationTsv
+        RulesConfig = ".\config\author-title-normalization-rules.json"
+    }
+
+    Write-Host ""
+    Write-Host "Running MQG-01 rule evaluation" -ForegroundColor Cyan
+    Write-Host "------------------------------"
+    Write-Host "This operation is read-only and does not modify Calibre metadata." -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "Running: Test-AuthorTitleRuleEvaluation.ps1" -ForegroundColor Cyan
+    Write-Host ""
+
+    & $ruleEvaluationScriptPath @ruleEvaluationArgs
+
+    if (-not (Test-Path $ruleEvaluationTsv)) {
+        throw "Expected MQG-01 rule evaluation TSV was not created: $ruleEvaluationTsv"
+    }
+
+    $ruleEvaluationRows = @(Import-Csv -Path $ruleEvaluationTsv -Delimiter "`t")
+
+    if ($ruleEvaluationRows.Count -eq 0) {
+        throw "MQG-01 rule evaluation TSV contains no rows: $ruleEvaluationTsv"
+    }
+
+    $ruleNoChangeCount = @($ruleEvaluationRows | Where-Object { $_.ProposalStatus -eq "No Change" }).Count
+    $ruleSafeMechanicalCount = @($ruleEvaluationRows | Where-Object { $_.ProposalStatus -eq "Safe Mechanical Change" }).Count
+    $ruleChangeProposedCount = @($ruleEvaluationRows | Where-Object { $_.ProposalStatus -eq "Change Proposed" }).Count
+    $ruleManualReviewCount = @($ruleEvaluationRows | Where-Object { $_.ProposalStatus -eq "Manual Review" }).Count
+    $ruleErrorCount = @($ruleEvaluationRows | Where-Object { $_.ProposalStatus -eq "Error" }).Count
+    $ruleTitleChangeCount = @($ruleEvaluationRows | Where-Object { $_.TitleWouldChange -eq "Yes" }).Count
+    $ruleAuthorsChangeCount = @($ruleEvaluationRows | Where-Object { $_.AuthorsWouldChange -eq "Yes" }).Count
+    $ruleActionRows = @($ruleEvaluationRows | Where-Object { $_.ProposalStatus -ne "No Change" })
+
     Write-Host ""
     Write-Host "MQG-01 Analyze/Preview Results" -ForegroundColor Green
     Write-Host "------------------------------"
@@ -689,6 +730,15 @@ function Start-ProductiveMqg01AnalyzePreview {
     Write-Host "Missing authors:         $missingAuthors"
     Write-Host "Rows with identifiers:   $withIdentifiers"
     Write-Host "Rows with series:        $withSeries"
+    Write-Host ""
+    Write-Host "Rule evaluation rows:    $($ruleEvaluationRows.Count)"
+    Write-Host "No change:               $ruleNoChangeCount"
+    Write-Host "Safe mechanical change:  $ruleSafeMechanicalCount"
+    Write-Host "Change proposed:         $ruleChangeProposedCount"
+    Write-Host "Manual review:           $ruleManualReviewCount"
+    Write-Host "Errors:                  $ruleErrorCount"
+    Write-Host "Rows with title changes: $ruleTitleChangeCount"
+    Write-Host "Rows with author changes: $ruleAuthorsChangeCount"
 
     if (-not [string]::IsNullOrWhiteSpace($rowCountWarning)) {
         Write-Host $rowCountWarning -ForegroundColor Yellow
@@ -706,12 +756,29 @@ function Start-ProductiveMqg01AnalyzePreview {
         Write-Host "Preview limited to first 20 rows. Full source file: $authorTitleSourceTsv" -ForegroundColor DarkGray
     }
 
+    Write-Host ""
+    Write-Host "Preview: first 20 actionable MQG-01 rule rows" -ForegroundColor Cyan
+    Write-Host ""
+
+    if ($ruleActionRows.Count -eq 0) {
+        Write-Host "No actionable rows found under the current MQG-01 rules." -ForegroundColor Green
+    }
+    else {
+        $ruleActionRows |
+            Select-Object -First 20 CalibreId,OriginalTitle,ProposedTitle,OriginalAuthors,ProposedAuthors,ProposalStatus,RuleIds,Confidence,ManualReviewRequired |
+            Format-Table -AutoSize
+
+        if ($ruleActionRows.Count -gt 20) {
+            Write-Host "Actionable preview limited to first 20 rows. Full rule evaluation file: $ruleEvaluationTsv" -ForegroundColor DarkGray
+        }
+    }
+
     $summaryLines = @(
         "MQG-01 Analyze/Preview Summary",
         "==============================",
         "",
         "Calibre metadata modified: No",
-        "Workflow type: Read-only Productive MQG-01 Analyze/Preview",
+        "Workflow type: Read-only Productive MQG-01 Analyze/Preview + Rule Evaluation",
         "",
         "Batch",
         "-----",
@@ -719,6 +786,7 @@ function Start-ProductiveMqg01AnalyzePreview {
         "Target mode: $($manifestResult.TargetMode)",
         "Batch manifest: $batchManifest",
         "Author/Title source TSV: $authorTitleSourceTsv",
+        "MQG-01 rule evaluation TSV: $ruleEvaluationTsv",
         "Preview summary: $previewSummaryTxt",
         "",
         "Counts",
@@ -733,10 +801,21 @@ function Start-ProductiveMqg01AnalyzePreview {
         "Rows with series: $withSeries",
         "Row count warning: $rowCountWarning",
         "",
+        "Rule Evaluation",
+        "---------------",
+        "Rule evaluation rows: $($ruleEvaluationRows.Count)",
+        "No change: $ruleNoChangeCount",
+        "Safe mechanical change: $ruleSafeMechanicalCount",
+        "Change proposed: $ruleChangeProposedCount",
+        "Manual review: $ruleManualReviewCount",
+        "Errors: $ruleErrorCount",
+        "Rows with title changes: $ruleTitleChangeCount",
+        "Rows with author changes: $ruleAuthorsChangeCount",
+        "",
         "Recommended next action",
         "-----------------------",
-        "Use the Author/Title source TSV as the base review set for MQG-01 rule evaluation.",
-        "Future MQG-01 releases will add proposal statuses, reasons, review packets, dry-run, and apply/verify behavior.",
+        "Use the MQG-01 rule evaluation TSV as the first review artifact for proposed title/author cleanup.",
+        "Future MQG-01 releases will add AI/manual review packets, dry-run, and apply/verify behavior.",
         "",
         "Safety note",
         "-----------",
@@ -757,9 +836,10 @@ function Start-ProductiveMqg01AnalyzePreview {
     Write-Host "Files prepared:"
     Write-Host "- $batchManifest"
     Write-Host "- $authorTitleSourceTsv"
+    Write-Host "- $ruleEvaluationTsv"
     Write-Host "- $previewSummaryTxt"
     Write-Host ""
-    Write-Host "v0.12.5 stops here intentionally. No proposals were generated and no Calibre metadata was modified." -ForegroundColor DarkGray
+    Write-Host "v0.12.6 stops here intentionally. Rule evaluation was generated, but no dry run, apply, or Calibre metadata changes were performed." -ForegroundColor DarkGray
 
     Pause-Toolkit
 }
