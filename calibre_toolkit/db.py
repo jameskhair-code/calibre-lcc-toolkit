@@ -58,7 +58,7 @@ class CalibreDB:
             "--library-path", str(self.library_path),
             query,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
         if result.returncode != 0:
             # calibredb returns non-zero when no results found — that's fine
             stderr = result.stderr.strip()
@@ -121,7 +121,7 @@ class CalibreDB:
             author_str = " & ".join(authors)
             cmd += ["--field", f"authors:{author_str}"]
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
         if result.returncode != 0:
             raise RuntimeError(
                 f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
@@ -137,7 +137,7 @@ class CalibreDB:
                 str(book_id),
                 "--field", f"{column}:true",
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
             if result.returncode != 0:
                 console_warn = f"Warning: could not mark book {book_id} as MQG complete: {result.stderr.strip()}"
                 print(console_warn)
