@@ -178,12 +178,16 @@ T-SER-01: RETAIN volume and part numbers in titles — do not remove them.
              "Volume 2 of 3"     → ", Volume 2"
            Use "high" confidence for mechanical format standardization.
 
-T-SER-02: Series identifiers in parentheses (e.g. "(Jao Empire Book 3)",
-           "(The Omega War Book 11)") — leave exactly as stored.
-           Do NOT convert them to subtitle format with a colon.
-           Do NOT remove them.
-           WRONG: "The Span of Empire: Jao Empire Book 3"
-           RIGHT: "The Span of Empire (Jao Empire Book 3)"
+T-SER-02: Series identifiers in parentheses containing a series name AND a
+           book/volume number should be removed entirely. These are retailer
+           metadata artifacts (Amazon, etc.) that belong in Calibre's Series
+           field, not the title.
+           REMOVE: "(Jao Empire Book 3)", "(The Omega War Book 11)",
+                   "(The Neapolitan Novels #2)", "[A Song of Ice and Fire, Book 1]"
+           EXAMPLE: "The Span of Empire (Jao Empire Book 3)" → "The Span of Empire"
+           EXAMPLE: "Sons of the Lion (The Omega War Book 11)" → "Sons of the Lion"
+           NOTE: Plain volume numbers without a series name are handled by
+           T-SER-01 and should be retained.
 
 T-SER-03: Do not add series information that is not already present in
            the title field. If series data appears only in the Calibre
