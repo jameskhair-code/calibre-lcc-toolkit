@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from rich import box
@@ -71,8 +72,12 @@ def run_cleanup(
     """Full Author/Title cleanup flow for a given Calibre search string."""
 
     # ── 1. Fetch ──────────────────────────────────────────────────────────────
-    with console.status(f"[cyan]Searching library:[/] {search_query}"):
-        books = db.search(search_query)
+    try:
+        with console.status(f"[cyan]Searching library:[/] {search_query}"):
+            books = db.search(search_query)
+    except RuntimeError as e:
+        console.print(Panel(str(e), title="[red]Cannot access library[/red]", border_style="red"))
+        raise typer.Exit(1)
 
     if not books:
         console.print("[yellow]No books matched that search. Nothing to do.[/yellow]")

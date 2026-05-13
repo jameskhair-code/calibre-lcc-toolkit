@@ -62,6 +62,13 @@ class CalibreDB:
         if result.returncode != 0:
             # calibredb returns non-zero when no results found — that's fine
             stderr = result.stderr.strip()
+            if "Another calibre program" in stderr:
+                raise RuntimeError(
+                    "Calibre is currently open.\n\n"
+                    "Please close the main Calibre application before running this tool, "
+                    "then try again.\n\n"
+                    "calibredb cannot write to the library while Calibre is running."
+                )
             if stderr and "No books found" not in stderr:
                 raise RuntimeError(f"calibredb search failed: {stderr}")
             return []
