@@ -107,20 +107,43 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
         book = book_map.get(book_id)
         if book is None:
             continue
-        suggested_title = normalize_text(item.get("title", book.title).strip())
-        suggested_authors = [normalize_text(a.strip()) for a in item.get("authors", book.authors)]
+
+        # What the AI returned (before code normalization)
+        raw_title = item.get("title", book.title).strip()
+        raw_authors = [a.strip() for a in item.get("authors", book.authors)]
+
+        # Apply code normalization (diacritics, dashes) on top of AI suggestion
+        suggested_title = normalize_text(raw_title)
+        suggested_authors = [normalize_text(a) for a in raw_authors]
+
+        ai_changed_title = raw_title != book.title
+        ai_changed_authors = raw_authors != book.authors
+        code_changed_title = suggested_title != raw_title
+        code_changed_authors = any(n != r for n, r in zip(suggested_authors, raw_authors))
+
         title_changed = suggested_title != book.title
         authors_changed = suggested_authors != book.authors
 
         notes = item.get("notes", "")
-        # If the AI says "no changes needed" but actually made changes, override the note
-        if (title_changed or authors_changed) and notes.lower().strip(".").strip() == "no changes needed":
-            parts = []
-            if title_changed:
-                parts.append("Title updated")
-            if authors_changed:
-                parts.append("Authors updated")
-            notes = "; ".join(parts) + " (AI note overridden — was incorrect)"
+        no_changes_note = notes.lower().strip(".").strip() == "no changes needed"
+
+        if (title_changed or authors_changed) and no_changes_note:
+            if not ai_changed_title and not ai_changed_authors:
+                # AI correctly left it alone; code normalization made the change
+                parts = []
+                if code_changed_title:
+                    parts.append("title")
+                if code_changed_authors:
+                    parts.append("authors")
+                notes = f"Code normalization applied to {' and '.join(parts)} (diacritics/dashes)"
+            else:
+                # AI made changes but incorrectly said "no changes needed"
+                parts = []
+                if title_changed:
+                    parts.append("title")
+                if authors_changed:
+                    parts.append("authors")
+                notes = f"Updated {' and '.join(parts)} (AI note corrected)"
 
         suggestions.append(CleanupSuggestion(
             book_id=book_id,

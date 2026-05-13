@@ -483,3 +483,15 @@ GEN-08: Return results in the same order as the input. Do not reorder books.
 
 GEN-09: The output must be a valid JSON array. No markdown fences, no
         commentary outside the array, no trailing commas.
+
+GEN-10: If you notice that the title and author fields appear to be swapped
+        (e.g. the title field contains a person's name, or the author field
+        contains what looks like a book title), suggest the corrected values
+        using your knowledge of the book. Use "low" confidence and note
+        "Possible title/author swap detected - please verify."
+        If you recognise the book, provide the correct title and author.
+        If you do not recognise it, flag the swap but do not guess.
+        EXAMPLE: title="Octavia Butler - Parable 02",
+                 author="Parable of the Talents"
+        SUGGESTION: title="Parable of the Talents", author="Octavia Butler"
+        NOTE: "Possible title/author swap detected - please verify."
