@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 from .db import Book
+from .normalize import normalize_text
 
 # Rules file lives alongside the package root
 _RULES_DIR = Path(__file__).parent.parent / "rules"
@@ -106,8 +107,8 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
         book = book_map.get(book_id)
         if book is None:
             continue
-        suggested_title = item.get("title", book.title).strip()
-        suggested_authors = [a.strip() for a in item.get("authors", book.authors)]
+        suggested_title = normalize_text(item.get("title", book.title).strip())
+        suggested_authors = [normalize_text(a.strip()) for a in item.get("authors", book.authors)]
         title_changed = suggested_title != book.title
         authors_changed = suggested_authors != book.authors
 

@@ -370,13 +370,12 @@ A-SPE-04: Celtic prefixes: "Mac", "Mc", "O'" — preserve exactly as stored.
 A-SPE-05: Hyphenated surnames — preserve the hyphen:
              "Jean-Paul Sartre", "Chimamanda Ngozi Adichie"
 
-A-SPE-06: Diacritics and accented characters — preserve them exactly:
-             "García Márquez" (not "Garcia Marquez")
-             "Günter Grass" (not "Gunter Grass")
-             "Amos Oz" (not "Amoz Oz")
-           If you are highly confident a diacritic is missing and can supply
-           it correctly, do so at "medium" confidence with a note.
-           If unsure, leave unchanged.
+A-SPE-06: Diacritics and accented characters — return them exactly as you
+           would normally write them. The system will automatically convert
+           all accented characters to plain ASCII after your response
+           (e.g. é→e, ä→a, ß→ss, García→Garcia). You do not need to
+           handle this conversion yourself — focus on correctness of the
+           name or title, not the character encoding.
 
 A-SPE-07: Corporate, institutional, or collective authors — leave exactly
            as stored. Do not attempt to reformat them as personal names.
