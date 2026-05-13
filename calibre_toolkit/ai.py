@@ -108,6 +108,19 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
             continue
         suggested_title = item.get("title", book.title).strip()
         suggested_authors = [a.strip() for a in item.get("authors", book.authors)]
+        title_changed = suggested_title != book.title
+        authors_changed = suggested_authors != book.authors
+
+        notes = item.get("notes", "")
+        # If the AI says "no changes needed" but actually made changes, override the note
+        if (title_changed or authors_changed) and notes.lower().strip(".").strip() == "no changes needed":
+            parts = []
+            if title_changed:
+                parts.append("Title updated")
+            if authors_changed:
+                parts.append("Authors updated")
+            notes = "; ".join(parts) + " (AI note overridden — was incorrect)"
+
         suggestions.append(CleanupSuggestion(
             book_id=book_id,
             original_title=book.title,
@@ -115,9 +128,9 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
             suggested_title=suggested_title,
             suggested_authors=suggested_authors,
             confidence=item.get("confidence", "medium"),
-            title_changed=suggested_title != book.title,
-            authors_changed=suggested_authors != book.authors,
-            notes=item.get("notes", ""),
+            title_changed=title_changed,
+            authors_changed=authors_changed,
+            notes=notes,
         ))
     return suggestions
 
