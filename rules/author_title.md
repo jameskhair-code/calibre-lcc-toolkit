@@ -137,8 +137,10 @@ T-SUB-01: Preserve substantive subtitles — those that add specific meaning
            Example to KEEP: "The Warmth of Other Suns: The Epic Story of
            America's Great Migration"
 
-T-SUB-02: Remove generic subtitles that add no meaningful information:
-             ": A Novel"
+T-SUB-02: Remove generic subtitles that add no meaningful information.
+           Matching is case-insensitive — remove regardless of capitalisation.
+           Patterns to remove (the colon and everything after):
+             ": A Novel"  /  ": a Novel"  /  ": a novel"
              ": A Memoir"
              ": A Story"
              ": Stories"
@@ -150,6 +152,12 @@ T-SUB-02: Remove generic subtitles that add no meaningful information:
              ": A History"
              ": Nonfiction"
              ": Fiction"
+           WRONG: "Halcyon: A novel"  →  "Halcyon: A Novel"  (capitalising ≠ removing)
+           RIGHT: "Halcyon: A novel"  →  "Halcyon"
+           WRONG: "The Garden: a memoir"  →  "The Garden: A Memoir"
+           RIGHT: "The Garden: a memoir"  →  "The Garden"
+           Do NOT capitalise the subtitle word and leave it — always remove the
+           entire ": A <generic-word>" phrase entirely.
 
 T-SUB-03: When in doubt about a subtitle's value, retain it and use
            "medium" or "low" confidence. Do not remove subtitles
@@ -162,6 +170,24 @@ T-SUB-05: Volume and part designations in titles are governed by T-SER-01 —
 
 T-SUB-06: Use a colon (not em-dash, not semicolon) to separate title and
            subtitle in the cleaned version, with a single space on each side.
+
+T-SUB-07: OMNIBUS / ANTHOLOGY TITLES WITH SLASH-SEPARATED WORKS — do NOT
+           strip any of the individual work titles. When a title lists multiple
+           collected works separated by " / " (or " / "), every slash-separated
+           segment is part of the real title and must be kept intact.
+           This applies especially to Library of America (LOA) volumes and
+           similar collected-works editions.
+           EXAMPLE title field:
+             "James Agee: Let Us Now Praise Famous Men / A Death in the Family
+              / Shorter Fiction (LOA #159)"
+           WRONG: strip everything after the first slash, leaving only the first
+                  work → "Let Us Now Praise Famous Men"
+           RIGHT: keep all slash-separated works; remove only the series marker
+                  per T-SER-02 → "Let Us Now Praise Famous Men / A Death in the
+                  Family / Shorter Fiction"
+           If an author name appears before the colon in such a title (e.g.
+           "James Agee: …"), remove just that "Author: " prefix and keep the
+           slash-separated works as the title.
 
 
 ---
@@ -182,12 +208,24 @@ T-SER-02: Series identifiers in parentheses or brackets containing a series
            name AND a book/volume number must be removed ENTIRELY — including
            the number. Do NOT retain the number or convert it to "Volume N".
            The whole parenthetical is gone; nothing replaces it.
-           REMOVE completely: "(Jao Empire Book 3)", "(The Omega War Book 11)",
-                              "(The Neapolitan Novels #2)", "[A Song of Ice and Fire, Book 1]"
+           A "series-name parenthetical" is any parenthetical that contains:
+             • a multi-word series name (e.g. "Kithamar Trilogy", "Omega War")
+             • followed by "Book N", "#N", or "Volume N"
+           ALL of the following patterns must be removed entirely:
+             "(Jao Empire Book 3)"        → remove
+             "(The Omega War Book 11)"    → remove
+             "(The Neapolitan Novels #2)" → remove
+             "[A Song of Ice and Fire, Book 1]" → remove
+             "(Kithamar Trilogy #1)"      → remove
            WRONG: "The Span of Empire (Jao Empire Book 3)" → "The Span of Empire, Volume 3"
            RIGHT: "The Span of Empire (Jao Empire Book 3)" → "The Span of Empire"
            WRONG: "Sons of the Lion (The Omega War Book 11)" → "Sons of the Lion, Volume 11"
            RIGHT: "Sons of the Lion (The Omega War Book 11)" → "Sons of the Lion"
+           WRONG: "Age of Ash (Kithamar Trilogy #1)" → "Age of Ash, Volume 1"
+           RIGHT: "Age of Ash (Kithamar Trilogy #1)" → "Age of Ash"
+           The "#1" or "Book 1" inside the parenthetical is the series book
+           position — it is NOT the same as a standalone volume number.
+           Do NOT convert it to ", Volume 1". Remove the entire parenthetical.
            NOTE: T-SER-01 applies only to standalone volume numbers that are
            NOT inside a series-name parenthetical (e.g. "Title, Volume 2" or
            "Title (Volume 2)" with no series name present).
