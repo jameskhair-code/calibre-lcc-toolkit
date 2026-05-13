@@ -24,6 +24,50 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.12.4 - MQG-01 Author/Title Workbench Design
+
+### Added
+
+- Added MQG-01 Author/Title Workbench design document:
+  - `docs/MQG-01-Author-Title-Workbench-Design.md`
+
+### Decision
+
+- MQG-01 Author/Title cleanup is now the primary implementation focus.
+- MQG-01 should be treated as a dedicated workbench, not a one-time script wrapper.
+- Development should iterate on MQG-01 repeatedly until it is genuinely useful, polished, and daily-usable before moving primary implementation focus to MQG-02.
+- Normal Productive Launcher usage should hide manifests, exports, reports, and internal artifacts unless they are useful for review, approval, troubleshooting, or audit.
+
+### Design Direction
+
+- MQG-01 should eventually support:
+  - target selection,
+  - scope/count preview,
+  - rule-based title/author analysis,
+  - proposed changes with reasons,
+  - proposal statuses,
+  - AI/manual review packets,
+  - safe dry-run behavior,
+  - guarded apply,
+  - verify,
+  - MQG-01 completion marking.
+- Proposed change rows must include enough explanation to be trusted:
+  - current value,
+  - proposed value,
+  - rule or reason,
+  - confidence,
+  - review action.
+
+### Notes
+
+- This is a design-only release.
+- No Productive Launcher behavior changed.
+- No MQG-01 apply behavior changed.
+- No Calibre metadata changes are performed.
+- Recommended next implementation target:
+  - `v0.12.5 - MQG-01 Analyze/Preview Shell`
+
+---
 ## v0.12.3 - Target Selection Batch Manifest Creation
 
 ### Added
