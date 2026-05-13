@@ -128,12 +128,15 @@ def clean_titles(
         )
     )
 
+    mqg_column = cfg.get("mqg", {}).get("title_author_column")
+
     run_cleanup(
         db=db,
         ai=ai,
         search_query=search,
         batch_size=batch_size,
         auto_apply_high=auto_apply_high,
+        mqg_column=mqg_column,
     )
 
 

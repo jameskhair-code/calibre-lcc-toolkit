@@ -126,3 +126,18 @@ class CalibreDB:
             raise RuntimeError(
                 f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
             )
+
+    def mark_mqg_complete(self, book_ids: list[int], column: str) -> None:
+        """Mark a list of books as complete for a given MQG column."""
+        for book_id in book_ids:
+            cmd = [
+                self.calibredb_path,
+                "set_metadata",
+                "--library-path", str(self.library_path),
+                str(book_id),
+                "--field", f"{column}:true",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                console_warn = f"Warning: could not mark book {book_id} as MQG complete: {result.stderr.strip()}"
+                print(console_warn)

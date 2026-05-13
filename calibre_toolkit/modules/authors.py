@@ -4,14 +4,13 @@ Orchestrates: fetch → AI suggest → display review table → confirm → appl
 """
 
 from __future__ import annotations
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from rich import box
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 
 from ..db import CalibreDB, Book
 from ..ai import AIClient, CleanupSuggestion
@@ -21,7 +20,6 @@ console = Console()
 
 
 def _confidence_style(confidence: str) -> tuple[str, str]:
-    """Returns (emoji, Rich style) for a confidence level."""
     return {
         "high":   ("●", "green"),
         "medium": ("◑", "yellow"),
@@ -30,7 +28,6 @@ def _confidence_style(confidence: str) -> tuple[str, str]:
 
 
 def _diff_text(original: str, suggested: str) -> Text:
-    """Show original → suggested, or just original if unchanged."""
     if original == suggested:
         return Text(original, style="dim")
     t = Text()
@@ -57,17 +54,9 @@ def _build_review_table(suggestions: list[CleanupSuggestion]) -> Table:
     for i, s in enumerate(suggestions, 1):
         icon, style = _confidence_style(s.confidence)
         conf_text = Text(icon, style=style)
-
         title_cell = _diff_text(s.original_title, s.suggested_title)
         author_cell = _diff_text(s.original_authors_display, s.suggested_authors_display)
-
-        table.add_row(
-            str(i),
-            conf_text,
-            title_cell,
-            author_cell,
-            s.notes or "",
-        )
+        table.add_row(str(i), conf_text, title_cell, author_cell, s.notes or "")
     return table
 
 
@@ -77,6 +66,7 @@ def run_cleanup(
     search_query: str,
     batch_size: int = 50,
     auto_apply_high: bool = False,
+    mqg_column: str | None = None,
 ) -> None:
     """Full Author/Title cleanup flow for a given Calibre search string."""
 
@@ -113,14 +103,17 @@ def run_cleanup(
         f"[dim]{len(no_changes)} already clean[/dim].\n"
     )
 
+    # Books already clean → mark MQG complete immediately
+    clean_ids = [s.book_id for s in no_changes]
+
     if not changes:
         console.print("[green]Everything looks good — no changes needed![/green]")
+        _mark_complete(db, mqg_column, clean_ids, label="already-clean")
         raise typer.Exit()
 
     # ── 3. Review table ───────────────────────────────────────────────────────
     table = _build_review_table(changes)
     console.print(table)
-
     console.print(
         "\n[dim]Legend: [green]●[/green] High confidence  "
         "[yellow]◑[/yellow] Medium  [red]○[/red] Low (review carefully)[/dim]\n"
@@ -129,20 +122,20 @@ def run_cleanup(
     # ── 4. Apply options ──────────────────────────────────────────────────────
     high = [s for s in changes if s.confidence == "high"]
     medium_low = [s for s in changes if s.confidence != "high"]
+    applied_ids: list[int] = []
 
     if auto_apply_high and high:
         console.print(
             f"[bold]--auto-apply-high[/bold]: applying [green]{len(high)}[/green] "
             f"high-confidence changes automatically.\n"
         )
-        _apply_suggestions(db, high)
-
+        applied_ids += _apply_suggestions(db, high)
         if medium_low:
             console.print(
                 f"\n[yellow]{len(medium_low)}[/yellow] medium/low-confidence changes "
                 "require your decision:\n"
             )
-            _prompt_and_apply(db, medium_low)
+            applied_ids += _prompt_and_apply(db, medium_low)
     else:
         choice = Prompt.ask(
             "[bold]Apply changes?[/bold]",
@@ -154,10 +147,10 @@ def run_cleanup(
             console.print("[dim]No changes applied.[/dim]")
             raise typer.Exit()
         elif choice == "all":
-            _apply_suggestions(db, changes)
+            applied_ids += _apply_suggestions(db, changes)
         elif choice == "high-only":
             if high:
-                _apply_suggestions(db, high)
+                applied_ids += _apply_suggestions(db, high)
                 if medium_low:
                     console.print(
                         f"\n[yellow]{len(medium_low)}[/yellow] medium/low-confidence "
@@ -166,13 +159,16 @@ def run_cleanup(
             else:
                 console.print("[dim]No high-confidence changes to apply.[/dim]")
         elif choice == "review":
-            _prompt_and_apply(db, changes)
+            applied_ids += _prompt_and_apply(db, changes)
 
+    # ── 5. Mark MQG complete ──────────────────────────────────────────────────
+    _mark_complete(db, mqg_column, clean_ids + applied_ids, label="processed")
     console.print("\n[bold green]Done![/bold green]")
 
 
-def _apply_suggestions(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> None:
-    success = 0
+def _apply_suggestions(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> list[int]:
+    """Apply a list of suggestions. Returns IDs of successfully updated books."""
+    applied: list[int] = []
     for s in suggestions:
         with console.status(f"Updating book {s.book_id}…"):
             try:
@@ -181,14 +177,15 @@ def _apply_suggestions(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> N
                     title=s.suggested_title if s.title_changed else None,
                     authors=s.suggested_authors if s.authors_changed else None,
                 )
-                success += 1
+                applied.append(s.book_id)
             except RuntimeError as e:
                 console.print(f"[red]Error on book {s.book_id}: {e}[/red]")
-    console.print(f"[green]Applied {success}/{len(suggestions)} changes.[/green]")
+    console.print(f"[green]Applied {len(applied)}/{len(suggestions)} changes.[/green]")
+    return applied
 
 
-def _prompt_and_apply(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> None:
-    """Walk through each suggestion and let the user accept, skip, or edit."""
+def _prompt_and_apply(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> list[int]:
+    """Walk through each suggestion one by one. Returns IDs of accepted books."""
     to_apply: list[CleanupSuggestion] = []
 
     for s in suggestions:
@@ -205,9 +202,7 @@ def _prompt_and_apply(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> No
             console.print(f"  Notes:   [dim]{s.notes}[/dim]")
 
         choice = Prompt.ask("  Action", choices=["y", "n", "e"], default="y",
-                            show_choices=True,
-                            show_default=True)
-        # y=accept, n=skip, e=edit manually
+                            show_choices=True, show_default=True)
         if choice == "y":
             to_apply.append(s)
         elif choice == "e":
@@ -222,6 +217,22 @@ def _prompt_and_apply(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> No
             to_apply.append(s)
 
     if to_apply:
-        _apply_suggestions(db, to_apply)
+        return _apply_suggestions(db, to_apply)
     else:
         console.print("[dim]No changes applied.[/dim]")
+        return []
+
+
+def _mark_complete(
+    db: CalibreDB,
+    mqg_column: str | None,
+    book_ids: list[int],
+    label: str = "processed",
+) -> None:
+    if not mqg_column or not book_ids:
+        return
+    with console.status(f"[cyan]Marking {len(book_ids)} {label} books as MQG-01 complete…"):
+        db.mark_mqg_complete(book_ids, mqg_column)
+    console.print(
+        f"[dim]Marked {len(book_ids)} books as complete in [bold]{mqg_column}[/bold].[/dim]"
+    )

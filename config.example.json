@@ -9,5 +9,9 @@
     "provider": "openai",
     "model": "gpt-4o-mini",
     "api_key": ""
+  },
+
+  "mqg": {
+    "title_author_column": "mqg_title_author"
   }
 }
