@@ -344,6 +344,23 @@ A-ROL-09: Remove nationality or occupation annotations:
              "Toni Morrison (American)" → "Toni Morrison"
              "Kazuo Ishiguro (novelist)" → "Kazuo Ishiguro"
 
+A-ROL-10: When a book has BOTH personal author(s) AND corporate/institutional
+           co-author(s), remove the corporate co-authors and keep only the
+           personal authors. Corporate bodies as co-authors add little value
+           and cause formatting problems.
+           EXAMPLE: "Peter Davies & United Methodist Church (U.S.) Board of
+           Church & Society" → "Peter Davies"
+           EXCEPTION: If ALL listed authors are corporate/institutional with
+           no personal author present (e.g. a government report, a commission
+           publication, an anthology with no named editor), retain the
+           corporate author as-is.
+
+A-ROL-11: When a corporate/institutional author name contains "&", replace
+           "&" with "and" to prevent the library software from incorrectly
+           splitting the name into multiple authors.
+           EXAMPLE: "National Board of Church & Society" →
+                    "National Board of Church and Society"
+
 
 ---
 ## SECTION A-SPE — Author: Special & Edge Cases
