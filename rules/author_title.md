@@ -157,9 +157,8 @@ T-SUB-03: When in doubt about a subtitle's value, retain it and use
 
 T-SUB-04: Subtitles that are simply the author's name repeated are removed.
 
-T-SUB-05: Subtitles describing the series or volume number should be removed
-           if that information belongs in the series field.
-           (e.g. ": Book Two of the Trilogy" → remove)
+T-SUB-05: Volume and part designations in titles are governed by T-SER-01 —
+           retain and standardize them. Do not remove volume/part numbers.
 
 T-SUB-06: Use a colon (not em-dash, not semicolon) to separate title and
            subtitle in the cleaned version, with a single space on each side.
@@ -169,20 +168,26 @@ T-SUB-06: Use a colon (not em-dash, not semicolon) to separate title and
 ## SECTION T-SER — Title: Series Information
 ---
 
-T-SER-01: Remove series numbering appended to titles:
-             "(Book 1)"
-             "(Volume 2)"
-             "(Part III)"
-             "#3 in the [Series] series"
-           This information belongs in the Calibre series field.
+T-SER-01: RETAIN volume and part numbers in titles — do not remove them.
+           Standardize their format to ", Volume N" or ", Part N" at the end
+           of the title, after any subtitle:
+             "(Volume 2 of 3)"   → ", Volume 2"
+             "(Volume 1)"        → ", Volume 1"
+             "- Volume 1"        → ", Volume 1"
+             "Vol. 2"            → ", Volume 2"
+             "Volume 2 of 3"     → ", Volume 2"
+           Use "high" confidence for mechanical format standardization.
 
-T-SER-02: Remove the series name itself if appended to the title:
-             "(The Neapolitan Novels, #2)"
-             "[A Trilogy of the Dead — Volume One]"
+T-SER-02: Series identifiers in parentheses (e.g. "(Jao Empire Book 3)",
+           "(The Omega War Book 11)") — leave exactly as stored.
+           Do NOT convert them to subtitle format with a colon.
+           Do NOT remove them.
+           WRONG: "The Span of Empire: Jao Empire Book 3"
+           RIGHT: "The Span of Empire (Jao Empire Book 3)"
 
-T-SER-03: EXCEPTION — if the series name or volume designation is genuinely
-           part of the published title as the author intended, retain it.
-           Use "medium" confidence.
+T-SER-03: Do not add series information that is not already present in
+           the title field. If series data appears only in the Calibre
+           series field, leave the title as-is.
 
 
 ---
@@ -376,6 +381,14 @@ A-SPE-06: Diacritics and accented characters — preserve them exactly:
 A-SPE-07: Corporate, institutional, or collective authors — leave exactly
            as stored. Do not attempt to reformat them as personal names.
            Examples: "Anonymous", "Various Authors", "The Paris Review Editors"
+           IMPORTANT: If a corporate author name contains "&", do NOT treat
+           it as an author separator. The entire name including "&" is one
+           single author entry. Indicators of a corporate author include:
+           Church, Board, University, Institute, Foundation, Society,
+           Association, Committee, Department, Council, Organization,
+           Ministry, Bureau, Office, Agency, Trust, Commission, Centre.
+           Example: "United Methodist Church (U.S.) Board of Church & Society"
+           is ONE author — do not split on the "&".
 
 A-SPE-08: Author names that are pen names — treat the pen name as a full,
            correct author name. Do not replace pen names with legal names
