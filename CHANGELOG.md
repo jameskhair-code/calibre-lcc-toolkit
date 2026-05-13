@@ -24,6 +24,96 @@ This project uses lightweight version milestones rather than formal semantic ver
 
 ---
 
+## v0.12.6 - MQG-01 Rule Evaluation Report
+
+### Added
+
+- Added read-only MQG-01 Author/Title rule evaluation script:
+  - `scripts/Test-AuthorTitleRuleEvaluation.ps1`
+- Wired Productive option `1. MQG-01: Clean Title & Author` to run rule evaluation after Author/Title source export.
+- MQG-01 Productive workflow now creates:
+  - Author/Title source TSV,
+  - MQG-01 rule evaluation TSV,
+  - Analyze/Preview summary TXT.
+
+### Behavior
+
+- MQG-01 Productive workflow now performs conservative rule evaluation.
+- Rule evaluation output includes:
+  - `ProposalStatus`,
+  - `RuleIds`,
+  - `ChangeReason`,
+  - `Confidence`,
+  - `ManualReviewRequired`,
+  - `ReviewAction`,
+  - `TitleWouldChange`,
+  - `AuthorsWouldChange`.
+- The rule evaluation TSV preserves dry-run-compatible fields:
+  - `CalibreId`,
+  - `OriginalTitle`,
+  - `ProposedTitle`,
+  - `OriginalAuthors`,
+  - `ProposedAuthors`,
+  - `ChangeReason`,
+  - `Confidence`,
+  - `ManualReviewRequired`.
+- Productive MQG-01 now shows:
+  - source row counts,
+  - MQG-01 complete vs needs-review counts,
+  - rule evaluation status counts,
+  - first 20 Author/Title rows,
+  - first 20 actionable rule rows.
+
+### Initial Rule Coverage
+
+- Safe mechanical change rules:
+  - trim title whitespace,
+  - collapse repeated title spaces,
+  - trim author whitespace,
+  - collapse repeated author spaces.
+- Review-required proposal rules:
+  - remove generic fiction subtitles such as `: A Novel` and `: A Story`,
+  - remove award or marketing parentheticals,
+  - remove edition or anniversary parenthetical text.
+- Manual review rules:
+  - missing title,
+  - missing author field,
+  - bracketed title text,
+  - unresolved parenthetical title text,
+  - contributor role text in author field.
+
+### Validation
+
+- Parser check passed for:
+  - `Start-LccWorkflow.ps1`,
+  - `scripts/Test-AuthorTitleRuleEvaluation.ps1`.
+- Direct script smoke testing confirmed:
+  - clean row produces `No Change`,
+  - `Matrix: A Novel` produces `Change Proposed`,
+  - award parenthetical cleanup produces `Change Proposed`,
+  - whitespace cleanup produces `Safe Mechanical Change`,
+  - missing title produces `Manual Review`,
+  - contributor role text produces `Manual Review`.
+- Productive launcher smoke test confirmed:
+  - Productive option `1` opened MQG-01 Analyze/Preview + Rule Evaluation,
+  - search `id:4058` created a batch manifest,
+  - Author/Title source TSV was exported,
+  - MQG-01 rule evaluation TSV was generated,
+  - preview summary was written,
+  - selected 1 row,
+  - showed rule evaluation counts,
+  - performed no dry run,
+  - performed no apply,
+  - performed no Calibre metadata writes.
+
+### Notes
+
+- This release adds the first practical MQG-01 rule-evaluation layer.
+- It remains read-only.
+- Recommended next implementation target:
+  - `v0.12.7 - MQG-01 AI/Manual Review Packet`
+
+---
 ## v0.12.5 - MQG-01 Analyze/Preview Shell
 
 ### Added
