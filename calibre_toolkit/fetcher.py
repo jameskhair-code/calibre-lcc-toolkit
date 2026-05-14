@@ -93,7 +93,9 @@ class IdentifierFetcher:
             return FetchResult(lookup_method=method, confidence=confidence, error="timeout")
 
         if not result.stdout.strip():
-            return FetchResult(lookup_method=method, confidence=confidence, error="no_results")
+            stderr = result.stderr.strip()
+            error_msg = f"no_results: {stderr[:120]}" if stderr else "no_results"
+            return FetchResult(lookup_method=method, confidence=confidence, error=error_msg)
 
         fr = _parse_opf(result.stdout)
         fr.lookup_method = method

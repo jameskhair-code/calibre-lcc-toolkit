@@ -199,6 +199,14 @@ def run_enrichment(
         f"{len(failed)} lookup errors[/dim]\n"
     )
 
+    if failed:
+        for s in failed:
+            console.print(
+                f"  [red]✗[/red] [dim]{s.title[:60]}[/dim] — "
+                f"[yellow]{s.lookup_error}[/yellow]"
+            )
+        console.print()
+
     already_sufficient_ids = [s.book_id for s in already_sufficient]
 
     if not has_new:
