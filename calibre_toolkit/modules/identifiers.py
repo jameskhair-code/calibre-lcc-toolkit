@@ -45,7 +45,8 @@ class IdentifierSuggestion:
 
 
 def _is_sufficient(identifiers: dict[str, str], required: list[str]) -> bool:
-    return any(t in identifiers for t in required)
+    """True only when ALL required types are present — ensures multirun enrichment."""
+    return all(t in identifiers for t in required)
 
 
 def _confidence_style(confidence: str) -> tuple[str, str]:
@@ -255,8 +256,26 @@ def run_enrichment(
         elif choice == "review":
             applied_ids += _prompt_and_apply(db, has_new)
 
-    # ── 6. Mark MQG complete ──────────────────────────────────────────────────
-    _mark_complete(db, mqg_column, already_sufficient_ids + applied_ids, label="processed")
+    # ── 6. Mark MQG complete ─────────────────────────────────────────────────
+    # Only mark complete if the book now has ALL sufficient_types.
+    # Books that got partial enrichment stay in the queue for another run.
+    applied_map = {s.book_id: s for s in has_new}
+    now_complete: list[int] = []
+    still_incomplete: list[int] = []
+    for book_id in applied_ids:
+        s = applied_map[book_id]
+        final_ids = {**s.current_identifiers, **s.new_identifiers}
+        if _is_sufficient(final_ids, sufficient_types):
+            now_complete.append(book_id)
+        else:
+            missing = [t for t in sufficient_types if t not in final_ids]
+            still_incomplete.append(book_id)
+            console.print(
+                f"[dim]Book {book_id} ({s.title[:50]}): "
+                f"still missing {', '.join(missing)} — will reappear on next run.[/dim]"
+            )
+
+    _mark_complete(db, mqg_column, already_sufficient_ids + now_complete, label="complete")
     console.print("\n[bold green]Done![/bold green]")
 
 
