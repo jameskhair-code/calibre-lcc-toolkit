@@ -329,6 +329,18 @@ T-FMT-15: If a title appears to be a duplicate with minor variation
            flag it with "low" confidence and note the possible duplicate
            rather than attempting to fix it.
 
+T-FMT-16: Use Roman numerals for World War references — never Arabic numerals.
+           WRONG: "World War 2"  →  leave as "World War 2"
+           RIGHT: "World War 2"  →  "World War II"
+           WRONG: "World War 1"  →  leave as "World War 1"
+           RIGHT: "World War 1"  →  "World War I"
+           Also correct abbreviations to the full standard form:
+             "WW2"  →  "World War II"
+             "WW1"  →  "World War I"
+             "WWII" →  "World War II"  (already correct Roman numerals, expand abbreviation)
+             "WWI"  →  "World War I"   (already correct Roman numerals, expand abbreviation)
+           Use "high" confidence for this mechanical correction.
+
 
 ---
 ## SECTION A-ORD — Author: Name Format & Order
