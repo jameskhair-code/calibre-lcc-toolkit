@@ -71,8 +71,18 @@ Each object must have exactly these keys:
   "title": "<cleaned title>",
   "authors": ["<First Last>", ...],
   "confidence": "high" | "medium" | "low",
-  "notes": "<one sentence: what changed and why, or 'No changes needed'>"
+  "notes": "<one sentence explaining what was changed and why>"
 }
+
+Notes guidance:
+- If you made changes: describe specifically what you changed and which rule applies.
+  Good: "Removed generic subtitle per T-SUB-02."
+  Good: "Lowercased preposition 'with' per title case rules."
+  Good: "Removed series parenthetical '(The Way Book 1)' per T-SER-02."
+- If you made NO changes: write "Already correctly formatted."
+- NEVER write "No changes needed" if you actually changed the title or authors.
+- Keep notes to one clear sentence.
+
 Return ONLY the JSON array. No markdown fences, no explanation outside the array.
 """
 
@@ -135,21 +145,21 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
 
         if (title_changed or authors_changed) and no_changes_note:
             if not ai_changed_title and not ai_changed_authors:
-                # AI correctly left it alone; code normalization made the change
+                # AI left it alone; code normalization made the change
                 parts = []
                 if code_changed_title:
                     parts.append("title")
                 if code_changed_authors:
                     parts.append("authors")
-                notes = f"Code normalization applied to {' and '.join(parts)} (diacritics/dashes)"
+                notes = f"Americanized special characters in {' and '.join(parts)} (diacritics and dashes converted to plain ASCII)."
             else:
-                # AI made changes but incorrectly said "no changes needed"
+                # AI made changes but wrote "no changes needed" — generate a clean fallback
                 parts = []
                 if title_changed:
                     parts.append("title")
                 if authors_changed:
                     parts.append("authors")
-                notes = f"Updated {' and '.join(parts)} (AI note corrected)"
+                notes = f"Corrected {' and '.join(parts)} formatting."
 
         suggestions.append(CleanupSuggestion(
             book_id=book_id,
