@@ -277,6 +277,10 @@ T-FMT-04: Normalize double punctuation:
 
 T-FMT-05: Do not change ampersand (&) to "and" or vice versa — follow the
            published title exactly in this respect.
+           WRONG: "Arthur & George"  →  "Arthur and George"
+           RIGHT: "Arthur & George"  →  "Arthur & George"  (leave unchanged)
+           WRONG: "Crime and Punishment"  →  "Crime & Punishment"
+           RIGHT: "Crime and Punishment"  →  "Crime and Punishment"  (leave unchanged)
 
 T-FMT-06: Remove stray markdown or formatting characters that appear in the
            title field: asterisks (*), underscores (_), hash symbols (#),
