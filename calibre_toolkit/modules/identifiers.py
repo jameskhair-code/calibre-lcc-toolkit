@@ -229,55 +229,72 @@ def run_enrichment(
         _mark_complete(db, mqg_column, already_sufficient_ids, label="already-sufficient")
         raise typer.Exit()
 
-    # ── 4. Review table ───────────────────────────────────────────────────────
-    table = _build_review_table(has_new)
-    console.print(table)
-    console.print(
+    # ── 4. Partition by confidence & display tiered tables ───────────────────
+    high = [s for s in has_new if s.confidence == "high"]
+    low  = [s for s in has_new if s.confidence != "high"]
+
+    _LEGEND = (
         "\n[dim]Legend: [green]●[/green] High confidence (ISBN lookup)  "
         "[red]○[/red] Low confidence (title/author lookup — verify before accepting)[/dim]\n"
     )
 
+    if high:
+        console.print(
+            f"[bold cyan]Tier 1 — High confidence[/bold cyan] "
+            f"[dim]({len(high)} book{'s' if len(high) != 1 else ''}, ISBN-verified)[/dim]"
+        )
+        console.print(_build_review_table(high))
+
+    if low:
+        console.print(
+            f"\n[bold yellow]Tier 2 — Low confidence[/bold yellow] "
+            f"[dim]({len(low)} book{'s' if len(low) != 1 else ''}, title/author match — "
+            "verify edition before accepting)[/dim]"
+        )
+        console.print(_build_review_table(low))
+
+    console.print(_LEGEND)
+
     # ── 5. Apply options ──────────────────────────────────────────────────────
-    high      = [s for s in has_new if s.confidence == "high"]
-    low       = [s for s in has_new if s.confidence != "high"]
     applied_ids: list[int] = []
 
-    if auto_apply_high and high:
-        console.print(
-            f"[bold]--auto-apply-high[/bold]: applying [green]{len(high)}[/green] "
-            "high-confidence enrichments automatically.\n"
-        )
-        applied_ids += _apply_suggestions(db, high)
-        if low:
+    # --- Tier 1: high confidence ---
+    if high:
+        if auto_apply_high:
             console.print(
-                f"\n[yellow]{len(low)}[/yellow] low-confidence enrichments require your decision:\n"
+                f"[bold]--auto-apply-high[/bold]: applying [green]{len(high)}[/green] "
+                "high-confidence enrichments automatically.\n"
             )
-            applied_ids += _prompt_and_apply(db, low)
-    else:
-        choice = Prompt.ask(
-            "[bold]Apply enrichments?[/bold]",
-            choices=["all", "high-only", "review", "skip"],
+            applied_ids += _apply_suggestions(db, high)
+        else:
+            choice_high = Prompt.ask(
+                f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence enrichment{'s' if len(high) != 1 else ''}?",
+                choices=["all", "review", "skip"],
+                default="all",
+                show_choices=True,
+            )
+            if choice_high == "all":
+                applied_ids += _apply_suggestions(db, high)
+            elif choice_high == "review":
+                applied_ids += _prompt_and_apply(db, high)
+            # skip: do nothing
+
+    # --- Tier 2: low confidence — always individual review ---
+    if low:
+        console.print(
+            f"\n[bold yellow]Tier 2:[/bold yellow] {len(low)} low-confidence enrichment{'s' if len(low) != 1 else ''} "
+            "— review each individually (wrong ISBN will affect run 2):\n"
+        )
+        low_choice = Prompt.ask(
+            f"[bold]Tier 2:[/bold] Apply low-confidence enrichments?",
+            choices=["review", "skip"],
             default="review",
             show_choices=True,
         )
-        if choice == "skip":
-            console.print("[dim]No changes applied.[/dim]")
-            _mark_complete(db, mqg_column, already_sufficient_ids, label="already-sufficient")
-            raise typer.Exit()
-        elif choice == "all":
-            applied_ids += _apply_suggestions(db, has_new)
-        elif choice == "high-only":
-            if high:
-                applied_ids += _apply_suggestions(db, high)
-                if low:
-                    console.print(
-                        f"\n[yellow]{len(low)}[/yellow] low-confidence enrichments skipped. "
-                        "Run again to review them."
-                    )
-            else:
-                console.print("[dim]No high-confidence enrichments to apply.[/dim]")
-        elif choice == "review":
-            applied_ids += _prompt_and_apply(db, has_new)
+        if low_choice == "review":
+            applied_ids += _prompt_and_apply(db, low)
+        else:
+            console.print(f"[dim]{len(low)} low-confidence enrichment(s) skipped. Run again to review.[/dim]")
 
     # ── 6. Mark MQG complete ─────────────────────────────────────────────────
     # Only mark complete if the book now has ALL sufficient_types.
