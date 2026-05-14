@@ -24,6 +24,7 @@
 
   "mqg": {
     "title_author_column": "#mqg_title_author",
-    "identifiers_column": "#mqg_identifiers"
+    "identifiers_column": "#mqg_identifiers",
+    "identifiers_manual_column": "#mqg_identifiers_manual"
   }
 }

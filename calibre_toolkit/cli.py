@@ -175,6 +175,10 @@ def enrich_identifiers(
         bool,
         typer.Option("--force-lookup", help="Look up all books even if already sufficient"),
     ] = False,
+    mark_unfound: Annotated[
+        bool,
+        typer.Option("--mark-unfound", help="Flag books with failed lookups in the manual curation column instead of leaving them in the queue"),
+    ] = False,
 ):
     """
     MQG-02: Find and add external identifiers (ISBN, Goodreads, Amazon, etc.).
@@ -187,6 +191,8 @@ def enrich_identifiers(
         calibre-toolkit enrich-identifiers "#metadata_queue:true"
 
         calibre-toolkit enrich-identifiers "#mqg_title_author:true" --batch-size 10
+
+        calibre-toolkit enrich-identifiers "#metadata_queue:true" --mark-unfound
     """
     from .modules.identifiers import run_enrichment
     from .fetcher import IdentifierFetcher
@@ -199,6 +205,7 @@ def enrich_identifiers(
     timeout = id_cfg.get("lookup_timeout_seconds", 45)
     sufficient_types = id_cfg.get("sufficient_types", ["isbn"])
     mqg_column = cfg.get("mqg", {}).get("identifiers_column")
+    mqg_manual_column = cfg.get("mqg", {}).get("identifiers_manual_column")
 
     fetcher = IdentifierFetcher(fetch_path=fetch_path, timeout=timeout)
 
@@ -221,8 +228,10 @@ def enrich_identifiers(
         batch_size=batch_size,
         auto_apply_high=auto_apply_high,
         mqg_column=mqg_column,
+        mqg_manual_column=mqg_manual_column,
         sufficient_types=sufficient_types,
         force_lookup=force_lookup,
+        mark_unfound=mark_unfound,
     )
 
 
