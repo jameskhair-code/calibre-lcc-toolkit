@@ -298,19 +298,21 @@ def run_enrichment(
                 applied_ids += _prompt_and_apply(db, high)
             # skip: do nothing
 
-    # --- Tier 2: low confidence — always individual review ---
+    # --- Tier 2: low confidence ---
     if low:
         console.print(
             f"\n[bold yellow]Tier 2:[/bold yellow] {len(low)} low-confidence enrichment{'s' if len(low) != 1 else ''} "
-            "— review each individually (wrong ISBN will affect run 2):\n"
+            "— title/author match (wrong ISBN will affect run 2):\n"
         )
         low_choice = Prompt.ask(
             f"[bold]Tier 2:[/bold] Apply low-confidence enrichments?",
-            choices=["review", "skip"],
+            choices=["all", "review", "skip"],
             default="review",
             show_choices=True,
         )
-        if low_choice == "review":
+        if low_choice == "all":
+            applied_ids += _apply_suggestions(db, low)
+        elif low_choice == "review":
             applied_ids += _prompt_and_apply(db, low)
         else:
             console.print(f"[dim]{len(low)} low-confidence enrichment(s) skipped. Run again to review.[/dim]")
