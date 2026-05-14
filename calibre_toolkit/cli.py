@@ -175,24 +175,20 @@ def enrich_identifiers(
         bool,
         typer.Option("--force-lookup", help="Look up all books even if already sufficient"),
     ] = False,
-    mark_unfound: Annotated[
-        bool,
-        typer.Option("--mark-unfound", help="Flag books with failed lookups in the manual curation column instead of leaving them in the queue"),
-    ] = False,
 ):
     """
     MQG-02: Find and add external identifiers (ISBN, Goodreads, Amazon, etc.).
 
     Uses Calibre's own fetch-ebook-metadata tool to query configured metadata
     sources including Goodreads. Each book requires a live web lookup.
+    Books that cannot be found are automatically flagged in the manual curation
+    column (mqg.identifiers_manual_column in config.json).
 
     Examples:
 
         calibre-toolkit enrich-identifiers "#metadata_queue:true"
 
         calibre-toolkit enrich-identifiers "#mqg_title_author:true" --batch-size 10
-
-        calibre-toolkit enrich-identifiers "#metadata_queue:true" --mark-unfound
     """
     from .modules.identifiers import run_enrichment
     from .fetcher import IdentifierFetcher
@@ -231,7 +227,6 @@ def enrich_identifiers(
         mqg_manual_column=mqg_manual_column,
         sufficient_types=sufficient_types,
         force_lookup=force_lookup,
-        mark_unfound=mark_unfound,
     )
 
 

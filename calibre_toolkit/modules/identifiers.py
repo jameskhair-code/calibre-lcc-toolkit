@@ -117,7 +117,6 @@ def run_enrichment(
     mqg_manual_column: str | None = None,
     sufficient_types: list[str] | None = None,
     force_lookup: bool = False,
-    mark_unfound: bool = False,
 ) -> None:
     """Full MQG-02 identifier enrichment flow for a given Calibre search string."""
 
@@ -207,18 +206,17 @@ def run_enrichment(
                 f"  [red]✗[/red] [dim]{s.title[:60]}[/dim] — "
                 f"[yellow]{s.lookup_error}[/yellow]"
             )
-        if mark_unfound:
-            unfound_ids = [s.book_id for s in failed]
+        unfound_ids = [s.book_id for s in failed]
+        if mqg_manual_column:
             console.print(
-                f"\n[yellow]--mark-unfound:[/yellow] flagging {len(unfound_ids)} "
-                f"unresolvable book(s) in [bold]{mqg_manual_column or '#mqg_identifiers_manual'}[/bold] "
-                "for manual curation."
+                f"\n[yellow]Auto-flagging {len(unfound_ids)} unresolvable book(s)[/yellow] "
+                f"in [bold]{mqg_manual_column}[/bold] for manual curation."
             )
             _mark_complete(db, mqg_manual_column, unfound_ids, label="manual-needed")
         else:
             console.print(
-                f"\n[dim]{len(failed)} book(s) could not be looked up. "
-                "Re-run to retry, or use --mark-unfound to flag them for manual curation.[/dim]"
+                f"\n[dim]{len(failed)} book(s) could not be looked up and were not flagged "
+                "(set mqg.identifiers_manual_column in config.json to track them).[/dim]"
             )
         console.print()
 
