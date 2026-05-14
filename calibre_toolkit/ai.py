@@ -141,7 +141,8 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
         authors_changed = suggested_authors != book.authors
 
         notes = item.get("notes", "")
-        no_changes_note = notes.lower().strip(".").strip() == "no changes needed"
+        _notes_lower = notes.lower().strip(".").strip()
+        no_changes_note = _notes_lower in ("no changes needed", "already correctly formatted")
 
         if (title_changed or authors_changed) and no_changes_note:
             if not ai_changed_title and not ai_changed_authors:
