@@ -13,8 +13,8 @@ from typing import Literal
 # Identifier types we surface, in display order
 IDENTIFIER_TYPES = ["isbn", "amazon", "goodreads", "google", "oclc", "openlibrary", "librarything"]
 
-# Internal Calibre identifiers and non-identifier metadata to ignore
-_SKIP_TYPES = {"calibre", "uuid", "grrating", "grvotes", "grreviews"}
+# Internal Calibre identifiers to ignore
+_SKIP_TYPES = {"calibre", "uuid"}
 
 _DC_NS  = "http://purl.org/dc/elements/1.1/"
 _OPF_NS = "http://www.idpf.org/2007/opf"
