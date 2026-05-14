@@ -130,18 +130,39 @@ def run_enrichment(
         raise typer.Exit(1)
 
     # ── 1. Fetch books ────────────────────────────────────────────────────────
+    # Automatically exclude books already flagged for manual curation.
+    effective_query = (
+        f"({search_query}) and not {mqg_manual_column}:true"
+        if mqg_manual_column else search_query
+    )
     try:
         with console.status(f"[cyan]Searching library:[/] {search_query}"):
-            books = db.search(search_query)
+            books = db.search(effective_query)
+            if mqg_manual_column and effective_query != search_query:
+                all_books = db.search(search_query)
+                skipped = len(all_books) - len(books)
+            else:
+                skipped = 0
     except RuntimeError as e:
         console.print(Panel(str(e), title="[red]Cannot access library[/red]", border_style="red"))
         raise typer.Exit(1)
 
     if not books:
         console.print("[yellow]No books matched that search. Nothing to do.[/yellow]")
+        if skipped:
+            console.print(
+                f"[dim]({skipped} book(s) skipped — already flagged in "
+                f"[bold]{mqg_manual_column}[/bold] for manual curation.)[/dim]"
+            )
         raise typer.Exit()
 
-    console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
+    console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]", end="")
+    if skipped:
+        console.print(
+            f" [dim]({skipped} already in {mqg_manual_column} skipped.)[/dim]"
+        )
+    else:
+        console.print()
 
     # ── 2. Lookup identifiers ─────────────────────────────────────────────────
     suggestions: list[IdentifierSuggestion] = []
