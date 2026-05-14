@@ -52,6 +52,19 @@ def _make_db(cfg: dict):
     )
 
 
+def _infer_fetch_path(cfg: dict) -> str:
+    """Infer fetch-ebook-metadata path from config or from calibredb_path sibling."""
+    explicit = cfg.get("identifiers", {}).get("fetch_ebook_metadata_path")
+    if explicit:
+        return explicit
+    calibredb = cfg.get("calibredb_path", "calibredb")
+    p = Path(calibredb)
+    if p.parent != Path("."):
+        suffix = ".exe" if calibredb.lower().endswith(".exe") else ""
+        return str(p.parent / f"fetch-ebook-metadata{suffix}")
+    return "fetch-ebook-metadata"
+
+
 def _make_ai(cfg: dict):
     from .ai import AIClient
     ai_cfg = cfg.get("ai", {})
@@ -137,6 +150,79 @@ def clean_titles(
         batch_size=batch_size,
         auto_apply_high=auto_apply_high,
         mqg_column=mqg_column,
+    )
+
+
+@app.command()
+def enrich_identifiers(
+    search: Annotated[
+        str,
+        typer.Argument(help='Calibre search string, e.g. "#metadata_queue:true"'),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    batch_size: Annotated[
+        int,
+        typer.Option("--batch-size", "-b", help="Books per run (each requires a live web lookup; default 20)"),
+    ] = 20,
+    auto_apply_high: Annotated[
+        bool,
+        typer.Option("--auto-apply-high", help="Apply high-confidence enrichments without prompting"),
+    ] = False,
+    force_lookup: Annotated[
+        bool,
+        typer.Option("--force-lookup", help="Look up all books even if already sufficient"),
+    ] = False,
+):
+    """
+    MQG-02: Find and add external identifiers (ISBN, Goodreads, Amazon, etc.).
+
+    Uses Calibre's own fetch-ebook-metadata tool to query configured metadata
+    sources including Goodreads. Each book requires a live web lookup.
+
+    Examples:
+
+        calibre-toolkit enrich-identifiers "#metadata_queue:true"
+
+        calibre-toolkit enrich-identifiers "#mqg_title_author:true" --batch-size 10
+    """
+    from .modules.identifiers import run_enrichment
+    from .fetcher import IdentifierFetcher
+
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+
+    id_cfg = cfg.get("identifiers", {})
+    fetch_path = _infer_fetch_path(cfg)
+    timeout = id_cfg.get("lookup_timeout_seconds", 45)
+    sufficient_types = id_cfg.get("sufficient_types", ["isbn"])
+    mqg_column = cfg.get("mqg", {}).get("identifiers_column")
+
+    fetcher = IdentifierFetcher(fetch_path=fetch_path, timeout=timeout)
+
+    console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — MQG-02 Identifier Enrichment\n\n",
+                ("Search: ", "dim"),
+                (search, "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_enrichment(
+        db=db,
+        fetcher=fetcher,
+        search_query=search,
+        batch_size=batch_size,
+        auto_apply_high=auto_apply_high,
+        mqg_column=mqg_column,
+        sufficient_types=sufficient_types,
+        force_lookup=force_lookup,
     )
 
 

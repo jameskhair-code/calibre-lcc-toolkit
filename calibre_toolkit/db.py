@@ -148,3 +148,36 @@ class CalibreDB:
             if result.returncode != 0:
                 console_warn = f"Warning: could not mark book {book_id} as MQG complete: {result.stderr.strip()}"
                 print(console_warn)
+
+    def get_identifiers(self, book_id: int) -> dict[str, str]:
+        """Return {type: value} for all identifiers currently on a book."""
+        query = "SELECT type, val FROM identifiers WHERE book = ?"
+        with self._connect() as conn:
+            rows = conn.execute(query, [book_id]).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def apply_identifiers(self, book_id: int, merged: dict[str, str]) -> None:
+        """Write a complete set of identifiers to Calibre via calibredb set_metadata.
+
+        REPLACES all existing identifiers — caller must merge current + new before calling.
+        Values containing ',' or ':' are skipped to avoid corrupting the field string.
+        """
+        safe = {
+            k: v for k, v in merged.items()
+            if v and "," not in v and k not in ("", "calibre")
+        }
+        if not safe:
+            return
+        id_str = ",".join(f"{k}:{v}" for k, v in safe.items())
+        cmd = [
+            self.calibredb_path,
+            "set_metadata",
+            "--library-path", str(self.library_path),
+            str(book_id),
+            "--field", f"identifiers:{id_str}",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
+            )
