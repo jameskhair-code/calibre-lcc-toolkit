@@ -230,6 +230,50 @@ def enrich_identifiers(
     )
 
 
+@app.command()
+def clean_identifiers(
+    search: Annotated[
+        str,
+        typer.Argument(help='Calibre search string, e.g. "all" or "#mqg_identifiers:true"'),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    auto_apply: Annotated[
+        bool,
+        typer.Option("--auto-apply", help="Apply all fixes without prompting"),
+    ] = False,
+):
+    """
+    Scan and fix malformed identifiers (UUIDs, urnisbn/ format, empty values).
+
+    Examples:
+
+        calibre-toolkit clean-identifiers "all"
+
+        calibre-toolkit clean-identifiers "#mqg_identifiers:true"
+    """
+    from .modules.clean_identifiers import run_clean_identifiers
+
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+
+    console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — Identifier Cleanup\n\n",
+                ("Search: ", "dim"),
+                (search, "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_clean_identifiers(db=db, search_query=search, auto_apply=auto_apply)
+
+
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context):
     if ctx.invoked_subcommand is None:
