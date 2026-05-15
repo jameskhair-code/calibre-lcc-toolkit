@@ -276,7 +276,7 @@ def run_enrichment(
     for idx, book in enumerate(books, 1):
         current = db.get_identifiers(book.id)
 
-        if not force_lookup and _is_sufficient(current, sufficient_types):
+        if not force_lookup and _is_sufficient(current, sufficient_types) and _is_sufficient(current, mqg_complete_requires):
             suggestions.append(IdentifierSuggestion(
                 book_id=book.id,
                 title=book.title,
