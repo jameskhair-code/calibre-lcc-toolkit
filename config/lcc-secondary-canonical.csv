@@ -140,25 +140,25 @@ ND,ND - Painting,ND - Fine Arts - Painting
 NE,NE - Print Media,NE - Fine Arts - Print Media
 NK,NK - Decorative Arts,NK - Fine Arts - Decorative Arts
 NX,NX - Arts: General,NX - Arts in General|NX - Fine Arts - Arts in General
-P,P - Philology & Linguistics,P - Philology / Linguistics|P - Language and Literature - Philology/Linguistics
-PA,PA - Classical Languages & Literature,PA - Greek Language and Literature / Latin Language and Literature|PA - Language and Literature - Greek Language and Literature/Latin Language and Literature
-PB,PB - Modern & Celtic Languages,PB - Modern Languages / Celtic Languages|PB - Language and Literature - Modern Languages/Celtic Languages
-PC,PC - Romanic Languages,PC - Language and Literature - Romanic Languages
-PD,PD - Germanic & Scandinavian Languages,PD - Germanic Languages / Scandinavian Languages|PD - Language and Literature - Germanic Languages/Scandinavian Languages
-PE,PE - English Language,PE - Language and Literature - English Language
-PF,PF - West Germanic Languages,PF - Language and Literature - West Germanic Languages
-PG,PG - Slavic & Baltic Languages,PG - Slavic Languages / Baltic Languages / Albanian Language|PG - Language and Literature - Slavic Languages/Baltic Languages/Albanian Language
-PH,PH - Uralic & Basque Languages,PH - Uralic Languages / Basque Language|PH - Language and Literature - Uralic Languages/Basque Language
-PJ,PJ - Oriental Languages & Literature,PJ - Oriental Languages and Literatures|PJ - Language and Literature - Oriental Languages and Literatures
-PK,PK - Indo-Iranian Languages & Literature,PK - Indo-Iranian Languages and Literatures|PK - Language and Literature - Indo-Iranian Languages and Literatures
-PL,PL - Languages: East Asia & Africa & Oceania,PL - Languages and Literatures of Eastern Asia / Africa / Oceania|PL - Language and Literature - Languages and Literatures of Eastern Asia/Africa/Oceania
-PM,PM - Indigenous & Constructed Languages,PM - Hyperborean / Indian / Artificial Languages|PM - Language and Literature - Hyperborean/Indian/Artificial Languages
-PN,PN - Literature General,PN - Language and Literature - Literature (General)
-PQ,PQ - Romance Literatures,PQ - French Literature / Italian Literature / Spanish Literature / Portuguese Literature|PQ - Language and Literature - French Literature/Italian Literature/Spanish Literature/Portuguese Literature
-PR,PR - English Literature,PR - Language and Literature - English Literature
-PS,PS - American Literature,PS - Language and Literature - American Literature
-PT,PT - Germanic & Scandinavian Literatures,PT - German / Dutch / Flemish / Afrikaans / Scandinavian / Old Norse / Icelandic / Faroese / Danish / Norwegian / Swedish Literature|PT - Language and Literature - German/Dutch/Flemish/Afrikaans/Scandinavian/Old Norse (Icelandic and Norwegian)/Modern Icelandic/Faroese/Danish/Norwegian/Swedish Literature
-PZ,PZ - Fiction & Juvenile Literature,PZ - Fiction and Juvenile Belles Lettres|PZ - Language and Literature - Fiction and Juvenile Belles Lettres
+P,P - Philology & Linguistics,P - Philology / Linguistics|P - Language & Literature - Philology/Linguistics
+PA,PA - Classical Languages & Literature,PA - Greek Language & Literature / Latin Language & Literature|PA - Language & Literature - Greek Language & Literature/Latin Language & Literature
+PB,PB - Modern & Celtic Languages,PB - Modern Languages / Celtic Languages|PB - Language & Literature - Modern Languages/Celtic Languages
+PC,PC - Romanic Languages,PC - Language & Literature - Romanic Languages
+PD,PD - Germanic & Scandinavian Languages,PD - Germanic Languages / Scandinavian Languages|PD - Language & Literature - Germanic Languages/Scandinavian Languages
+PE,PE - English Language,PE - Language & Literature - English Language
+PF,PF - West Germanic Languages,PF - Language & Literature - West Germanic Languages
+PG,PG - Slavic & Baltic Languages,PG - Slavic Languages / Baltic Languages / Albanian Language|PG - Language & Literature - Slavic Languages/Baltic Languages/Albanian Language
+PH,PH - Uralic & Basque Languages,PH - Uralic Languages / Basque Language|PH - Language & Literature - Uralic Languages/Basque Language
+PJ,PJ - Oriental Languages & Literature,PJ - Oriental Languages and Literatures|PJ - Language & Literature - Oriental Languages and Literatures
+PK,PK - Indo-Iranian Languages & Literature,PK - Indo-Iranian Languages and Literatures|PK - Language & Literature - Indo-Iranian Languages and Literatures
+PL,PL - Languages: East Asia & Africa & Oceania,PL - Languages and Literatures of Eastern Asia / Africa / Oceania|PL - Language & Literature - Languages and Literatures of Eastern Asia/Africa/Oceania
+PM,PM - Indigenous & Constructed Languages,PM - Hyperborean / Indian / Artificial Languages|PM - Language & Literature - Hyperborean/Indian/Artificial Languages
+PN,PN - Literature General,PN - Language & Literature - Literature (General)
+PQ,PQ - Romance Literatures,PQ - French Literature / Italian Literature / Spanish Literature / Portuguese Literature|PQ - Language & Literature - French Literature/Italian Literature/Spanish Literature/Portuguese Literature
+PR,PR - English Literature,PR - Language & Literature - English Literature
+PS,PS - American Literature,PS - Language & Literature - American Literature
+PT,PT - Germanic & Scandinavian Literatures,PT - German / Dutch / Flemish / Afrikaans / Scandinavian / Old Norse / Icelandic / Faroese / Danish / Norwegian / Swedish Literature|PT - Language & Literature - German/Dutch/Flemish/Afrikaans/Scandinavian/Old Norse (Icelandic and Norwegian)/Modern Icelandic/Faroese/Danish/Norwegian/Swedish Literature
+PZ,PZ - Fiction & Juvenile Literature,PZ - Fiction and Juvenile Belles Lettres|PZ - Language & Literature - Fiction and Juvenile Belles Lettres
 Q,Q - Science General,Q - Science - Science (General)
 QA,QA - Mathematics,QA - Science - Mathematics
 QB,QB - Astronomy,QB - Science - Astronomy

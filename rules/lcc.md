@@ -131,7 +131,7 @@ PRI-02: Derive the primary class from the leading letter of the LCC call
             L → L - Education
             M → M - Music
             N → N - Fine Arts
-            P → P - Language and Literature
+            P → P - Language & Literature
             Q → Q - Science
             R → R - Medicine
             S → S - Agriculture
@@ -353,7 +353,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             NK    → "NK - Decorative Arts"
             NX    → "NX - Arts: General"
 
-          P — Language and Literature
+          P — Language & Literature
             P     → "P - Philology & Linguistics"
             PA    → "PA - Classical Languages & Literature"
             PB    → "PB - Modern & Celtic Languages"
@@ -511,7 +511,7 @@ PATH-04: First level (primary class, short form). Use these exact strings:
             L. Education
             M. Music
             N. Fine Arts
-            P. Language and Literature
+            P. Language & Literature
             Q. Science
             R. Medicine
             S. Agriculture
@@ -548,7 +548,7 @@ PATH-07: Examples spanning different classes:
             Path:  "B. Philosophy / Psychology / Religion > BM. Judaism > Reform Judaism > Modern Period > 20th-Century North America"
 
             LCC:   "PS3563.O8749 B45 1987"
-            Path:  "P. Language and Literature > PS. American Literature > 20th-Century Fiction > Postmodern Novel > Toni Morrison"
+            Path:  "P. Language & Literature > PS. American Literature > 20th-Century Fiction > Postmodern Novel > Toni Morrison"
 
             LCC:   "HD8390.B73 K63 1990"
             Path:  "H. Social Sciences > HD. Industries & Land Use & Labor > Labor History > Brazil > 20th-Century Working-Class Movements"
