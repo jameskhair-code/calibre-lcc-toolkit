@@ -2,10 +2,15 @@
 Identifier cleanup module.
 Scans books for malformed identifiers and offers to fix them.
 
-Phase 1 rules:
+Rules applied:
   - UUID values in any field → remove
   - urnisbn/<isbn> as identifier type → normalize to isbn:<isbn>
-  - Empty identifier values → remove
+  - urnuuid/<anything> as identifier type → remove
+  - isbn10 / isbn13 / isbn-10 type names → normalize to isbn (or remove if isbn present)
+  - ISBN or p-prefix embedded in type name (e.g. isbn9780007462520) → normalize to isbn
+  - Known junk/artifact/store types → remove
+  - Hyphens/spaces in isbn values → strip
+  - Whitespace-only or empty values → remove
 """
 
 from __future__ import annotations
@@ -29,6 +34,32 @@ _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
+
+# ISBN embedded directly in type name, with optional isbn or p prefix
+# Matches: isbn9780007462520, p9780299300234, p9781940941141
+_ISBN_AS_TYPE_RE = re.compile(r"^(?:isbn|p)(\d{10}|\d{13})$", re.IGNORECASE)
+
+# Non-digit chars to strip from isbn values (hyphens and spaces)
+_ISBN_NOISE_RE = re.compile(r"[-\s]")
+
+# Non-standard type names that encode isbn
+_ISBN_ALIASES = frozenset({"isbn10", "isbn13", "isbn-10"})
+
+# Types to remove outright — store artifacts, defunct sites, URL noise, DRM keys
+_REMOVE_TYPES = frozenset({
+    # DRM / plugin artifacts
+    "acs6", "epubbud", "notes_images", "revision", "ligmd5",
+    # Typos / ambiguous
+    "oasin",
+    # URL/URI noise — import artifacts, not useful for lookup
+    "url", "url2", "url3", "uri", "urn", "access_url", "ark",
+    # Store identifiers with no lookup value for this library
+    "ozon", "epl", "ilot", "guid",
+    # ISBN variants the user prefers not to keep separately
+    "eisbn", "ean",
+    # LibraryThing — not used in this workflow
+    "ltid",
+})
 
 
 @dataclass
@@ -66,13 +97,15 @@ def _analyze(identifiers: dict[str, str]) -> list[IdentifierChange]:
     changes: list[IdentifierChange] = []
 
     for id_type, id_value in identifiers.items():
+        raw_value = id_value or ""
+        value = raw_value.strip()
 
         # Rule 1: UUID value in any field
-        if _UUID_RE.match(id_value or ""):
+        if _UUID_RE.match(value):
             changes.append(IdentifierChange(
                 action="remove",
                 old_type=id_type,
-                old_value=id_value,
+                old_value=raw_value,
                 reason="UUID — not a valid external identifier",
             ))
             continue
@@ -85,7 +118,7 @@ def _analyze(identifiers: dict[str, str]) -> list[IdentifierChange]:
                     changes.append(IdentifierChange(
                         action="normalize",
                         old_type=id_type,
-                        old_value=id_value or "",
+                        old_value=value,
                         new_type="isbn",
                         new_value=isbn,
                         reason="URN-format ISBN — normalize to isbn",
@@ -94,18 +127,106 @@ def _analyze(identifiers: dict[str, str]) -> list[IdentifierChange]:
                     changes.append(IdentifierChange(
                         action="remove",
                         old_type=id_type,
-                        old_value=id_value or "",
+                        old_value=value,
                         reason="URN-format ISBN (isbn already present — remove duplicate)",
                     ))
             continue
 
-        # Rule 3: empty value
-        if not id_value:
+        # Rule 3: urnuuid/<anything> stored as the identifier type
+        if id_type.startswith("urnuuid/"):
             changes.append(IdentifierChange(
                 action="remove",
                 old_type=id_type,
-                old_value="",
-                reason="Empty value",
+                old_value=value,
+                reason="URN UUID type — not a valid external identifier",
+            ))
+            continue
+
+        # Rule 4: non-standard isbn alias types (isbn10, isbn13, isbn-10)
+        if id_type in _ISBN_ALIASES:
+            if "isbn" not in identifiers:
+                changes.append(IdentifierChange(
+                    action="normalize",
+                    old_type=id_type,
+                    old_value=value,
+                    new_type="isbn",
+                    new_value=value,
+                    reason=f"Non-standard ISBN type '{id_type}' — normalize to isbn",
+                ))
+            else:
+                changes.append(IdentifierChange(
+                    action="remove",
+                    old_type=id_type,
+                    old_value=value,
+                    reason=f"Non-standard ISBN type '{id_type}' (isbn already present — remove duplicate)",
+                ))
+            continue
+
+        # Rule 5: ISBN embedded in type name (isbn9780007462520, p9780299300234)
+        m = _ISBN_AS_TYPE_RE.match(id_type)
+        if m:
+            extracted = m.group(1)
+            if "isbn" not in identifiers:
+                changes.append(IdentifierChange(
+                    action="normalize",
+                    old_type=id_type,
+                    old_value=value,
+                    new_type="isbn",
+                    new_value=extracted,
+                    reason=f"ISBN embedded in type name — normalize to isbn:{extracted}",
+                ))
+            else:
+                changes.append(IdentifierChange(
+                    action="remove",
+                    old_type=id_type,
+                    old_value=value,
+                    reason="ISBN embedded in type name (isbn already present — remove duplicate)",
+                ))
+            continue
+
+        # Rule 6: known junk / artifact / non-useful types
+        if id_type in _REMOVE_TYPES:
+            changes.append(IdentifierChange(
+                action="remove",
+                old_type=id_type,
+                old_value=value,
+                reason=f"Non-useful identifier type — library hygiene",
+            ))
+            continue
+
+        # Rule 7: empty or whitespace-only value
+        if not value:
+            changes.append(IdentifierChange(
+                action="remove",
+                old_type=id_type,
+                old_value=raw_value,
+                reason="Whitespace-only value" if raw_value else "Empty value",
+            ))
+            continue
+
+        # Rule 8: isbn value normalization — strip hyphens and spaces
+        if id_type == "isbn":
+            normalized = _ISBN_NOISE_RE.sub("", value)
+            if normalized != value:
+                changes.append(IdentifierChange(
+                    action="normalize",
+                    old_type="isbn",
+                    old_value=value,
+                    new_type="isbn",
+                    new_value=normalized,
+                    reason="Strip hyphens/spaces from ISBN value",
+                ))
+            continue
+
+        # Rule 9: whitespace in value for any other type
+        if value != raw_value:
+            changes.append(IdentifierChange(
+                action="normalize",
+                old_type=id_type,
+                old_value=raw_value,
+                new_type=id_type,
+                new_value=value,
+                reason="Strip leading/trailing whitespace from value",
             ))
 
     return changes

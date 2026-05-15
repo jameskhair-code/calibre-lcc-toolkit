@@ -1,10 +1,10 @@
 # Identifier Normalization Rules
 
 Profile name: Keith Identifier Normalization Rules  
-Profile version: v0.1  
-Scope: MQG-02 Identifiers  
+Profile version: v0.2  
+Scope: MQG-02 Identifiers + Maintenance (clean-identifiers)  
 Status: ActiveDraft  
-Last updated: 2026-05-10
+Last updated: 2026-05-15
 
 ---
 
@@ -59,13 +59,24 @@ These identifiers are useful and should generally be preserved unless clearly ma
 - `isfdb`
 - `isfdb-title`
 - `librarything`
-- `ltid`
-- `uri`
-- `url`
-- `url2`
-- `url3`
+- `amazon_uk`
+- `sonybookid`
 
 These may support later enrichment, external linking, or disambiguation.
+
+## 3a. Types Removed by clean-identifiers (maintenance rules)
+
+The following types are removed automatically by the `clean-identifiers` maintenance command:
+
+**DRM / plugin artifacts:** `acs6`, `epubbud`, `notes_images`, `revision`, `ligmd5`
+
+**Typos / ambiguous:** `oasin`
+
+**URL / URI noise** (import artifacts, not useful for lookup): `url`, `url2`, `url3`, `uri`, `urn`, `access_url`, `ark`
+
+**Store identifiers not used in this library's workflow:** `ozon`, `epl`, `ilot`, `guid`, `ltid`
+
+**ISBN variants kept separately** (user preference — normalize or remove in favour of `isbn`): `eisbn`, `ean`, `isbn10`, `isbn13`, `isbn-10`
 
 ---
 
@@ -84,22 +95,17 @@ They are useful metadata, but they are not identity anchors.
 
 Identifier type names should not themselves be ISBNs, URNs, or malformed pseudo-fields.
 
-Examples requiring review:
+The following patterns are auto-corrected by `clean-identifiers`:
 
-- bare ISBN-looking type names, such as `9780061760358`
-- `isbn978...`
-- `urnisbn/...`
-- `p978...`
-- `urnuuid...`
+| Pattern | Example | Action |
+|---|---|---|
+| `urnisbn/<isbn>` as type | `urnisbn/9781409016571` | Normalize to `isbn:<isbn>` (or remove if `isbn` present) |
+| `urnuuid/<anything>` as type | `urnuuid/0395856973` | Remove |
+| `isbn<10 or 13 digits>` as type | `isbn9780007462520` | Normalize to `isbn:<digits>` (or remove if `isbn` present) |
+| `p<10 or 13 digits>` as type | `p9780299300234` | Normalize to `isbn:<digits>` (or remove if `isbn` present) |
+| `isbn10`, `isbn13`, `isbn-10` | `isbn13` | Normalize to `isbn` (or remove if `isbn` present) |
 
-These usually indicate that an identifier was imported into the wrong part of the identifier map.
-
-Default action:
-
-- Flag for review.
-- Do not automatically remove unless the intended value is safely recoverable.
-- If a suspicious type encodes an ISBN and the record lacks a proper `isbn`, propose adding the recovered ISBN to `isbn`.
-- Preserve source evidence in the proposal notes.
+Bare ISBN-looking type names (e.g. `9780061760358` as a type with no prefix) are not yet auto-detected and should be handled manually.
 
 ---
 
