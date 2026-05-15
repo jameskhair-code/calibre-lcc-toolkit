@@ -368,7 +368,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             PL    → "PL - Languages: East Asia & Africa & Oceania"
             PM    → "PM - Indigenous & Constructed Languages"
             PN    → "PN - Literature General"
-            PQ    → "PQ - Romance Literatures"
+            PQ    → "PQ - Romance-Language Literatures"
             PR    → "PR - English Literature"
             PS    → "PS - American Literature"
             PT    → "PT - Germanic & Scandinavian Literatures"
