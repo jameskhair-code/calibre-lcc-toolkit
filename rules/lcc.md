@@ -119,12 +119,12 @@ PRI-02: Derive the primary class from the leading letter of the LCC call
           number. The mapping is mechanical:
 
             A → A - General Works
-            B → B - Philosophy, Psychology & Religion
+            B → B - Philosophy & Psychology & Religion
             C → C - Auxiliary Sciences of History
             D → D - World History & Area Studies
             E → E - History of the Americas
             F → F - History of the Americas
-            G → G - Geography, Anthropology & Recreation
+            G → G - Geography & Anthropology & Recreation
             H → H - Social Sciences
             J → J - Political Science
             K → K - Law
@@ -162,10 +162,10 @@ SEC-01: lcc_secondary_class is a controlled drop-down. You MUST return one
 SEC-02: Derive the secondary class from the subclass letters of the LCC call
           number (the letters immediately preceding the first digit).
           Examples:
-            "DK189 .W67 2003"      → subclass "DK"  → "DK - Russia, Soviet Union & Former Republics"
+            "DK189 .W67 2003"      → subclass "DK"  → "DK - Russia & Soviet Union & Former Republics"
             "BM197.5 .K64 2003"    → subclass "BM"  → "BM - Judaism"
             "PS3563.O8749 B45"     → subclass "PS"  → "PS - American Literature"
-            "HD8390.B73 K63 1990"  → subclass "HD"  → "HD - Industries, Land Use & Labor"
+            "HD8390.B73 K63 1990"  → subclass "HD"  → "HD - Industries & Land Use & Labor"
 
 SEC-03: Special cases — range-coded secondaries for E and F:
             E11-143      → "E11-143 - Americas: Pre-Colonial & Colonial"
@@ -181,7 +181,7 @@ SEC-04: Special cases — combined-range secondaries:
             KD or KDK    → "KD-KDK - Law: United Kingdom & Ireland"
             KG through KKH → "KG-KKH - Law: Latin America & Caribbean"
             KJ through KKZ → "KJ-KKZ - Law: Europe"
-            KL through KWX → "KL-KWX - Law: Asia, Africa & Pacific"
+            KL through KWX → "KL-KWX - Law: Asia & Africa & Pacific"
           When the subclass letters fall in one of these combined ranges,
           use the combined-range secondary.
 
@@ -190,7 +190,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
 
           A — General Works
             A     → "A - General Works"
-            AC    → "AC - Collections, Series & Collected Works"
+            AC    → "AC - Collections & Series & Collected Works"
             AE    → "AE - Encyclopedias"
             AG    → "AG - Dictionaries and Other General Reference Works"
             AI    → "AI - Indexes"
@@ -198,7 +198,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             AN    → "AN - Newspapers"
             AP    → "AP - Periodicals"
             AS    → "AS - Academies and Learned Societies"
-            AY    → "AY - Yearbooks, Almanacs & Directories"
+            AY    → "AY - Yearbooks & Almanacs & Directories"
             AZ    → "AZ - History of Scholarship & The Humanities"
 
           B — Philosophy, Psychology & Religion
@@ -208,9 +208,9 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             BF    → "BF - Psychology"
             BH    → "BH - Aesthetics"
             BJ    → "BJ - Ethics"
-            BL    → "BL - Religions, Mythology & Rationalism"
+            BL    → "BL - Religions & Mythology & Rationalism"
             BM    → "BM - Judaism"
-            BP    → "BP - Islam, Bahai Faith & Theosophy"
+            BP    → "BP - Islam & Bahai Faith & Theosophy"
             BQ    → "BQ - Buddhism"
             BR    → "BR - Christianity"
             BS    → "BS - The Bible"
@@ -222,7 +222,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             C     → "C - Auxiliary Sciences of History General"
             CB    → "CB - History of Civilization"
             CC    → "CC - Archaeology"
-            CD    → "CD - Diplomatics, Archives & Seals"
+            CD    → "CD - Diplomatics & Archives & Seals"
             CE    → "CE - Technical Chronology & Calendar"
             CJ    → "CJ - Numismatics"
             CN    → "CN - Inscriptions & Epigraphy"
@@ -234,8 +234,8 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             D     → "D - History General"
             DA    → "DA - Great Britain"
             DAW   → "DAW - Central Europe"
-            DB    → "DB - Austria, Hungary & Central Europe"
-            DC    → "DC - France, Andorra & Monaco"
+            DB    → "DB - Austria & Hungary & Central Europe"
+            DC    → "DC - France & Andorra & Monaco"
             DD    → "DD - Germany"
             DE    → "DE - Greco-Roman World"
             DF    → "DF - Greece"
@@ -243,7 +243,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             DH    → "DH - Low Countries & Benelux"
             DJ    → "DJ - Netherlands"
             DJK   → "DJK - Eastern Europe General"
-            DK    → "DK - Russia, Soviet Union & Former Republics"
+            DK    → "DK - Russia & Soviet Union & Former Republics"
             DL    → "DL - Northern Europe & Scandinavia"
             DP    → "DP - Spain & Portugal"
             DQ    → "DQ - Switzerland"
@@ -266,7 +266,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             F1201-3799    → "F1201-3799 - Latin America & Caribbean"
 
           G — Geography, Anthropology & Recreation
-            G     → "G - Geography: General, Atlases & Maps"
+            G     → "G - Geography: General & Atlases & Maps"
             GA    → "GA - Mathematical Geography & Cartography"
             GB    → "GB - Physical Geography"
             GC    → "GC - Oceanography"
@@ -282,18 +282,18 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             HA    → "HA - Statistics"
             HB    → "HB - Economic Theory & Demography"
             HC    → "HC - Economic History and Conditions"
-            HD    → "HD - Industries, Land Use & Labor"
+            HD    → "HD - Industries & Land Use & Labor"
             HE    → "HE - Transportation & Communications"
             HF    → "HF - Commerce"
             HG    → "HG - Finance"
             HJ    → "HJ - Public Finance"
             HM    → "HM - Sociology: General"
             HN    → "HN - Social History & Social Reform"
-            HQ    → "HQ - Family, Marriage & Women"
+            HQ    → "HQ - Family & Marriage & Women"
             HS    → "HS - Societies & Organizations"
-            HT    → "HT - Communities, Classes & Races"
+            HT    → "HT - Communities & Classes & Races"
             HV    → "HV - Criminology & Social Welfare"
-            HX    → "HX - Socialism, Communism & Anarchism"
+            HX    → "HX - Socialism & Communism & Anarchism"
 
           J — Political Science
             J     → "J - Legislative & Executive Papers"
@@ -304,7 +304,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             JK    → "JK - Political Administration: United States"
             JL    → "JL - Political Administration: Canada & Latin America"
             JN    → "JN - Political Administration: Europe"
-            JQ    → "JQ - Political Administration: Asia, Africa & Pacific"
+            JQ    → "JQ - Political Administration: Asia & Africa & Pacific"
             JS    → "JS - Local & Municipal Government"
             JV    → "JV - Colonization & Immigration"
             JZ    → "JZ - International Relations"
@@ -322,7 +322,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             KF          → "KF - Law: United States"
             KG-KKH      → "KG-KKH - Law: Latin America & Caribbean"
             KJ-KKZ      → "KJ-KKZ - Law: Europe"
-            KL-KWX      → "KL-KWX - Law: Asia, Africa & Pacific"
+            KL-KWX      → "KL-KWX - Law: Asia & Africa & Pacific"
             KZ          → "KZ - Law of Nations"
 
           L — Education
@@ -333,7 +333,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             LD    → "LD - Educational Institutions: United States"
             LE    → "LE - Educational Institutions: Americas (excl. US)"
             LF    → "LF - Educational Institutions: Europe"
-            LG    → "LG - Educational Institutions: Asia, Africa & Pacific"
+            LG    → "LG - Educational Institutions: Asia & Africa & Pacific"
             LH    → "LH - College & School Publications"
             LJ    → "LJ - Student Organizations: United States"
             LT    → "LT - Textbooks"
@@ -347,7 +347,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             N     → "N - Visual Arts"
             NA    → "NA - Architecture"
             NB    → "NB - Sculpture"
-            NC    → "NC - Drawing, Design & Illustration"
+            NC    → "NC - Drawing & Design & Illustration"
             ND    → "ND - Painting"
             NE    → "NE - Print Media"
             NK    → "NK - Decorative Arts"
@@ -365,7 +365,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             PH    → "PH - Uralic & Basque Languages"
             PJ    → "PJ - Oriental Languages & Literature"
             PK    → "PK - Indo-Iranian Languages & Literature"
-            PL    → "PL - Languages: East Asia, Africa & Oceania"
+            PL    → "PL - Languages: East Asia & Africa & Oceania"
             PM    → "PM - Indigenous & Constructed Languages"
             PN    → "PN - Literature General"
             PQ    → "PQ - Romance Literatures"
@@ -412,7 +412,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             SB    → "SB - Plant Culture"
             SD    → "SD - Forestry"
             SF    → "SF - Animal Husbandry & Culture"
-            SH    → "SH - Aquaculture, Fisheries & Angling"
+            SH    → "SH - Aquaculture & Fisheries & Angling"
             SK    → "SK - Hunting & Field Sports"
 
           T — Technology
@@ -425,8 +425,8 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             TG    → "TG - Bridge Engineering"
             TH    → "TH - Building Construction"
             TJ    → "TJ - Mechanical Engineering and Machinery"
-            TK    → "TK - Electrical, Electronics & Nuclear Engineering"
-            TL    → "TL - Vehicles, Aviation & Space"
+            TK    → "TK - Electrical & Electronics & Nuclear Engineering"
+            TL    → "TL - Vehicles & Aviation & Space"
             TN    → "TN - Mining & Metallurgy"
             TP    → "TP - Chemical Technology"
             TR    → "TR - Photography"
@@ -458,7 +458,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             VM    → "VM - Naval Architecture & Shipbuilding"
 
           Z — Bibliography & Library Science
-            Z     → "Z - Books, Libraries & Bibliography"
+            Z     → "Z - Books & Libraries & Bibliography"
             ZA    → "ZA - Information Resources General"
 
 SEC-06: If lcc is empty, lcc_secondary_class should still be your best
@@ -525,9 +525,9 @@ PATH-05: Second level (secondary class, short form).
            drop-down value but with the leading code stripped and trimmed.
            Examples:
              "BM - Judaism"                         → "BM. Judaism"
-             "DK - Russia, Soviet Union & …"        → "DK. Russia, Soviet Union & Former Republics"
+             "DK - Russia & Soviet Union & …"        → "DK. Russia & Soviet Union & Former Republics"
              "PS - American Literature"             → "PS. American Literature"
-             "HD - Industries, Land Use & Labor"    → "HD. Industries, Land Use & Labor"
+             "HD - Industries & Land Use & Labor"    → "HD. Industries & Land Use & Labor"
 
 PATH-06: Third level and below — narrative subject narrowing.
            These come from the LCC schedule structure for the specific
@@ -551,7 +551,7 @@ PATH-07: Examples spanning different classes:
             Path:  "P. Language and Literature > PS. American Literature > 20th-Century Fiction > Postmodern Novel > Toni Morrison"
 
             LCC:   "HD8390.B73 K63 1990"
-            Path:  "H. Social Sciences > HD. Industries, Land Use & Labor > Labor History > Brazil > 20th-Century Working-Class Movements"
+            Path:  "H. Social Sciences > HD. Industries & Land Use & Labor > Labor History > Brazil > 20th-Century Working-Class Movements"
 
             LCC:   "ND653.G7 S447 2000"
             Path:  "N. Fine Arts > ND. Painting > Painters by Country > Netherlands > Vincent van Gogh"
@@ -622,8 +622,8 @@ GEN-02: Required keys per book object:
           {
             "lcc": "DK189 .W67 2003",
             "lcc_primary_class": "D - World History & Area Studies",
-            "lcc_secondary_class": "DK - Russia, Soviet Union & Former Republics",
-            "lcc_class_path": "D. World History > DK. Russia, Soviet Union & Former Republics > Russia - History > Imperial Russia / Romanov Monarchy > Court Ceremony / Political Myth / Monarchical Representation",
+            "lcc_secondary_class": "DK - Russia & Soviet Union & Former Republics",
+            "lcc_class_path": "D. World History > DK. Russia & Soviet Union & Former Republics > Russia - History > Imperial Russia / Romanov Monarchy > Court Ceremony / Political Myth / Monarchical Representation",
             "confidence": "high",
             "source": "Library of Congress catalog, exact ISBN match",
             "notes": "LC record confirms class for this edition."

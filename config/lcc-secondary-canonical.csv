@@ -1,6 +1,6 @@
-Code,CanonicalValue,LegacyValues
+﻿Code,CanonicalValue,LegacyValues
 A,A - General Works,A - General Works - General
-AC,AC - Collections, Series & Collected Works,AC - General Works - Collections/Series/Collected Works
+AC,AC - Collections & Series & Collected Works,AC - General Works - Collections/Series/Collected Works
 AE,AE - Encyclopedias,AE - General Works - Encyclopedias
 AG,AG - Dictionaries and Other General Reference Works,AG - General Works - Dictionaries and Other General Reference Works
 AI,AI - Indexes,AI - General Works - Indexes
@@ -8,7 +8,7 @@ AM,AM - Museums & Collecting,AM - General Works - Museums/Collectors and Collect
 AN,AN - Newspapers,AN - General Works - Newspapers
 AP,AP - Periodicals,AP - General Works - Periodicals
 AS,AS - Academies and Learned Societies,AS - General Works - Academies and Learned Socieites
-AY,AY - Yearbooks, Almanacs & Directories,AY - General Works - Yearbooks/Almanacs/Directories
+AY,AY - Yearbooks & Almanacs & Directories,AY - General Works - Yearbooks/Almanacs/Directories
 AZ,AZ - History of Scholarship & The Humanities,AZ - History of Scholarship and Learning / The Humanities|AZ - General Works - History of Scholarship and Learning/The Humanities
 B,B - Philosophy General,B - Philosophy/Psychology/Religion - Philosophy (General)
 BC,BC - Logic,BC - Philosophy/Psychology/Religion - Logic
@@ -16,9 +16,9 @@ BD,BD - Speculative Philosophy,BD - Philosophy/Psychology/Religion - Speculative
 BF,BF - Psychology,BF - Philosophy/Psychology/Religion - Psychology|BF - Philosophy/Psychology/Religion - Psychology / Occult Sciences
 BH,BH - Aesthetics,BH - Philosophy/Psychology/Religion - Aesthetics
 BJ,BJ - Ethics,BJ - Philosophy/Psychology/Religion - Ethics
-BL,BL - Religions, Mythology & Rationalism,BL - Philosophy/Psychology/Religion - Religions/Mythology/Rationalism|BL - Philosophy/Psychology/Religion - Religions / Mythology / Rationalism
+BL,BL - Religions & Mythology & Rationalism,BL - Philosophy/Psychology/Religion - Religions/Mythology/Rationalism|BL - Philosophy/Psychology/Religion - Religions / Mythology / Rationalism
 BM,BM - Judaism,BM - Philosophy/Psychology/Religion - Judaism
-BP,BP - Islam, Bahai Faith & Theosophy,BP - Islam / Bahaism / Theosophy / Etc|BP - Philosophy/Psychology/Religion - Islam/Bahaism/Theosophy/Etc|BP - Philosophy/Psychology/Religion - Islam / Bahai Faith / Theosophy
+BP,BP - Islam & Bahai Faith & Theosophy,BP - Islam / Bahaism / Theosophy / Etc|BP - Philosophy/Psychology/Religion - Islam/Bahaism/Theosophy/Etc|BP - Philosophy/Psychology/Religion - Islam / Bahai Faith / Theosophy
 BQ,BQ - Buddhism,BQ - Philosophy/Psychology/Religion - Buddhism
 BR,BR - Christianity,BR - Philosophy/Psychology/Religion - Christianity
 BS,BS - The Bible,BS - Philosophy/Psychology/Religion - The Bible
@@ -28,7 +28,7 @@ BX,BX - Christian Denominations,BX - Philosophy/Psychology/Religion - Christian 
 C,C - Auxiliary Sciences of History General,C - Auxiliary Sciences of History - Auxiliary Sciences of History (General)
 CB,CB - History of Civilization,CB - Auxiliary Sciences of History - History of Civilization
 CC,CC - Archaeology,CC - Auxiliary Sciences of History - Archaeology
-CD,CD - Diplomatics, Archives & Seals,CD - Auxiliary Sciences of History - Diplomatics/Archives/Seals
+CD,CD - Diplomatics & Archives & Seals,CD - Auxiliary Sciences of History - Diplomatics/Archives/Seals
 CE,CE - Technical Chronology & Calendar,CE - Auxiliary Sciences of History - Technical Chronology/Calendar
 CJ,CJ - Numismatics,CJ - Auxiliary Sciences of History - Numismatics
 CN,CN - Inscriptions & Epigraphy,CN - Auxiliary Sciences of History - Inscriptions/Epigraphy
@@ -38,8 +38,8 @@ CT,CT - Biography,CT - Auxiliary Sciences of History - Biography
 D,D - History General,D - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - History (General)|D - World History and History of Europe/Asia/Africa/Australia/New Zealand/Etc - History (General)
 DA,DA - Great Britain,DA - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Great Britain
 DAW,DAW - Central Europe,DAW - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Central Europe
-DB,DB - Austria, Hungary & Central Europe,DB - Austria / Liechtenstein / Hungary / Czechoslovakia|DB - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Austria/Liechtenstein/Hungary/Czechoslovakia|DB - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Austria / Liechtenstein / Hungary / Czechoslovakia
-DC,DC - France, Andorra & Monaco,DC - France / Andorra / Monaco|DC -World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - France/Andorra/Monacco|DC - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - France
+DB,DB - Austria & Hungary & Central Europe,DB - Austria / Liechtenstein / Hungary / Czechoslovakia|DB - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Austria/Liechtenstein/Hungary/Czechoslovakia|DB - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Austria / Liechtenstein / Hungary / Czechoslovakia
+DC,DC - France & Andorra & Monaco,DC - France / Andorra / Monaco|DC -World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - France/Andorra/Monacco|DC - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - France
 DD,DD - Germany,DD - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Germany
 DE,DE - Greco-Roman World,DE -World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Greco-Roman World
 DF,DF - Greece,DF -World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Greece
@@ -47,7 +47,7 @@ DG,DG - Italy & Malta,DG - Italy / Malta|DG - World History/History of Europe/As
 DH,DH - Low Countries & Benelux,DH - Low Countries / Benelux Countries|DH -World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Low Countries/Benelux Countries
 DJ,DJ - Netherlands,DJ - Netherlands / Holland|DJ - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Netherlands (Holland)
 DJK,DJK - Eastern Europe General,DJK - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Eastern Europe (General)
-DK,DK - Russia, Soviet Union & Former Republics,DK - Russia / Soviet Union / Former Soviet Republics / Poland|DK - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Russia/Soviet Union/Former Soviet Republics/Poland|DK - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Russia / Soviet Union / Former Soviet Republics
+DK,DK - Russia & Soviet Union & Former Republics,DK - Russia / Soviet Union / Former Soviet Republics / Poland|DK - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Russia/Soviet Union/Former Soviet Republics/Poland|DK - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Russia / Soviet Union / Former Soviet Republics
 DL,DL - Northern Europe & Scandinavia,DL - Northern Europe / Scandinavia|DL - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Northern Europe/Scandanavia
 DP,DP - Spain & Portugal,DP - Spain / Portugal|DP - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Spain/Portugal|DP - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Spain / Portugal
 DQ,DQ - Switzerland,DQ - World History/History of Europe/Asia/Africa/Australia/New Zealand/Etc - Switzerland
@@ -64,7 +64,7 @@ F1-975,F1-975 - United States: Local & Regional History,F1-975 - United States L
 F1001-1145,F1001-1145 - Canada & British America,F1001-1145 - British America Including Canada / Dutch America|F1001-1145 - British America (including Canada)/Dutch America
 F1170,F1170 - French America,F1170 - History of the Americas - French America
 F1201-3799,F1201-3799 - Latin America & Caribbean,F1201-3799 - Latin America / Spanish America|F1201-3799 - History of the Americas - Latin America/Spanish America|F1201-3799 - History of the Americas - Latin America / Spanish America
-G,G - Geography: General, Atlases & Maps,G - Geography General / Atlases / Maps|G - Geography/Anthropology/Recreation - Geography (General)/Atlases/Maps
+G,G - Geography: General & Atlases & Maps,G - Geography General / Atlases / Maps|G - Geography/Anthropology/Recreation - Geography (General)/Atlases/Maps
 GA,GA - Mathematical Geography & Cartography,GA - Geography/Anthropology/Recreation - Mathematical geography/Cartography
 GB,GB - Physical Geography,GB - Geography/Anthropology/Recreation - Physical Geography
 GC,GC - Oceanography,GC - Geography/Anthropology/Recreation - Oceanography
@@ -78,18 +78,18 @@ H,H - Social Sciences General,H - Social Sciences - Social Sciences (General)
 HA,HA - Statistics,HA - Social Sciences - Statistics
 HB,HB - Economic Theory & Demography,HB - Economic Theory / Demography|HB - Social Sciences - Economic Theory/Demography
 HC,HC - Economic History and Conditions,HC - Social Sciences - Economic History and Conditions
-HD,HD - Industries, Land Use & Labor,HD - Industries / Land Use / Labor|HD - Social Sciences - Industries/Land Use/Labor|HD - Social Sciences - Industries / Land Use / Labor
+HD,HD - Industries & Land Use & Labor,HD - Industries / Land Use / Labor|HD - Social Sciences - Industries/Land Use/Labor|HD - Social Sciences - Industries / Land Use / Labor
 HE,HE - Transportation & Communications,HE - Transportation and Communications|HE - Social Sciences - Transportation and Communications
 HF,HF - Commerce,HF - Social Sciences - Commerce
 HG,HG - Finance,HG - Social Sciences - Finance
 HJ,HJ - Public Finance,HJ - Social Sciences - Public Finance
 HM,HM - Sociology: General,HM - Sociology General|HM - Social Sciences - Sociology (General)
 HN,HN - Social History & Social Reform,HN - Social History and Conditions / Social Problems / Social Reform|HN - Social Sciences - Social History and Conditions/Social Problems/Social Reform
-HQ,HQ - Family, Marriage & Women,HQ - The Family / Marriage / Women|HQ - Social Sciences - The Family/Marriage/Women
+HQ,HQ - Family & Marriage & Women,HQ - The Family / Marriage / Women|HQ - Social Sciences - The Family/Marriage/Women
 HS,HS - Societies & Organizations,HS - Societies / Secret / Benevolent / Etc|HS - Social Sciences - Societies: Secret/Benevolent/Etc
-HT,HT - Communities, Classes & Races,HT - Communities / Classes / Races|HT - Social Sciences - Communities/Classes/Races
+HT,HT - Communities & Classes & Races,HT - Communities / Classes / Races|HT - Social Sciences - Communities/Classes/Races
 HV,HV - Criminology & Social Welfare,HV - Social Pathology / Social and Public Welfare / Criminology|HV - Social Sciences - Social Pathology/Social and Public Welfare/Criminology
-HX,HX - Socialism, Communism & Anarchism,HX - Socialism / Communism / Anarchism|HX - Social Sciences - Socialism/Communism/Anarchism
+HX,HX - Socialism & Communism & Anarchism,HX - Socialism / Communism / Anarchism|HX - Social Sciences - Socialism/Communism/Anarchism
 J,J - Legislative & Executive Papers,J - General Legislative and Executive Papers|J - Political Science - General Legislative and Executive Papers
 JA,JA - Political Science General,JA - Political Science - Political Science (General)
 JC,JC - Political Theory,JC - Political Science - Political Theory
@@ -98,7 +98,7 @@ JJ,JJ - Political Administration: North America,JJ - Political Institutions and 
 JK,JK - Political Administration: United States,JK - Political Institutions and Public Administration / United States|JK - Political Science - Political Institutions and Public Administration (United States)
 JL,JL - Political Administration: Canada & Latin America,JL - Political Institutions and Public Administration / Canada / Latin America / Etc|JL - Political Science - Political Institutions and Public Administration (Canada/Latin America/etc)
 JN,JN - Political Administration: Europe,JN - Political Institutions and Public Administration / Europe|JN - Political Science - Political Institutions and Public Administration (Europe)|JN - Political Science - Political Institutions and Public Administration - Europe
-JQ,JQ - Political Administration: Asia, Africa & Pacific,JQ - Political Institutions and Public Administration / Asia / Africa / Australia / Pacific Area / Etc|JQ - Political Science - Political Institutions and Public Administration (Asia/Africa/Australia/Pacific Area/etc)
+JQ,JQ - Political Administration: Asia & Africa & Pacific,JQ - Political Institutions and Public Administration / Asia / Africa / Australia / Pacific Area / Etc|JQ - Political Science - Political Institutions and Public Administration (Asia/Africa/Australia/Pacific Area/etc)
 JS,JS - Local & Municipal Government,JS - Local Government / Municipal Government|JS - Political Science - Local Government/Municipal Government
 JV,JV - Colonization & Immigration,JV - Colonies and Colonization / Emigration and Immigration / International Migration|JV - Political Science - Colonies and Colonization/Emigration and Immigration/International Migration
 JZ,JZ - International Relations,JZ - Political Science - International Relations
@@ -116,7 +116,7 @@ KE,KE - Law: Canada,KE - Law - Canada
 KF,KF - Law: United States,KF - Law - United States
 KG-KKH,KG-KKH - Law: Latin America & Caribbean,KG-KKH - Latin America / Mexico and Central America / West Indies / Caribbean Area|KG - Law - Latin America - Mexico and Central America - West Indies/Caribbean Area
 KJ-KKZ,KJ-KKZ - Law: Europe,KJ-KKZ - Europe|KKZ - Law - Europe
-KL-KWX,KL-KWX - Law: Asia, Africa & Pacific,KL-KWX - Asia and Eurasia / Africa / Pacific Area / Antarctica|KWX - Law - Asia and Eurasia/Africa/Pacific Area/Antarctica
+KL-KWX,KL-KWX - Law: Asia & Africa & Pacific,KL-KWX - Asia and Eurasia / Africa / Pacific Area / Antarctica|KWX - Law - Asia and Eurasia/Africa/Pacific Area/Antarctica
 KZ,KZ - Law of Nations,KZ - Law - Law of Nations
 L,L - Education General,L - Education - Education (General)
 LA,LA - History of Education,LA - Education - History of Education
@@ -125,7 +125,7 @@ LC,LC - Special Aspects of Education,LC - Education - Special Aspects of Educati
 LD,LD - Educational Institutions: United States,LD - Individual Institutions / United States|LD - Education - Individual Institutions - United States
 LE,LE - Educational Institutions: Americas (excl. US),LE - Individual Institutions / America Except United States|LE - Education - Individual Institutions - America (Except United States)
 LF,LF - Educational Institutions: Europe,LF - Individual Institutions / Europe|LF - Education - Individual Institutions - Europe
-LG,LG - Educational Institutions: Asia, Africa & Pacific,LG - Individual Institutions / Asia / Africa / Indian Ocean Islands / Australia / New Zealand / Pacific Islands|LG - Education - Individual Institutions - Asia/Africa/Indian Ocean Islands/Australia/New Zealand/Pacific Islands
+LG,LG - Educational Institutions: Asia & Africa & Pacific,LG - Individual Institutions / Asia / Africa / Indian Ocean Islands / Australia / New Zealand / Pacific Islands|LG - Education - Individual Institutions - Asia/Africa/Indian Ocean Islands/Australia/New Zealand/Pacific Islands
 LH,LH - College & School Publications,LH - College and School Magazines and Papers|LH - Education - College and School Magazines and Papers
 LJ,LJ - Student Organizations: United States,LJ - Student Fraternities and Societies / United States|LJ - Education - Student Fraternities and Societies/United States
 LT,LT - Textbooks,LT - Education - Textbooks
@@ -135,7 +135,7 @@ MT,MT - Music Instruction & Study,MT - Instruction and Study|MT - Music - Instru
 N,N - Visual Arts,N - Fine Arts - Visual Arts
 NA,NA - Architecture,NA - Fine Arts - Architecture
 NB,NB - Sculpture,NB - Fine Arts - Sculpture
-NC,NC - Drawing, Design & Illustration,NC - Drawing / Design / Illustration|NC - Fine Arts - Drawing/Design/Illustration
+NC,NC - Drawing & Design & Illustration,NC - Drawing / Design / Illustration|NC - Fine Arts - Drawing/Design/Illustration
 ND,ND - Painting,ND - Fine Arts - Painting
 NE,NE - Print Media,NE - Fine Arts - Print Media
 NK,NK - Decorative Arts,NK - Fine Arts - Decorative Arts
@@ -151,7 +151,7 @@ PG,PG - Slavic & Baltic Languages,PG - Slavic Languages / Baltic Languages / Alb
 PH,PH - Uralic & Basque Languages,PH - Uralic Languages / Basque Language|PH - Language and Literature - Uralic Languages/Basque Language
 PJ,PJ - Oriental Languages & Literature,PJ - Oriental Languages and Literatures|PJ - Language and Literature - Oriental Languages and Literatures
 PK,PK - Indo-Iranian Languages & Literature,PK - Indo-Iranian Languages and Literatures|PK - Language and Literature - Indo-Iranian Languages and Literatures
-PL,PL - Languages: East Asia, Africa & Oceania,PL - Languages and Literatures of Eastern Asia / Africa / Oceania|PL - Language and Literature - Languages and Literatures of Eastern Asia/Africa/Oceania
+PL,PL - Languages: East Asia & Africa & Oceania,PL - Languages and Literatures of Eastern Asia / Africa / Oceania|PL - Language and Literature - Languages and Literatures of Eastern Asia/Africa/Oceania
 PM,PM - Indigenous & Constructed Languages,PM - Hyperborean / Indian / Artificial Languages|PM - Language and Literature - Hyperborean/Indian/Artificial Languages
 PN,PN - Literature General,PN - Language and Literature - Literature (General)
 PQ,PQ - Romance Literatures,PQ - French Literature / Italian Literature / Spanish Literature / Portuguese Literature|PQ - Language and Literature - French Literature/Italian Literature/Spanish Literature/Portuguese Literature
@@ -192,7 +192,7 @@ S,S - Agriculture General,S - Agriculture - Agriculture (General)
 SB,SB - Plant Culture,SB - Agriculture - Plant Culture
 SD,SD - Forestry,SD - Agriculture - Forestry
 SF,SF - Animal Husbandry & Culture,SF - Animal Culture|SF - Agriculture - Animal Culture
-SH,SH - Aquaculture, Fisheries & Angling,SH - Aquaculture / Fisheries / Angling|SH - Agriculture - Aquaculture/Fisheries/Angling
+SH,SH - Aquaculture & Fisheries & Angling,SH - Aquaculture / Fisheries / Angling|SH - Agriculture - Aquaculture/Fisheries/Angling
 SK,SK - Hunting & Field Sports,SK - Hunting Sports|SK - Agriculture - Hunting Sports
 T,T - Technology General,T - Technology - Technology (General)
 TA,TA - Engineering: General & Civil,TA - Engineering General / Civil Engineering|TA - Technology - Engineering (General)/Civil Engineering
@@ -203,8 +203,8 @@ TF,TF - Railroad Engineering and Operation,TF - Technology - Railroad Engineerin
 TG,TG - Bridge Engineering,TG - Technology - Bridge Engineering
 TH,TH - Building Construction,TH - Technology - Building Construction
 TJ,TJ - Mechanical Engineering and Machinery,TJ - Technology - Mechanical Engineering and Machinery
-TK,TK - Electrical, Electronics & Nuclear Engineering,TK - Electrical Engineering / Electronics / Nuclear Engineering|TK - Technology - Electrical Engineering/Electronics/Nuclear Engineering|TK - Technology - Electrical Engineering / Electronics / Nuclear Engineering
-TL,TL - Vehicles, Aviation & Space,TL - Motor Vehicles / Aeronautics / Astronautics|TL - Technology - Motor Vehicles/Aeronautics/Astronautics
+TK,TK - Electrical & Electronics & Nuclear Engineering,TK - Electrical Engineering / Electronics / Nuclear Engineering|TK - Technology - Electrical Engineering/Electronics/Nuclear Engineering|TK - Technology - Electrical Engineering / Electronics / Nuclear Engineering
+TL,TL - Vehicles & Aviation & Space,TL - Motor Vehicles / Aeronautics / Astronautics|TL - Technology - Motor Vehicles/Aeronautics/Astronautics
 TN,TN - Mining & Metallurgy,TN - Mining Engineering / Metallurgy|TN - Technology - Mining Engineering/Metallurgy
 TP,TP - Chemical Technology,TP - Technology - Chemical Technology
 TR,TR - Photography,TR - Technology - Photography
@@ -230,5 +230,5 @@ VF,VF - Naval Ordnance,VF - Naval Science - Naval Ordinance
 VG,VG - Minor Naval Services,VG - Minor Services of Navies|VG - Naval Science - Minor Services of Navies
 VK,VK - Navigation & Merchant Marine,VK - Navigation / Merchant Marine|VK - Naval Science - Navigation/Merchant Marine
 VM,VM - Naval Architecture & Shipbuilding,VM - Naval Architecture / Shipbuilding / Marine Engineering|VM - Naval Science - Naval Architecture/Shipbuilding/Marine Engineering
-Z,Z - Books, Libraries & Bibliography,Z - Books General / Writing / Paleography / Book Industries and Trade / Libraries / Bibliography|Z - Bibliography/Library Science/Information Resources (General) - Books (General)/Writing/Paleography/Book Industries and Trade/Libraries/Bibliography
+Z,Z - Books & Libraries & Bibliography,Z - Books General / Writing / Paleography / Book Industries and Trade / Libraries / Bibliography|Z - Bibliography/Library Science/Information Resources (General) - Books (General)/Writing/Paleography/Book Industries and Trade/Libraries/Bibliography
 ZA,ZA - Information Resources General,ZA - Bibliography/Library Science/Information Resources (General) - Information Resources (General)
