@@ -39,11 +39,19 @@ class CalibreDB:
         uri = f"file:{self._db_path}?mode=ro"
         return sqlite3.connect(uri, uri=True, check_same_thread=False)
 
+    def count_books(self) -> int:
+        """Return the total number of books in the library via direct SQLite."""
+        with self._connect() as conn:
+            return conn.execute("SELECT COUNT(*) FROM books").fetchone()[0]
+
     def search(self, search_query: str) -> list[Book]:
         """
         Return books matching a Calibre search string.
-        Uses calibredb search to honour the full Calibre search syntax,
-        then fetches details via direct SQLite for speed.
+
+        The special query "all" reads IDs directly from SQLite, bypassing
+        calibredb so that GUI restrictions and virtual-library filters have
+        no effect.  All other queries go through calibredb search to honour
+        the full Calibre search syntax.
         """
         ids = self._search_ids(search_query)
         if not ids:
@@ -51,7 +59,15 @@ class CalibreDB:
         return self._fetch_books(ids)
 
     def _search_ids(self, query: str) -> list[int]:
-        """Use calibredb to resolve the search string into book IDs."""
+        """Resolve a Calibre search string to a list of book IDs.
+
+        "all" (case-insensitive) uses SQLite directly to guarantee every book
+        is included regardless of any restriction saved in the GUI state.
+        All other queries go through calibredb search.
+        """
+        if query.strip().lower() == "all":
+            return self._all_ids_from_sqlite()
+
         cmd = [
             self.calibredb_path,
             "search",
@@ -76,6 +92,12 @@ class CalibreDB:
         if not raw:
             return []
         return [int(x) for x in raw.split(",") if x.strip().isdigit()]
+
+    def _all_ids_from_sqlite(self) -> list[int]:
+        """Return every book ID in the library, ordered by ID."""
+        with self._connect() as conn:
+            rows = conn.execute("SELECT id FROM books ORDER BY id").fetchall()
+        return [row[0] for row in rows]
 
     def _fetch_books(self, ids: list[int]) -> list[Book]:
         placeholders = ",".join("?" * len(ids))
