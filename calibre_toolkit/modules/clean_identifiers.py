@@ -59,12 +59,16 @@ _REMOVE_TYPES = frozenset({
     "url", "url2", "url3", "uri", "urn", "access_url", "ark",
     # Store identifiers not used in this library's workflow
     "ozon", "epl", "ilot", "guid", "amazon_uk", "sonybookid",
+    # Retail store identifiers with very low coverage — not worth maintaining
+    "asin", "kobo",
     # ISBN variants — normalize or remove in favour of isbn
     "eisbn", "ean",
     # LibraryThing — not used in this workflow
     "ltid",
     # Academic/archive identifiers not relevant to this collection
     "doi",
+    # Specialist databases with negligible coverage in this library
+    "isfdb", "isfdb-title", "lccn",
 })
 
 

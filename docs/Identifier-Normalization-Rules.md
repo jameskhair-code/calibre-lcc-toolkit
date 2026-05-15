@@ -31,15 +31,15 @@ The first-pass core identifier set is:
 
 - `isbn`
 - `amazon`
-- `asin`
 - `mobi-asin`
 - `goodreads`
 
 ### Notes
 
 - `isbn` is the primary bibliographic anchor.
-- `amazon`, `asin`, and `mobi-asin` are treated as Amazon-linking identifiers.
-- `goodreads` is treated as a book-discovery / external-linking identifier.
+- `amazon` and `mobi-asin` are the Amazon-linking identifiers used in this library.
+  `asin` is removed by `clean-identifiers` (low coverage, superseded by `amazon`/`mobi-asin`).
+- `goodreads` is the book-discovery / external-linking identifier.
 
 ---
 
@@ -51,18 +51,10 @@ These identifiers are useful and should generally be preserved unless clearly ma
 - `barnesnoble`
 - `fictiondb`
 - `ff`
-- `kobo`
-- `lccn`
 - `oclc`
 - `oclc-worldcat`
-- `doi`
-- `isfdb`
-- `isfdb-title`
-- `librarything`
-- `amazon_uk`
-- `sonybookid`
 
-These may support later enrichment, external linking, or disambiguation.
+`oclc` and `oclc-worldcat` are kept because they are candidates for future enrichment.
 
 ## 3a. Types Removed by clean-identifiers (maintenance rules)
 
@@ -74,9 +66,17 @@ The following types are removed automatically by the `clean-identifiers` mainten
 
 **URL / URI noise** (import artifacts, not useful for lookup): `url`, `url2`, `url3`, `uri`, `urn`, `access_url`, `ark`
 
-**Store identifiers not used in this library's workflow:** `ozon`, `epl`, `ilot`, `guid`, `ltid`
+**Store identifiers not used in this library's workflow:** `ozon`, `epl`, `ilot`, `guid`, `ltid`, `amazon_uk`, `sonybookid`
 
-**ISBN variants kept separately** (user preference — normalize or remove in favour of `isbn`): `eisbn`, `ean`, `isbn10`, `isbn13`, `isbn-10`
+**Low-coverage retail store identifiers:** `asin` (21 books — superseded by `amazon`/`mobi-asin`), `kobo` (16 books)
+
+**ISBN variants** (normalize or remove in favour of `isbn`): `eisbn`, `ean`, `isbn10`, `isbn13`, `isbn-10`
+
+**Specialist databases with negligible coverage:** `isfdb` (1 book), `isfdb-title` (1 book), `lccn` (8 books)
+
+**Academic/archive identifiers not relevant to this collection:** `doi`
+
+**LibraryThing:** `ltid`
 
 ---
 
