@@ -212,12 +212,22 @@ def run_enrichment(
     mqg_column: str | None = None,
     mqg_manual_column: str | None = None,
     sufficient_types: list[str] | None = None,
+    mqg_complete_requires: list[str] | None = None,
     force_lookup: bool = False,
 ) -> None:
-    """Full MQG-02 identifier enrichment flow for a given Calibre search string."""
+    """Full MQG-02 identifier enrichment flow for a given Calibre search string.
+
+    sufficient_types      — gates whether to attempt a live lookup (book already
+                           has enough data to skip).  Default: ["isbn"].
+    mqg_complete_requires — additional types that must be present before MQG-02
+                           is marked complete.  Default: [] (no extra gate).
+                           Typical use: ["grrating", "grvotes"].
+    """
 
     if sufficient_types is None:
         sufficient_types = ["isbn"]
+    if mqg_complete_requires is None:
+        mqg_complete_requires = []
 
     # ── 0. Probe binary ───────────────────────────────────────────────────────
     probe_error = fetcher.probe()
@@ -348,11 +358,20 @@ def run_enrichment(
             )
         console.print()
 
-    already_sufficient_ids = [s.book_id for s in already_sufficient]
+    # Split already_sufficient by whether they also pass the completion gate
+    already_mqg_complete   = [
+        s for s in already_sufficient
+        if _is_sufficient(s.current_identifiers, mqg_complete_requires)
+    ]
+    already_needs_ratings  = [
+        s for s in already_sufficient
+        if not _is_sufficient(s.current_identifiers, mqg_complete_requires)
+    ]
 
     if not has_new:
         console.print("[green]Nothing new to add — no changes needed.[/green]")
-        _mark_complete(db, mqg_column, already_sufficient_ids, label="already-sufficient")
+        _mark_complete(db, mqg_column, [s.book_id for s in already_mqg_complete], label="already-sufficient")
+        _report_needs_ratings(already_needs_ratings, mqg_complete_requires)
         raise typer.Exit()
 
     # ── 4. Partition by confidence & display tiered tables ───────────────────
@@ -433,31 +452,38 @@ def run_enrichment(
             console.print(f"[dim]{len(low)} low-confidence enrichment(s) skipped. Run again to review.[/dim]")
 
     # ── 6. Mark MQG complete ─────────────────────────────────────────────────
-    # Only mark complete if the book now has ALL sufficient_types.
-    # Books that got partial enrichment stay in the queue for another run (Phase 1→2 pattern).
+    # Three-way split for enriched books:
+    #   now_complete      — passes sufficient_types AND mqg_complete_requires → mark done
+    #   phase1_complete   — missing sufficient_types (isbn/goodreads) → needs another run
+    #   needs_ratings     — has sufficient_types but missing mqg_complete_requires → ratings retry
     applied_map = {s.book_id: s for s in has_new}
     now_complete: list[int] = []
-    phase1_complete: list[int] = []   # enriched but still missing some sufficient_types
+    phase1_complete: list[IdentifierSuggestion] = []
+    newly_needs_ratings: list[IdentifierSuggestion] = []
 
     for book_id in applied_ids:
         s = applied_map[book_id]
         final_ids = {**s.current_identifiers, **s.new_identifiers}
-        if _is_sufficient(final_ids, sufficient_types):
-            now_complete.append(book_id)
+        if not _is_sufficient(final_ids, sufficient_types):
+            phase1_complete.append(s)
+        elif not _is_sufficient(final_ids, mqg_complete_requires):
+            newly_needs_ratings.append(s)
         else:
-            phase1_complete.append(book_id)
+            now_complete.append(book_id)
 
     if phase1_complete:
-        # Find which types are still missing across these books (usually the same ones)
-        sample = applied_map[phase1_complete[0]]
-        final_ids = {**sample.current_identifiers, **sample.new_identifiers}
-        still_missing = [t for t in sufficient_types if t not in final_ids]
+        sample_ids = {**phase1_complete[0].current_identifiers, **phase1_complete[0].new_identifiers}
+        still_missing = [t for t in sufficient_types if t not in sample_ids]
         missing_str = ", ".join(f"[bold]{t}[/bold]" for t in still_missing)
         console.print(
             f"\n[dim]Phase 1 complete for [bold]{len(phase1_complete)}[/bold] book(s) — "
             f"still need {missing_str} to finish enrichment. "
             "Run again after confirming ISBNs to complete Phase 2.[/dim]"
         )
+
+    # Report books that have sufficient IDs but still lack ratings
+    all_needs_ratings = already_needs_ratings + newly_needs_ratings
+    _report_needs_ratings(all_needs_ratings, mqg_complete_requires)
 
     # Flag manually declined books alongside lookup failures
     if manually_declined and mqg_manual_column:
@@ -468,16 +494,21 @@ def run_enrichment(
         )
         _mark_manual(db, mqg_manual_column, declined_ids)
 
-    _mark_complete(db, mqg_column, already_sufficient_ids + now_complete, label="complete")
+    _mark_complete(
+        db, mqg_column,
+        [s.book_id for s in already_mqg_complete] + now_complete,
+        label="complete",
+    )
 
     total_enriched = len(applied_ids)
-    total_complete = len(already_sufficient_ids) + len(now_complete)
+    total_complete = len(already_mqg_complete) + len(now_complete)
     total_manual = len(needs_manual) + len(manually_declined)
     console.print(
         f"\n[bold green]Done![/bold green] "
         f"[green]{total_enriched}[/green] enriched, "
         f"[green]{total_complete}[/green] marked MQG-02 complete"
         + (f", [yellow]{total_manual}[/yellow] flagged for manual review" if total_manual else "")
+        + (f", [dim]{len(all_needs_ratings)} pending ratings[/dim]" if all_needs_ratings else "")
         + "."
     )
 
@@ -544,6 +575,24 @@ def _prompt_and_apply(
     if not to_apply:
         console.print("[dim]No enrichments applied.[/dim]")
     return applied, declined
+
+
+def _report_needs_ratings(
+    suggestions: list[IdentifierSuggestion],
+    mqg_complete_requires: list[str],
+) -> None:
+    """Print a summary for books that are enriched but still missing the ratings gate."""
+    if not suggestions or not mqg_complete_requires:
+        return
+    missing_types = ", ".join(f"[bold]{t}[/bold]" for t in mqg_complete_requires)
+    console.print(
+        f"\n[yellow]{len(suggestions)} book(s) are enriched but still missing {missing_types}.[/yellow]\n"
+        "  These are [bold]not[/bold] marked MQG-02 complete yet.\n"
+        "  Options:\n"
+        "  [dim]• Run again — the next ISBN-based lookup may return the ratings.\n"
+        "  • Run with [bold]--force-lookup[/bold] to force a fresh fetch for these books.\n"
+        "  • Check and add grrating/grvotes manually in Calibre.[/dim]"
+    )
 
 
 def _mark_complete(

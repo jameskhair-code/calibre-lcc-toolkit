@@ -200,6 +200,7 @@ def enrich_identifiers(
     fetch_path = _infer_fetch_path(cfg)
     timeout = id_cfg.get("lookup_timeout_seconds", 45)
     sufficient_types = id_cfg.get("sufficient_types", ["isbn"])
+    mqg_complete_requires = id_cfg.get("mqg_complete_requires", [])
     mqg_column = cfg.get("mqg", {}).get("identifiers_column")
     mqg_manual_column = cfg.get("mqg", {}).get("identifiers_manual_column")
 
@@ -226,6 +227,7 @@ def enrich_identifiers(
         mqg_column=mqg_column,
         mqg_manual_column=mqg_manual_column,
         sufficient_types=sufficient_types,
+        mqg_complete_requires=mqg_complete_requires,
         force_lookup=force_lookup,
     )
 
