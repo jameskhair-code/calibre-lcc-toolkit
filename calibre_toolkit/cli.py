@@ -269,6 +269,10 @@ def lcc_enrich(
         Optional[int],
         typer.Option("--limit", "-n", help="Cap total books processed in this run (for testing)"),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show what the AI would write vs. current values — no changes saved"),
+    ] = False,
 ):
     """
     MQG-03: AI-assisted Library of Congress Classification (LCC) enrichment.
@@ -333,6 +337,7 @@ def lcc_enrich(
         mqg_column=mqg_column,
         mqg_manual_column=mqg_manual_column,
         force=force,
+        dry_run=dry_run,
     )
 
 

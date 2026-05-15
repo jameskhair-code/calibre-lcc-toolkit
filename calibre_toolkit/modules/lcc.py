@@ -288,6 +288,99 @@ def _apply_suggestion(db: CalibreDB, v: ValidatedSuggestion, columns: dict[str, 
     db.apply_custom_fields(v.book_id, fields)
 
 
+# ── Audit display ─────────────────────────────────────────────────────────────
+
+def _build_audit_table(
+    validated: list[ValidatedSuggestion],
+    current_map: dict[int, dict[str, str]],
+) -> Table:
+    table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan",
+                  expand=True, show_lines=True)
+    table.add_column("#",        style="dim", width=4, no_wrap=True)
+    table.add_column("Conf",     width=5, no_wrap=True)
+    table.add_column("Book",     ratio=2)
+    table.add_column("Current",  ratio=4)
+    table.add_column("Proposed", ratio=4)
+    table.add_column("Δ",        width=5, no_wrap=True)
+
+    _LABELS = [("LCC",  "lcc"),
+               ("Pri",  "lcc_primary_class"),
+               ("Sec",  "lcc_secondary_class"),
+               ("Path", "lcc_class_path")]
+
+    for i, v in enumerate(validated, 1):
+        s = v.suggestion
+        current = current_map.get(s.book_id, {})
+        proposed = v.final_fields
+
+        icon, style = _CONF_DISPLAY.get(s.confidence, ("—", "dim"))
+
+        book_text = Text()
+        book_text.append(s.title)
+        book_text.append(f"\n{s.authors_display}", style="dim")
+
+        cur_text  = Text()
+        prop_text = Text()
+        changed: list[str] = []
+
+        for label, key in _LABELS:
+            cur_val  = current.get(key,  "") or ""
+            prop_val = proposed.get(key, "") or ""
+            match = cur_val == prop_val
+
+            cur_text.append(f"{label}: ", style="dim")
+            cur_text.append(cur_val or "(empty)", style="green" if match else "yellow")
+            cur_text.append("\n")
+
+            prop_text.append(f"{label}: ", style="dim")
+            prop_text.append(prop_val or "(empty)", style="green" if match else "bold white")
+            prop_text.append("\n")
+
+            if not match:
+                changed.append(label)
+
+        delta = Text("✓", style="green") if not changed else Text(f"Δ{len(changed)}", style="yellow")
+
+        table.add_row(str(i), Text(icon, style=style), book_text, cur_text, prop_text, delta)
+
+    return table
+
+
+def _print_audit_summary(
+    validated: list[ValidatedSuggestion],
+    current_map: dict[int, dict[str, str]],
+) -> None:
+    total = len(validated)
+    exact_match = 0
+    diff_counts: dict[str, int] = {k: 0 for k in _LCC_FIELDS}
+
+    for v in validated:
+        current  = current_map.get(v.book_id, {})
+        proposed = v.final_fields
+        any_diff = False
+        for key in _LCC_FIELDS:
+            if (current.get(key) or "") != (proposed.get(key) or ""):
+                diff_counts[key] += 1
+                any_diff = True
+        if not any_diff:
+            exact_match += 1
+
+    differ = total - exact_match
+
+    console.print("\n[bold]── Audit Summary ──────────────────────────────[/bold]")
+    console.print(f"  Total reviewed:    [bold]{total}[/bold]")
+    console.print(f"  [green]Exact match:       {exact_match}[/green]  [dim](AI agrees with current values)[/dim]")
+    console.print(f"  [yellow]Have differences:  {differ}[/yellow]  [dim](AI would write something different)[/dim]")
+    if differ:
+        console.print("\n  [dim]Differences by field:[/dim]")
+        labels = {"lcc": "LCC call number", "lcc_primary_class": "Primary class",
+                  "lcc_secondary_class": "Secondary class", "lcc_class_path": "Class path"}
+        for key, count in diff_counts.items():
+            if count:
+                console.print(f"    {labels[key]}: [yellow]{count}[/yellow] book(s)")
+    console.print("\n[dim]Dry-run complete — no changes were written.[/dim]")
+
+
 # ── Orchestration ─────────────────────────────────────────────────────────────
 
 def run_lcc_enrichment(
@@ -301,6 +394,7 @@ def run_lcc_enrichment(
     mqg_column: str | None = None,
     mqg_manual_column: str | None = None,
     force: bool = False,
+    dry_run: bool = False,
 ) -> None:
     """Full MQG-03 LCC enrichment flow for a Calibre search string.
 
@@ -407,7 +501,13 @@ def run_lcc_enrichment(
         console.print(_build_review_table(low))
     console.print(_LEGEND)
 
-    # ── 5. Apply ──────────────────────────────────────────────────────────────
+    # ── 5. Apply (or dry-run) ─────────────────────────────────────────────────
+    if dry_run:
+        console.print("[bold cyan]── Dry-run: comparing AI proposals to current values ──[/bold cyan]\n")
+        console.print(_build_audit_table(validated, current_map))
+        _print_audit_summary(validated, current_map)
+        return
+
     applied_ids: list[int] = []
     declined: list[ValidatedSuggestion] = []
 
