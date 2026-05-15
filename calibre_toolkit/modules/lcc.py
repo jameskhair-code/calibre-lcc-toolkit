@@ -295,6 +295,7 @@ def run_lcc_enrichment(
     search_query: str,
     columns: dict[str, str],
     batch_size: int = 10,
+    limit: int | None = None,
     auto_apply_high: bool = False,
     mqg_column: str | None = None,
     mqg_manual_column: str | None = None,
@@ -322,7 +323,15 @@ def run_lcc_enrichment(
         console.print("[yellow]No books matched that search. Nothing to do.[/yellow]")
         raise typer.Exit()
 
-    console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
+    total_matched = len(books)
+    if limit and len(books) > limit:
+        books = books[:limit]
+        console.print(
+            f"\n[bold]Found [green]{total_matched}[/green] books "
+            f"— processing first [cyan]{limit}[/cyan] (--limit).[/bold]"
+        )
+    else:
+        console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
 
     # ── 2. Read current LCC values ────────────────────────────────────────────
     book_ids = [b.id for b in books]

@@ -265,6 +265,10 @@ def lcc_enrich(
         bool,
         typer.Option("--force", help="Re-process books that already have all four LCC fields"),
     ] = False,
+    limit: Annotated[
+        Optional[int],
+        typer.Option("--limit", "-n", help="Cap total books processed in this run (for testing)"),
+    ] = None,
 ):
     """
     MQG-03: AI-assisted Library of Congress Classification (LCC) enrichment.
@@ -324,6 +328,7 @@ def lcc_enrich(
         search_query=search,
         columns=columns,
         batch_size=batch_size,
+        limit=limit,
         auto_apply_high=auto_apply_high,
         mqg_column=mqg_column,
         mqg_manual_column=mqg_manual_column,
