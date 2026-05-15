@@ -166,8 +166,6 @@ class CalibreDB:
             k: v for k, v in merged.items()
             if v and "," not in v and k not in ("", "calibre")
         }
-        if not safe:
-            return
         id_str = ",".join(f"{k}:{v}" for k, v in safe.items())
         cmd = [
             self.calibredb_path,
