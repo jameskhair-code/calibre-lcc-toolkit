@@ -303,6 +303,7 @@ def run_enrichment(
 
     # ── 5. Apply options ──────────────────────────────────────────────────────
     applied_ids: list[int] = []
+    manually_declined: list[IdentifierSuggestion] = []
 
     # --- Tier 1: high confidence ---
     if high:
@@ -322,7 +323,9 @@ def run_enrichment(
             if choice_high == "all":
                 applied_ids += _apply_suggestions(db, high)
             elif choice_high == "review":
-                applied_ids += _prompt_and_apply(db, high)
+                ids, declined = _prompt_and_apply(db, high)
+                applied_ids += ids
+                manually_declined += declined
             # skip: do nothing
 
     # --- Tier 2: low confidence ---
@@ -340,7 +343,9 @@ def run_enrichment(
         if low_choice == "all":
             applied_ids += _apply_suggestions(db, low)
         elif low_choice == "review":
-            applied_ids += _prompt_and_apply(db, low)
+            ids, declined = _prompt_and_apply(db, low)
+            applied_ids += ids
+            manually_declined += declined
         else:
             console.print(f"[dim]{len(low)} low-confidence enrichment(s) skipped. Run again to review.[/dim]")
 
@@ -371,11 +376,20 @@ def run_enrichment(
             "Run again after confirming ISBNs to complete Phase 2.[/dim]"
         )
 
+    # Flag manually declined books alongside lookup failures
+    if manually_declined and mqg_manual_column:
+        declined_ids = [s.book_id for s in manually_declined]
+        console.print(
+            f"\n[yellow]Flagging {len(declined_ids)} manually declined book(s)[/yellow] "
+            f"in [bold]{mqg_manual_column}[/bold] for manual curation."
+        )
+        _mark_manual(db, mqg_manual_column, declined_ids)
+
     _mark_complete(db, mqg_column, already_sufficient_ids + now_complete, label="complete")
 
     total_enriched = len(applied_ids)
     total_complete = len(already_sufficient_ids) + len(now_complete)
-    total_manual = len(needs_manual)
+    total_manual = len(needs_manual) + len(manually_declined)
     console.print(
         f"\n[bold green]Done![/bold green] "
         f"[green]{total_enriched}[/green] enriched, "
@@ -399,8 +413,17 @@ def _apply_suggestions(db: CalibreDB, suggestions: list[IdentifierSuggestion]) -
     return applied
 
 
-def _prompt_and_apply(db: CalibreDB, suggestions: list[IdentifierSuggestion]) -> list[int]:
+def _prompt_and_apply(
+    db: CalibreDB,
+    suggestions: list[IdentifierSuggestion],
+) -> tuple[list[int], list[IdentifierSuggestion]]:
+    """Step through suggestions one by one.
+
+    Returns (applied_ids, declined_suggestions).
+    Declined books are returned so the caller can flag them for manual curation.
+    """
     to_apply: list[IdentifierSuggestion] = []
+    declined: list[IdentifierSuggestion] = []
 
     for s in suggestions:
         console.rule(f"[bold]Book {s.book_id}[/bold]")
@@ -425,11 +448,14 @@ def _prompt_and_apply(db: CalibreDB, suggestions: list[IdentifierSuggestion]) ->
                             show_choices=True, show_default=True)
         if choice == "y":
             to_apply.append(s)
+        else:
+            declined.append(s)
+            console.print("  [dim]Flagging for manual curation.[/dim]")
 
-    if to_apply:
-        return _apply_suggestions(db, to_apply)
-    console.print("[dim]No enrichments applied.[/dim]")
-    return []
+    applied = _apply_suggestions(db, to_apply) if to_apply else []
+    if not to_apply:
+        console.print("[dim]No enrichments applied.[/dim]")
+    return applied, declined
 
 
 def _mark_complete(
