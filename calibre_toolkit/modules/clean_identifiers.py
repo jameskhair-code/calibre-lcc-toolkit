@@ -5,9 +5,10 @@ Scans books for malformed identifiers and offers to fix them.
 Rules applied:
   - UUID values in any field → remove
   - urnisbn/<isbn> as identifier type → normalize to isbn:<isbn>
-  - urnuuid/<anything> as identifier type → remove
+  - urnuuid* as identifier type (with or without slash) → remove
   - isbn10 / isbn13 / isbn-10 type names → normalize to isbn (or remove if isbn present)
   - ISBN or p-prefix embedded in type name (e.g. isbn9780007462520) → normalize to isbn
+  - Bare ISBN-13 (978/979 prefix, 13 digits) stored as type name → normalize to isbn
   - Known junk/artifact/store types → remove
   - Hyphens/spaces in isbn values → strip
   - Whitespace-only or empty values → remove
@@ -39,6 +40,9 @@ _UUID_RE = re.compile(
 # Matches: isbn9780007462520, p9780299300234, p9781940941141
 _ISBN_AS_TYPE_RE = re.compile(r"^(?:isbn|p)(\d{10}|\d{13})$", re.IGNORECASE)
 
+# Bare ISBN-13 stored as type name (e.g. 9780061760358) — 978/979 prefix, 13 digits
+_BARE_ISBN13_TYPE_RE = re.compile(r"^97[89]\d{10}$")
+
 # Non-digit chars to strip from isbn values (hyphens and spaces)
 _ISBN_NOISE_RE = re.compile(r"[-\s]")
 
@@ -53,12 +57,14 @@ _REMOVE_TYPES = frozenset({
     "oasin",
     # URL/URI noise — import artifacts, not useful for lookup
     "url", "url2", "url3", "uri", "urn", "access_url", "ark",
-    # Store identifiers with no lookup value for this library
-    "ozon", "epl", "ilot", "guid",
-    # ISBN variants the user prefers not to keep separately
+    # Store identifiers not used in this library's workflow
+    "ozon", "epl", "ilot", "guid", "amazon_uk", "sonybookid",
+    # ISBN variants — normalize or remove in favour of isbn
     "eisbn", "ean",
     # LibraryThing — not used in this workflow
     "ltid",
+    # Academic/archive identifiers not relevant to this collection
+    "doi",
 })
 
 
@@ -132,8 +138,8 @@ def _analyze(identifiers: dict[str, str]) -> list[IdentifierChange]:
                     ))
             continue
 
-        # Rule 3: urnuuid/<anything> stored as the identifier type
-        if id_type.startswith("urnuuid/"):
+        # Rule 3: urnuuid* stored as type (with or without slash: urnuuid/, urnuuid0...)
+        if id_type.startswith("urnuuid"):
             changes.append(IdentifierChange(
                 action="remove",
                 old_type=id_type,
@@ -184,17 +190,37 @@ def _analyze(identifiers: dict[str, str]) -> list[IdentifierChange]:
                 ))
             continue
 
-        # Rule 6: known junk / artifact / non-useful types
+        # Rule 6: bare ISBN-13 stored as type name (e.g. 9780061760358)
+        if _BARE_ISBN13_TYPE_RE.match(id_type):
+            if "isbn" not in identifiers:
+                changes.append(IdentifierChange(
+                    action="normalize",
+                    old_type=id_type,
+                    old_value=value,
+                    new_type="isbn",
+                    new_value=id_type,
+                    reason=f"ISBN-13 stored as type name — normalize to isbn:{id_type}",
+                ))
+            else:
+                changes.append(IdentifierChange(
+                    action="remove",
+                    old_type=id_type,
+                    old_value=value,
+                    reason="ISBN-13 stored as type name (isbn already present — remove duplicate)",
+                ))
+            continue
+
+        # Rule 7: known junk / artifact / non-useful types
         if id_type in _REMOVE_TYPES:
             changes.append(IdentifierChange(
                 action="remove",
                 old_type=id_type,
                 old_value=value,
-                reason=f"Non-useful identifier type — library hygiene",
+                reason="Non-useful identifier type — library hygiene",
             ))
             continue
 
-        # Rule 7: empty or whitespace-only value
+        # Rule 8: empty or whitespace-only value
         if not value:
             changes.append(IdentifierChange(
                 action="remove",
@@ -204,7 +230,7 @@ def _analyze(identifiers: dict[str, str]) -> list[IdentifierChange]:
             ))
             continue
 
-        # Rule 8: isbn value normalization — strip hyphens and spaces
+        # Rule 9: isbn value normalization — strip hyphens and spaces
         if id_type == "isbn":
             normalized = _ISBN_NOISE_RE.sub("", value)
             if normalized != value:
@@ -218,7 +244,7 @@ def _analyze(identifiers: dict[str, str]) -> list[IdentifierChange]:
                 ))
             continue
 
-        # Rule 9: whitespace in value for any other type
+        # Rule 10: whitespace in value for any other type
         if value != raw_value:
             changes.append(IdentifierChange(
                 action="normalize",
