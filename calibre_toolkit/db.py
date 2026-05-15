@@ -168,8 +168,22 @@ class CalibreDB:
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
             if result.returncode != 0:
-                console_warn = f"Warning: could not mark book {book_id} as MQG complete: {result.stderr.strip()}"
-                print(console_warn)
+                print(f"Warning: could not mark book {book_id} as MQG complete: {result.stderr.strip()}")
+
+    def clear_mqg_flag(self, book_id: int, column: str) -> None:
+        """Clear (set to false) a custom boolean MQG column for a single book."""
+        cmd = [
+            self.calibredb_path,
+            "set_metadata",
+            "--library-path", str(self.library_path),
+            str(book_id),
+            "--field", f"{column}:false",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
+            )
 
     def get_identifiers(self, book_id: int) -> dict[str, str]:
         """Return {type: value} for all identifiers currently on a book."""

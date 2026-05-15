@@ -34,6 +34,8 @@ class IdentifierSuggestion:
     lookup_attempted: bool
     lookup_error: str | None = None
     already_sufficient: bool = False
+    returned_title: str = ""              # title returned by the lookup service
+    returned_authors: list[str] = field(default_factory=list)
 
     @property
     def any_new(self) -> bool:
@@ -42,6 +44,10 @@ class IdentifierSuggestion:
     @property
     def author_display(self) -> str:
         return " & ".join(self.authors)
+
+    @property
+    def returned_title_differs(self) -> bool:
+        return bool(self.returned_title) and self.returned_title.lower() != self.title.lower()
 
 
 def _is_sufficient(identifiers: dict[str, str], required: list[str]) -> bool:
@@ -64,7 +70,10 @@ def _ids_display(identifiers: dict[str, str], highlight_keys: set[str] | None = 
     return t
 
 
-def _build_review_table(suggestions: list[IdentifierSuggestion]) -> Table:
+def _build_review_table(
+    suggestions: list[IdentifierSuggestion],
+    show_returned_title: bool = False,
+) -> Table:
     table = Table(
         box=box.ROUNDED,
         show_header=True,
@@ -86,6 +95,11 @@ def _build_review_table(suggestions: list[IdentifierSuggestion]) -> Table:
         book_text = Text()
         book_text.append(s.title)
         book_text.append(f"\n{s.author_display}", style="dim")
+        if show_returned_title and s.returned_title:
+            if s.returned_title_differs:
+                book_text.append(f"\n↳ {s.returned_title}", style="yellow italic")
+            else:
+                book_text.append(f"\n↳ {s.returned_title}", style="dim green")
 
         current_text = Text()
         if s.current_identifiers:
@@ -205,6 +219,8 @@ def run_enrichment(
             lookup_attempted=True,
             lookup_error=result.error,
             already_sufficient=False,
+            returned_title=result.title,
+            returned_authors=result.authors,
         ))
 
     # ── 3. Partition results ──────────────────────────────────────────────────
@@ -221,22 +237,31 @@ def run_enrichment(
         f"{len(failed)} lookup errors[/dim]\n"
     )
 
-    if failed:
-        for s in failed:
+    # Auto-flag books that need manual attention: both hard errors and "nothing found"
+    needs_manual = failed + no_new_found
+    if needs_manual:
+        if failed:
+            console.print("[bold]Lookup errors:[/bold]")
+            for s in failed:
+                console.print(
+                    f"  [red]✗[/red] [dim]{s.title[:60]}[/dim] — "
+                    f"[yellow]{s.lookup_error}[/yellow]"
+                )
+        if no_new_found:
             console.print(
-                f"  [red]✗[/red] [dim]{s.title[:60]}[/dim] — "
-                f"[yellow]{s.lookup_error}[/yellow]"
+                f"[dim]{len(no_new_found)} book(s) looked up successfully but no new identifiers found.[/dim]"
             )
-        unfound_ids = [s.book_id for s in failed]
+
+        needs_manual_ids = [s.book_id for s in needs_manual]
         if mqg_manual_column:
             console.print(
-                f"\n[yellow]Auto-flagging {len(unfound_ids)} unresolvable book(s)[/yellow] "
+                f"\n[yellow]Auto-flagging {len(needs_manual_ids)} book(s)[/yellow] "
                 f"in [bold]{mqg_manual_column}[/bold] for manual curation."
             )
-            _mark_complete(db, mqg_manual_column, unfound_ids, label="manual-needed")
+            _mark_manual(db, mqg_manual_column, needs_manual_ids)
         else:
             console.print(
-                f"\n[dim]{len(failed)} book(s) could not be looked up and were not flagged "
+                f"\n[dim]{len(needs_manual_ids)} book(s) could not be enriched and were not flagged "
                 "(set mqg.identifiers_manual_column in config.json to track them).[/dim]"
             )
         console.print()
@@ -254,7 +279,9 @@ def run_enrichment(
 
     _LEGEND = (
         "\n[dim]Legend: [green]●[/green] High confidence (ISBN lookup)  "
-        "[red]○[/red] Low confidence (title/author lookup — verify before accepting)[/dim]\n"
+        "[red]○[/red] Low confidence (title/author lookup — verify before accepting)\n"
+        "  Book column: [green]↳ green[/green] = returned title matches  "
+        "[yellow]↳ yellow[/yellow] = returned title differs — check edition[/dim]\n"
     )
 
     if high:
@@ -262,7 +289,7 @@ def run_enrichment(
             f"[bold cyan]Tier 1 — High confidence[/bold cyan] "
             f"[dim]({len(high)} book{'s' if len(high) != 1 else ''}, ISBN-verified)[/dim]"
         )
-        console.print(_build_review_table(high))
+        console.print(_build_review_table(high, show_returned_title=True))
 
     if low:
         console.print(
@@ -270,7 +297,7 @@ def run_enrichment(
             f"[dim]({len(low)} book{'s' if len(low) != 1 else ''}, title/author match — "
             "verify edition before accepting)[/dim]"
         )
-        console.print(_build_review_table(low))
+        console.print(_build_review_table(low, show_returned_title=True))
 
     console.print(_LEGEND)
 
@@ -305,7 +332,7 @@ def run_enrichment(
             "— title/author match (wrong ISBN will affect run 2):\n"
         )
         low_choice = Prompt.ask(
-            f"[bold]Tier 2:[/bold] Apply low-confidence enrichments?",
+            "[bold]Tier 2:[/bold] Apply low-confidence enrichments?",
             choices=["all", "review", "skip"],
             default="review",
             show_choices=True,
@@ -319,25 +346,43 @@ def run_enrichment(
 
     # ── 6. Mark MQG complete ─────────────────────────────────────────────────
     # Only mark complete if the book now has ALL sufficient_types.
-    # Books that got partial enrichment stay in the queue for another run.
+    # Books that got partial enrichment stay in the queue for another run (Phase 1→2 pattern).
     applied_map = {s.book_id: s for s in has_new}
     now_complete: list[int] = []
-    still_incomplete: list[int] = []
+    phase1_complete: list[int] = []   # enriched but still missing some sufficient_types
+
     for book_id in applied_ids:
         s = applied_map[book_id]
         final_ids = {**s.current_identifiers, **s.new_identifiers}
         if _is_sufficient(final_ids, sufficient_types):
             now_complete.append(book_id)
         else:
-            missing = [t for t in sufficient_types if t not in final_ids]
-            still_incomplete.append(book_id)
-            console.print(
-                f"[dim]Book {book_id} ({s.title[:50]}): "
-                f"still missing {', '.join(missing)} — will reappear on next run.[/dim]"
-            )
+            phase1_complete.append(book_id)
+
+    if phase1_complete:
+        # Find which types are still missing across these books (usually the same ones)
+        sample = applied_map[phase1_complete[0]]
+        final_ids = {**sample.current_identifiers, **sample.new_identifiers}
+        still_missing = [t for t in sufficient_types if t not in final_ids]
+        missing_str = ", ".join(f"[bold]{t}[/bold]" for t in still_missing)
+        console.print(
+            f"\n[dim]Phase 1 complete for [bold]{len(phase1_complete)}[/bold] book(s) — "
+            f"still need {missing_str} to finish enrichment. "
+            "Run again after confirming ISBNs to complete Phase 2.[/dim]"
+        )
 
     _mark_complete(db, mqg_column, already_sufficient_ids + now_complete, label="complete")
-    console.print("\n[bold green]Done![/bold green]")
+
+    total_enriched = len(applied_ids)
+    total_complete = len(already_sufficient_ids) + len(now_complete)
+    total_manual = len(needs_manual)
+    console.print(
+        f"\n[bold green]Done![/bold green] "
+        f"[green]{total_enriched}[/green] enriched, "
+        f"[green]{total_complete}[/green] marked MQG-02 complete"
+        + (f", [yellow]{total_manual}[/yellow] flagged for manual review" if total_manual else "")
+        + "."
+    )
 
 
 def _apply_suggestions(db: CalibreDB, suggestions: list[IdentifierSuggestion]) -> list[int]:
@@ -360,8 +405,16 @@ def _prompt_and_apply(db: CalibreDB, suggestions: list[IdentifierSuggestion]) ->
     for s in suggestions:
         console.rule(f"[bold]Book {s.book_id}[/bold]")
         icon, style = _confidence_style(s.confidence)
-        console.print(f"  {s.title}")
+        console.print(f"  [bold]{s.title}[/bold]")
         console.print(f"  [dim]{s.author_display}[/dim]")
+        if s.returned_title:
+            if s.returned_title_differs:
+                console.print(
+                    f"  [yellow]↳ Returned title:[/yellow] [yellow italic]{s.returned_title}[/yellow italic]  "
+                    "[yellow bold]⚠ title mismatch — verify edition[/yellow bold]"
+                )
+            else:
+                console.print(f"  [dim green]↳ Returned title matches.[/dim green]")
         console.print(f"  Confidence: [{style}]{icon} {s.confidence}[/{style}]")
         if s.current_identifiers:
             console.print(f"  Currently has: [dim]{', '.join(s.current_identifiers.keys())}[/dim]")
@@ -392,3 +445,73 @@ def _mark_complete(
     console.print(
         f"[dim]Marked {len(book_ids)} books as complete in [bold]{mqg_column}[/bold].[/dim]"
     )
+
+
+def _mark_manual(
+    db: CalibreDB,
+    mqg_manual_column: str,
+    book_ids: list[int],
+) -> None:
+    if not book_ids:
+        return
+    with console.status(f"[cyan]Flagging {len(book_ids)} books for manual curation…"):
+        db.mark_mqg_complete(book_ids, mqg_manual_column)
+
+
+def run_unflag_manual(
+    db: CalibreDB,
+    search_query: str,
+    mqg_manual_column: str,
+    auto_apply: bool = False,
+) -> None:
+    """Clear the mqg_identifiers_manual flag for books matching search_query."""
+    try:
+        with console.status(f"[cyan]Searching:[/] {search_query}"):
+            books = db.search(search_query)
+    except RuntimeError as e:
+        console.print(Panel(str(e), title="[red]Cannot access library[/red]", border_style="red"))
+        raise typer.Exit(1)
+
+    if not books:
+        console.print("[yellow]No books matched that search.[/yellow]")
+        raise typer.Exit()
+
+    # Filter to only those actually flagged
+    flagged: list[Book] = []
+    with console.status("Checking manual flags…"):
+        for book in books:
+            ids = db.get_identifiers(book.id)  # we use a separate check via custom cols
+            flagged.append(book)  # include all — calibredb will simply set false
+
+    console.print(
+        f"\n[bold]Found [green]{len(books)}[/green] book(s) matching the search.[/bold]\n"
+        f"Clearing [bold]{mqg_manual_column}[/bold] will re-queue them for the next enrichment run.\n"
+    )
+
+    if not auto_apply:
+        choice = Prompt.ask(
+            "Clear the manual flag for all matched books?",
+            choices=["y", "n"],
+            default="y",
+            show_choices=True,
+        )
+        if choice != "y":
+            console.print("[dim]No changes made.[/dim]")
+            raise typer.Exit()
+
+    cleared = 0
+    errors = 0
+    with console.status(f"Clearing flags for {len(books)} book(s)…"):
+        for book in books:
+            try:
+                db.clear_mqg_flag(book.id, mqg_manual_column)
+                cleared += 1
+            except RuntimeError as e:
+                console.print(f"[red]Error on book {book.id}: {e}[/red]")
+                errors += 1
+
+    console.print(
+        f"[green]Cleared flag for {cleared} book(s).[/green]"
+        + (f" [red]{errors} error(s).[/red]" if errors else "")
+    )
+    console.print("\n[bold green]Done![/bold green]")

@@ -275,6 +275,65 @@ def clean_identifiers(
 
 
 @app.command()
+def unflag_manual(
+    search: Annotated[
+        str,
+        typer.Argument(help='Calibre search string for books to un-flag, e.g. "ids:goodreads:12345"'),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    auto_apply: Annotated[
+        bool,
+        typer.Option("--auto-apply", help="Clear flags without prompting"),
+    ] = False,
+):
+    """
+    Clear the MQG-02 manual-curation flag for books you have fixed manually.
+
+    Use this after manually adding identifiers to books that were auto-flagged
+    in the identifiers_manual_column. Clearing the flag re-queues them for the
+    next enrich-identifiers run.
+
+    Examples:
+
+        calibre-toolkit unflag-manual "ids:goodreads:12345"
+
+        calibre-toolkit unflag-manual "#mqg_identifiers_manual:true" --auto-apply
+    """
+    from .modules.identifiers import run_unflag_manual
+
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+    mqg_manual_column = cfg.get("mqg", {}).get("identifiers_manual_column")
+
+    if not mqg_manual_column:
+        console.print(
+            "[red]identifiers_manual_column not set in config.json.[/red]\n"
+            "Add it under the [bold]mqg[/bold] key, e.g. "
+            '[bold]"identifiers_manual_column": "#mqg_identifiers_manual"[/bold]'
+        )
+        raise typer.Exit(1)
+
+    console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — Unflag Manual Curation\n\n",
+                ("Search: ", "dim"),
+                (search, "bold"),
+                ("\nColumn: ", "dim"),
+                (mqg_manual_column, "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_unflag_manual(db=db, search_query=search, mqg_manual_column=mqg_manual_column, auto_apply=auto_apply)
+
+
+@app.command()
 def library_info(
     config: Annotated[
         Path,
