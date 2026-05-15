@@ -5,6 +5,7 @@ Orchestrates: fetch → lookup → display review table → confirm → apply.
 
 from __future__ import annotations
 
+import re
 import typer
 from dataclasses import dataclass, field
 from rich.console import Console
@@ -19,6 +20,78 @@ from ..fetcher import IdentifierFetcher, IDENTIFIER_TYPES
 
 
 console = Console()
+
+# ── Title match classification ────────────────────────────────────────────────
+
+# Suffixes that are generic publication noise — same book, different marketing copy
+_GENERIC_SUBTITLE_RE = re.compile(
+    r":\s*(a|an|the)\s+"
+    r"(novel|memoir|story|thriller|mystery|romance|biography|history|narrative|"
+    r"tale|journey|collection|stories|poems|play|drama|comedy|novella|account|"
+    r"chronicle|true\s+story|life|portrait)\s*$",
+    re.IGNORECASE,
+)
+
+# Book club branding — typically a different print run / ISBN, not the original edition
+_BOOK_CLUB_RE = re.compile(
+    r"\b(oprah|reese|gma|book\s*club)\b"
+    r"|\(.*book\s+club.*\)",
+    re.IGNORECASE,
+)
+
+# Tie-in / adapted editions — not the original trade edition
+_TIE_IN_RE = re.compile(
+    r"\b(movie|film|tv|television|screen)\s*(tie[-\s]in|edition|version|adaptation)\b"
+    r"|\(movie\s+tie[-\s]?in\)|\(film\s+tie[-\s]?in\)",
+    re.IGNORECASE,
+)
+
+
+def _classify_title_match(calibre_title: str, returned_title: str) -> str:
+    """Classify how the returned title relates to the Calibre title.
+
+    Returns one of:
+      "match"            — effectively the same title
+      "generic_subtitle" — returned adds only generic publication noise (': A Novel')
+      "book_club"        — returned has book club branding (likely different ISBN)
+      "tie_in"           — returned has tie-in/movie marker (likely different ISBN)
+      "mismatch"         — other meaningful difference — verify edition
+    """
+    if not returned_title:
+        return "match"
+
+    cal = calibre_title.strip()
+    ret = returned_title.strip()
+
+    if cal.lower() == ret.lower():
+        return "match"
+
+    # Check for specific edition flags before anything else
+    if _BOOK_CLUB_RE.search(ret):
+        return "book_club"
+    if _TIE_IN_RE.search(ret):
+        return "tie_in"
+
+    # Strip generic subtitle from returned title and re-compare
+    ret_stripped = _GENERIC_SUBTITLE_RE.sub("", ret).strip()
+    if cal.lower() == ret_stripped.lower():
+        return "generic_subtitle"
+
+    # Calibre title is a clean prefix of the returned title (subtitle added)
+    if ret_stripped.lower().startswith(cal.lower() + ":") or ret_stripped.lower() == cal.lower():
+        return "generic_subtitle"
+
+    return "mismatch"
+
+
+# Labels and styles for each match class
+_MATCH_CLASS_DISPLAY = {
+    "match":            ("↳ matches",               "dim green",  ""),
+    "generic_subtitle": ("↳ subtitle noise only",   "dim green",  ""),
+    "book_club":        ("↳ book club edition",      "red",        " — likely different ISBN"),
+    "tie_in":           ("↳ tie-in edition",         "red",        " — likely different ISBN"),
+    "mismatch":         ("↳ title differs",          "yellow",     " — verify edition"),
+}
 
 
 @dataclass
@@ -46,8 +119,12 @@ class IdentifierSuggestion:
         return " & ".join(self.authors)
 
     @property
+    def title_match_class(self) -> str:
+        return _classify_title_match(self.title, self.returned_title)
+
+    @property
     def returned_title_differs(self) -> bool:
-        return bool(self.returned_title) and self.returned_title.lower() != self.title.lower()
+        return self.title_match_class not in ("match", "generic_subtitle")
 
 
 def _is_sufficient(identifiers: dict[str, str], required: list[str]) -> bool:
@@ -96,10 +173,15 @@ def _build_review_table(
         book_text.append(s.title)
         book_text.append(f"\n{s.author_display}", style="dim")
         if show_returned_title and s.returned_title:
-            if s.returned_title_differs:
-                book_text.append(f"\n↳ {s.returned_title}", style="yellow italic")
+            mc = s.title_match_class
+            label, style, note = _MATCH_CLASS_DISPLAY[mc]
+            if mc in ("match", "generic_subtitle"):
+                book_text.append(f"\n{label}", style=style)
             else:
-                book_text.append(f"\n↳ {s.returned_title}", style="dim green")
+                book_text.append(f"\n{label}: ", style=style)
+                book_text.append(s.returned_title, style=f"{style} italic")
+                if note:
+                    book_text.append(note, style=f"{style} bold")
 
         current_text = Text()
         if s.current_identifiers:
@@ -280,8 +362,9 @@ def run_enrichment(
     _LEGEND = (
         "\n[dim]Legend: [green]●[/green] High confidence (ISBN lookup)  "
         "[red]○[/red] Low confidence (title/author lookup — verify before accepting)\n"
-        "  Book column: [green]↳ green[/green] = returned title matches  "
-        "[yellow]↳ yellow[/yellow] = returned title differs — check edition[/dim]\n"
+        "  [green]↳ green[/green] = title matches or subtitle noise only  "
+        "[yellow]↳ yellow[/yellow] = edition differs — verify  "
+        "[red]↳ red[/red] = book club / tie-in — defaults to N[/dim]\n"
     )
 
     if high:
@@ -431,20 +514,25 @@ def _prompt_and_apply(
         console.print(f"  [bold]{s.title}[/bold]")
         console.print(f"  [dim]{s.author_display}[/dim]")
         if s.returned_title:
-            if s.returned_title_differs:
-                console.print(
-                    f"  [yellow]↳ Returned title:[/yellow] [yellow italic]{s.returned_title}[/yellow italic]  "
-                    "[yellow bold]⚠ title mismatch — verify edition[/yellow bold]"
-                )
-            else:
+            mc = s.title_match_class
+            _, rt_style, rt_note = _MATCH_CLASS_DISPLAY[mc]
+            if mc in ("match", "generic_subtitle"):
                 console.print(f"  [dim green]↳ Returned title matches.[/dim green]")
+            else:
+                console.print(
+                    f"  [{rt_style}]↳ Returned title:[/{rt_style}] "
+                    f"[{rt_style} italic]{s.returned_title}[/{rt_style} italic]"
+                    + (f"  [{rt_style} bold]{rt_note}[/{rt_style} bold]" if rt_note else "")
+                )
         console.print(f"  Confidence: [{style}]{icon} {s.confidence}[/{style}]")
         if s.current_identifiers:
             console.print(f"  Currently has: [dim]{', '.join(s.current_identifiers.keys())}[/dim]")
         for k, v in s.new_identifiers.items():
             console.print(f"  [green]+[/green] {k}: {v}")
 
-        choice = Prompt.ask("  Action", choices=["y", "n"], default="y",
+        # Default to N for edition-specific flags — these usually need manual verification
+        default_action = "n" if s.title_match_class in ("book_club", "tie_in") else "y"
+        choice = Prompt.ask("  Action", choices=["y", "n"], default=default_action,
                             show_choices=True, show_default=True)
         if choice == "y":
             to_apply.append(s)
