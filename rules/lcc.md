@@ -190,15 +190,15 @@ SEC-05: Canonical secondary-class list, organised by primary class.
 
           A — General Works
             A     → "A - General Works"
-            AC    → "AC - Collections / Series / Collected Works"
+            AC    → "AC - Collections, Series & Collected Works"
             AE    → "AE - Encyclopedias"
             AG    → "AG - Dictionaries and Other General Reference Works"
             AI    → "AI - Indexes"
-            AM    → "AM - Museums / Collectors and Collecting"
+            AM    → "AM - Museums & Collecting"
             AN    → "AN - Newspapers"
             AP    → "AP - Periodicals"
             AS    → "AS - Academies and Learned Societies"
-            AY    → "AY - Yearbooks / Almanacs / Directories"
+            AY    → "AY - Yearbooks, Almanacs & Directories"
             AZ    → "AZ - History of Scholarship & The Humanities"
 
           B — Philosophy, Psychology & Religion
@@ -208,7 +208,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             BF    → "BF - Psychology"
             BH    → "BH - Aesthetics"
             BJ    → "BJ - Ethics"
-            BL    → "BL - Religions / Mythology / Rationalism"
+            BL    → "BL - Religions, Mythology & Rationalism"
             BM    → "BM - Judaism"
             BP    → "BP - Islam, Bahai Faith & Theosophy"
             BQ    → "BQ - Buddhism"
@@ -222,10 +222,10 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             C     → "C - Auxiliary Sciences of History General"
             CB    → "CB - History of Civilization"
             CC    → "CC - Archaeology"
-            CD    → "CD - Diplomatics / Archives / Seals"
-            CE    → "CE - Technical Chronology / Calendar"
+            CD    → "CD - Diplomatics, Archives & Seals"
+            CE    → "CE - Technical Chronology & Calendar"
             CJ    → "CJ - Numismatics"
-            CN    → "CN - Inscriptions / Epigraphy"
+            CN    → "CN - Inscriptions & Epigraphy"
             CR    → "CR - Heraldry"
             CS    → "CS - Genealogy"
             CT    → "CT - Biography"
@@ -267,7 +267,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
 
           G — Geography, Anthropology & Recreation
             G     → "G - Geography: General, Atlases & Maps"
-            GA    → "GA - Mathematical Geography / Cartography"
+            GA    → "GA - Mathematical Geography & Cartography"
             GB    → "GB - Physical Geography"
             GC    → "GC - Oceanography"
             GE    → "GE - Environmental Sciences"

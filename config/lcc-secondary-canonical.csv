@@ -1,14 +1,14 @@
 Code,CanonicalValue,LegacyValues
 A,A - General Works,A - General Works - General
-AC,AC - Collections / Series / Collected Works,AC - General Works - Collections/Series/Collected Works
+AC,AC - Collections, Series & Collected Works,AC - General Works - Collections/Series/Collected Works
 AE,AE - Encyclopedias,AE - General Works - Encyclopedias
 AG,AG - Dictionaries and Other General Reference Works,AG - General Works - Dictionaries and Other General Reference Works
 AI,AI - Indexes,AI - General Works - Indexes
-AM,AM - Museums / Collectors and Collecting,AM - General Works - Museums/Collectors and Collecting
+AM,AM - Museums & Collecting,AM - General Works - Museums/Collectors and Collecting
 AN,AN - Newspapers,AN - General Works - Newspapers
 AP,AP - Periodicals,AP - General Works - Periodicals
 AS,AS - Academies and Learned Societies,AS - General Works - Academies and Learned Socieites
-AY,AY - Yearbooks / Almanacs / Directories,AY - General Works - Yearbooks/Almanacs/Directories
+AY,AY - Yearbooks, Almanacs & Directories,AY - General Works - Yearbooks/Almanacs/Directories
 AZ,AZ - History of Scholarship & The Humanities,AZ - History of Scholarship and Learning / The Humanities|AZ - General Works - History of Scholarship and Learning/The Humanities
 B,B - Philosophy General,B - Philosophy/Psychology/Religion - Philosophy (General)
 BC,BC - Logic,BC - Philosophy/Psychology/Religion - Logic
@@ -16,7 +16,7 @@ BD,BD - Speculative Philosophy,BD - Philosophy/Psychology/Religion - Speculative
 BF,BF - Psychology,BF - Philosophy/Psychology/Religion - Psychology|BF - Philosophy/Psychology/Religion - Psychology / Occult Sciences
 BH,BH - Aesthetics,BH - Philosophy/Psychology/Religion - Aesthetics
 BJ,BJ - Ethics,BJ - Philosophy/Psychology/Religion - Ethics
-BL,BL - Religions / Mythology / Rationalism,BL - Philosophy/Psychology/Religion - Religions/Mythology/Rationalism|BL - Philosophy/Psychology/Religion - Religions / Mythology / Rationalism
+BL,BL - Religions, Mythology & Rationalism,BL - Philosophy/Psychology/Religion - Religions/Mythology/Rationalism|BL - Philosophy/Psychology/Religion - Religions / Mythology / Rationalism
 BM,BM - Judaism,BM - Philosophy/Psychology/Religion - Judaism
 BP,BP - Islam, Bahai Faith & Theosophy,BP - Islam / Bahaism / Theosophy / Etc|BP - Philosophy/Psychology/Religion - Islam/Bahaism/Theosophy/Etc|BP - Philosophy/Psychology/Religion - Islam / Bahai Faith / Theosophy
 BQ,BQ - Buddhism,BQ - Philosophy/Psychology/Religion - Buddhism
@@ -28,10 +28,10 @@ BX,BX - Christian Denominations,BX - Philosophy/Psychology/Religion - Christian 
 C,C - Auxiliary Sciences of History General,C - Auxiliary Sciences of History - Auxiliary Sciences of History (General)
 CB,CB - History of Civilization,CB - Auxiliary Sciences of History - History of Civilization
 CC,CC - Archaeology,CC - Auxiliary Sciences of History - Archaeology
-CD,CD - Diplomatics / Archives / Seals,CD - Auxiliary Sciences of History - Diplomatics/Archives/Seals
-CE,CE - Technical Chronology / Calendar,CE - Auxiliary Sciences of History - Technical Chronology/Calendar
+CD,CD - Diplomatics, Archives & Seals,CD - Auxiliary Sciences of History - Diplomatics/Archives/Seals
+CE,CE - Technical Chronology & Calendar,CE - Auxiliary Sciences of History - Technical Chronology/Calendar
 CJ,CJ - Numismatics,CJ - Auxiliary Sciences of History - Numismatics
-CN,CN - Inscriptions / Epigraphy,CN - Auxiliary Sciences of History - Inscriptions/Epigraphy
+CN,CN - Inscriptions & Epigraphy,CN - Auxiliary Sciences of History - Inscriptions/Epigraphy
 CR,CR - Heraldry,CR - Auxiliary Sciences of History - Heraldry
 CS,CS - Genealogy,CS - Auxiliary Sciences of History - Genealogy
 CT,CT - Biography,CT - Auxiliary Sciences of History - Biography
@@ -65,7 +65,7 @@ F1001-1145,F1001-1145 - Canada & British America,F1001-1145 - British America In
 F1170,F1170 - French America,F1170 - History of the Americas - French America
 F1201-3799,F1201-3799 - Latin America & Caribbean,F1201-3799 - Latin America / Spanish America|F1201-3799 - History of the Americas - Latin America/Spanish America|F1201-3799 - History of the Americas - Latin America / Spanish America
 G,G - Geography: General, Atlases & Maps,G - Geography General / Atlases / Maps|G - Geography/Anthropology/Recreation - Geography (General)/Atlases/Maps
-GA,GA - Mathematical Geography / Cartography,GA - Geography/Anthropology/Recreation - Mathematical geography/Cartography
+GA,GA - Mathematical Geography & Cartography,GA - Geography/Anthropology/Recreation - Mathematical geography/Cartography
 GB,GB - Physical Geography,GB - Geography/Anthropology/Recreation - Physical Geography
 GC,GC - Oceanography,GC - Geography/Anthropology/Recreation - Oceanography
 GE,GE - Environmental Sciences,GE - Geography/Anthropology/Recreation - Environmental Sciences
