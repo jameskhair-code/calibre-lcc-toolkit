@@ -118,13 +118,14 @@ def _derive_classes(call_number: str) -> tuple[str, str]:
         # Direct match first (KBM, KBP, KE, KF, KZ, etc.)
         if letters in _SECONDARY_BY_CODE:
             return primary, _SECONDARY_BY_CODE[letters]
-        # KG-KKH, KJ-KKZ, KL-KWX ranges (by 2-letter prefix)
+        # KG-KH (Latin America & South America), KJ-KKZ (Europe), KL-KWX (Asia/Eurasia/Africa/Pacific)
+        # Use explicit two-letter prefix sets to avoid alphabetic range ambiguity.
         two = letters[:2]
-        if "KG" <= two <= "KKH":
-            return primary, _SECONDARY_BY_CODE.get("KG-KKH", "")
-        if "KJ" <= two <= "KKZ":
+        if two in ("KG", "KH"):
+            return primary, _SECONDARY_BY_CODE.get("KG-KH", "")
+        if two in ("KJ", "KK"):
             return primary, _SECONDARY_BY_CODE.get("KJ-KKZ", "")
-        if "KL" <= two <= "KWX":
+        if "KL" <= two <= "KW":
             return primary, _SECONDARY_BY_CODE.get("KL-KWX", "")
 
     # Try 3-letter (DAW, DJK), then 2-letter

@@ -179,9 +179,9 @@ SEC-03: Special cases — range-coded secondaries for E and F:
 
 SEC-04: Special cases — combined-range secondaries:
             KD or KDK    → "KD-KDK - Law: United Kingdom & Ireland"
-            KG through KKH → "KG-KKH - Law: Latin America & Caribbean"
+            KG through KH  → "KG-KH - Law: Latin America & South America"
             KJ through KKZ → "KJ-KKZ - Law: Europe"
-            KL through KWX → "KL-KWX - Law: Asia & Africa & Pacific"
+            KL through KWX → "KL-KWX - Law: Asia & Eurasia & Africa & Pacific"
           When the subclass letters fall in one of these combined ranges,
           use the combined-range secondary.
 
@@ -320,9 +320,9 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             KDZ         → "KDZ - Law: North America"
             KE          → "KE - Law: Canada"
             KF          → "KF - Law: United States"
-            KG-KKH      → "KG-KKH - Law: Latin America & Caribbean"
+            KG-KH       → "KG-KH - Law: Latin America & South America"
             KJ-KKZ      → "KJ-KKZ - Law: Europe"
-            KL-KWX      → "KL-KWX - Law: Asia & Africa & Pacific"
+            KL-KWX      → "KL-KWX - Law: Asia & Eurasia & Africa & Pacific"
             KZ          → "KZ - Law of Nations"
 
           L — Education
