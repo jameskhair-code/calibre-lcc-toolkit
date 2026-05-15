@@ -65,9 +65,20 @@ def _infer_fetch_path(cfg: dict) -> str:
     return "fetch-ebook-metadata"
 
 
-def _make_ai(cfg: dict):
+def _make_ai(cfg: dict, command_key: str | None = None):
+    """Build an AIClient from config.
+
+    command_key — if provided, look for an override block at ai.<command_key>
+    (e.g. "lcc") before falling back to the top-level ai block. This lets
+    different commands use different providers without changing the default.
+    """
     from .ai import AIClient
-    ai_cfg = cfg.get("ai", {})
+    base_cfg = cfg.get("ai", {})
+
+    # Merge: command-specific block overrides the top-level block
+    override = base_cfg.get(command_key, {}) if command_key else {}
+    ai_cfg = {**base_cfg, **override}
+
     provider = ai_cfg.get("provider", "openai")
 
     # Allow API key from env var as override (more secure than config file)
@@ -277,7 +288,7 @@ def lcc_enrich(
 
     cfg = _load_config(config)
     db = _make_db(cfg)
-    ai = _make_ai(cfg)
+    ai = _make_ai(cfg, command_key="lcc")
 
     lcc_cfg = cfg.get("lcc", {})
     columns = {
@@ -289,16 +300,19 @@ def lcc_enrich(
     mqg_column = cfg.get("mqg", {}).get("lcc_column")
     mqg_manual_column = cfg.get("mqg", {}).get("lcc_manual_column")
 
+    # Resolve which AI config is actually active for display
+    _base = cfg.get("ai", {})
+    _lcc_ai = {**_base, **_base.get("lcc", {})}
+
     console.print(
         Panel(
             Text.assemble(
                 ("Calibre Toolkit", "bold cyan"),
                 " — MQG-03 LCC Enrichment\n\n",
-                ("Search: ", "dim"),
+                ("Search:    ", "dim"),
                 (search, "bold"),
-                ("\nAI model: ", "dim"),
-                (f"{cfg.get('ai', {}).get('provider', 'openai')} / "
-                 f"{cfg.get('ai', {}).get('model', '(default)')}", "bold"),
+                ("\nProvider:  ", "dim"),
+                (f"{_lcc_ai.get('provider', 'openai')} / {_lcc_ai.get('model', '(default)')}", "bold"),
             ),
             border_style="cyan",
         )
