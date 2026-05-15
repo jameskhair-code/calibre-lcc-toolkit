@@ -27,6 +27,30 @@ def _load_rules(rules_file: str) -> str:
 
 
 @dataclass
+class LccSuggestion:
+    book_id: int
+    title: str
+    authors: list[str]
+    current: dict[str, str]            # current values for the four LCC fields
+    proposed: dict[str, str]           # AI-proposed values for the four LCC fields
+    confidence: Literal["high", "medium", "low"]
+    source: str = ""
+    notes: str = ""
+    parse_error: str = ""              # populated if AI output failed validation
+
+    @property
+    def authors_display(self) -> str:
+        return " & ".join(self.authors)
+
+    @property
+    def any_change(self) -> bool:
+        return any(
+            self.proposed.get(k, "") != self.current.get(k, "")
+            for k in ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_class_path")
+        )
+
+
+@dataclass
 class CleanupSuggestion:
     book_id: int
     original_title: str
@@ -217,6 +241,36 @@ class AIClient:
         )
         return response.choices[0].message.content.strip()
 
+    def suggest_lcc(
+        self,
+        books: list[Book],
+        current_map: dict[int, dict[str, str]],
+        batch_size: int = 10,
+    ) -> list["LccSuggestion"]:
+        """Process books in batches and return LCC suggestions.
+
+        current_map[book_id] = dict of current values for the four LCC fields
+        (used to give the model context about what's already there).
+        """
+        results: list[LccSuggestion] = []
+        batches = [books[i:i + batch_size] for i in range(0, len(books), batch_size)]
+        for batch in batches:
+            results.extend(self._process_lcc_batch(batch, current_map))
+        return results
+
+    def _process_lcc_batch(
+        self,
+        books: list[Book],
+        current_map: dict[int, dict[str, str]],
+    ) -> list["LccSuggestion"]:
+        system_prompt = _build_lcc_system_prompt()
+        user_msg = _build_lcc_user_message(books, current_map)
+        if self.provider == "openai":
+            raw = self._call_openai(user_msg, system_prompt)
+        else:
+            raw = self._call_anthropic(user_msg, system_prompt)
+        return _parse_lcc_response(raw, books, current_map)
+
     def _call_anthropic(self, user_msg: str, system_prompt: str) -> str:
         from anthropic import Anthropic
         client = Anthropic(api_key=self.api_key)
@@ -227,3 +281,100 @@ class AIClient:
             messages=[{"role": "user", "content": user_msg}],
         )
         return response.content[0].text.strip()
+
+
+# ── LCC prompt + parsing ─────────────────────────────────────────────────────
+
+_LCC_PROMPT_PREAMBLE = """\
+You are a metadata librarian propagating Library of Congress Classification (LCC)
+values into a personal Calibre library called "Collection – Literary Awards
+and Nominees".
+
+For each book, propose four LCC fields plus confidence, source, and notes.
+Apply the rules below exactly. Prefer catalog evidence over invention.
+"""
+
+_LCC_PROMPT_OUTPUT_FORMAT = """\
+
+---
+## OUTPUT FORMAT
+
+Respond with a JSON array, one object per book, in the SAME ORDER as the input.
+Each object must have exactly these keys:
+{
+  "id": <integer>,
+  "lcc": "<LCC call number, or empty string>",
+  "lcc_primary_class": "<exact canonical drop-down string from PRI-02>",
+  "lcc_secondary_class": "<exact canonical drop-down string from SEC-05>",
+  "lcc_class_path": "<narrative breadcrumb per PATH section>",
+  "confidence": "high" | "medium" | "low",
+  "source": "<short phrase describing the strongest evidence used>",
+  "notes": "<one short sentence; reasoning or caveat>"
+}
+
+Return ONLY the JSON array. No markdown fences, no commentary outside the array.
+"""
+
+
+def _build_lcc_system_prompt() -> str:
+    rules = _load_rules("lcc.md")
+    return _LCC_PROMPT_PREAMBLE + "\n" + rules + "\n" + _LCC_PROMPT_OUTPUT_FORMAT
+
+
+def _build_lcc_user_message(books: list[Book], current_map: dict[int, dict[str, str]]) -> str:
+    payload = []
+    for b in books:
+        current = current_map.get(b.id, {})
+        item = {
+            "id": b.id,
+            "title": b.title,
+            "authors": b.authors,
+        }
+        if any(current.get(k) for k in ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_class_path")):
+            item["current"] = {k: current.get(k, "") for k in
+                               ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_class_path")}
+        payload.append(item)
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _parse_lcc_response(
+    raw: str,
+    books: list[Book],
+    current_map: dict[int, dict[str, str]],
+) -> list[LccSuggestion]:
+    # Strip optional markdown fences in case the model ignores instructions
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:]
+        cleaned = cleaned.strip()
+    try:
+        items = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
+
+    book_map = {b.id: b for b in books}
+    suggestions: list[LccSuggestion] = []
+    for item in items:
+        book_id = item.get("id")
+        book = book_map.get(book_id)
+        if book is None:
+            continue
+        proposed = {
+            "lcc": (item.get("lcc") or "").strip(),
+            "lcc_primary_class": (item.get("lcc_primary_class") or "").strip(),
+            "lcc_secondary_class": (item.get("lcc_secondary_class") or "").strip(),
+            "lcc_class_path": (item.get("lcc_class_path") or "").strip(),
+        }
+        suggestions.append(LccSuggestion(
+            book_id=book_id,
+            title=book.title,
+            authors=book.authors,
+            current=current_map.get(book_id, {}),
+            proposed=proposed,
+            confidence=item.get("confidence", "low"),
+            source=item.get("source", "").strip(),
+            notes=item.get("notes", "").strip(),
+        ))
+    return suggestions

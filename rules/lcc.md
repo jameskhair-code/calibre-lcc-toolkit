@@ -532,7 +532,10 @@ PATH-05: Second level (secondary class, short form).
 PATH-06: Third level and below — narrative subject narrowing.
            These come from the LCC schedule structure for the specific
            number range AND from the actual subject of the book.
-           - Aim for 2–4 additional levels after the secondary class.
+           - Aim for 4–5 additional levels after the secondary class
+             (so total path depth is typically 6–7 levels including
+             primary and secondary). Lean toward MORE specificity over
+             less when evidence supports it.
            - Each level should be more specific than the last.
            - Use short noun-phrase headings, title case, no trailing
              punctuation.

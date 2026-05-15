@@ -192,6 +192,62 @@ class CalibreDB:
             rows = conn.execute(query, [book_id]).fetchall()
         return {row[0]: row[1] for row in rows}
 
+    def get_custom_column_batch(self, book_ids: list[int], label: str) -> dict[int, str]:
+        """Read a Calibre custom text column for many books at once.
+
+        label is the column's lookup name with or without the leading '#'.
+        Returns {book_id: value} only for books that have a non-empty value.
+        Handles both inline (custom_column_N) and normalized (link-table) text columns.
+        """
+        if not book_ids:
+            return {}
+        label_clean = label.lstrip("#")
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, normalized FROM custom_columns WHERE label = ?",
+                [label_clean],
+            ).fetchone()
+            if row is None:
+                return {}
+            col_id, normalized = row[0], bool(row[1])
+            placeholders = ",".join("?" * len(book_ids))
+            if normalized:
+                query = (
+                    f"SELECT link.book, cc.value "
+                    f"FROM books_custom_column_{col_id}_link link "
+                    f"JOIN custom_column_{col_id} cc ON cc.id = link.value "
+                    f"WHERE link.book IN ({placeholders})"
+                )
+            else:
+                query = (
+                    f"SELECT book, value FROM custom_column_{col_id} "
+                    f"WHERE book IN ({placeholders})"
+                )
+            rows = conn.execute(query, book_ids).fetchall()
+        return {row[0]: row[1] for row in rows if row[1]}
+
+    def apply_custom_fields(self, book_id: int, fields: dict[str, str]) -> None:
+        """Set multiple custom column values for a book in a single calibredb call.
+
+        fields keys are lookup names with the leading '#'.
+        Empty-string values are written as empty (clears the field).
+        """
+        if not fields:
+            return
+        cmd = [
+            self.calibredb_path,
+            "set_metadata",
+            "--library-path", str(self.library_path),
+            str(book_id),
+        ]
+        for label, value in fields.items():
+            cmd += ["--field", f"{label}:{value}"]
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
+            )
+
     def apply_identifiers(self, book_id: int, merged: dict[str, str]) -> None:
         """Write a complete set of identifiers to Calibre via calibredb set_metadata.
 

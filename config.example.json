@@ -24,9 +24,19 @@
     "_comment_mqg_complete": "Extra identifier types that must be present before MQG-02 is marked complete. Books enriched but missing these are reported as 'pending ratings' and not marked done. Set to [] to disable the gate."
   },
 
+  "lcc": {
+    "_comment": "MQG-03 LCC enrichment — custom column labels (with leading #).",
+    "lcc_column": "#lcc",
+    "primary_class_column": "#lcc_primary_class",
+    "secondary_class_column": "#lcc_secondary_class",
+    "class_path_column": "#lcc_class_path"
+  },
+
   "mqg": {
     "title_author_column": "#mqg_title_author",
     "identifiers_column": "#mqg_identifiers",
-    "identifiers_manual_column": "#mqg_identifiers_manual"
+    "identifiers_manual_column": "#mqg_identifiers_manual",
+    "lcc_column": "#mqg_lcc",
+    "lcc_manual_column": "#mqg_lcc_manual"
   }
 }

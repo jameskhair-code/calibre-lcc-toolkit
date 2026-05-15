@@ -233,6 +233,91 @@ def enrich_identifiers(
 
 
 @app.command()
+def lcc_enrich(
+    search: Annotated[
+        str,
+        typer.Argument(help='Calibre search string, e.g. "#mqg_identifiers:true and not #mqg_lcc:true"'),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    batch_size: Annotated[
+        int,
+        typer.Option("--batch-size", "-b", help="Books per AI request (default 10)"),
+    ] = 10,
+    auto_apply_high: Annotated[
+        bool,
+        typer.Option("--auto-apply-high", help="Apply high-confidence enrichments without prompting"),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Re-process books that already have all four LCC fields"),
+    ] = False,
+):
+    """
+    MQG-03: AI-assisted Library of Congress Classification (LCC) enrichment.
+
+    For each book, proposes:
+      • lcc (call number)
+      • lcc_primary_class (drop-down)
+      • lcc_secondary_class (drop-down)
+      • lcc_class_path (narrative breadcrumb)
+
+    Primary and secondary class are code-derived from the AI-proposed call
+    number and validated against config/lcc-{primary,secondary}-canonical.csv.
+
+    Examples:
+
+        calibre-toolkit lcc-enrich "#mqg_identifiers:true and not #mqg_lcc:true"
+
+        calibre-toolkit lcc-enrich "tag:booker" --batch-size 5 --auto-apply-high
+    """
+    from .modules.lcc import run_lcc_enrichment
+
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+    ai = _make_ai(cfg)
+
+    lcc_cfg = cfg.get("lcc", {})
+    columns = {
+        "lcc": lcc_cfg.get("lcc_column", "#lcc"),
+        "lcc_primary_class": lcc_cfg.get("primary_class_column", "#lcc_primary_class"),
+        "lcc_secondary_class": lcc_cfg.get("secondary_class_column", "#lcc_secondary_class"),
+        "lcc_class_path": lcc_cfg.get("class_path_column", "#lcc_class_path"),
+    }
+    mqg_column = cfg.get("mqg", {}).get("lcc_column")
+    mqg_manual_column = cfg.get("mqg", {}).get("lcc_manual_column")
+
+    console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — MQG-03 LCC Enrichment\n\n",
+                ("Search: ", "dim"),
+                (search, "bold"),
+                ("\nAI model: ", "dim"),
+                (f"{cfg.get('ai', {}).get('provider', 'openai')} / "
+                 f"{cfg.get('ai', {}).get('model', '(default)')}", "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_lcc_enrichment(
+        db=db,
+        ai=ai,
+        search_query=search,
+        columns=columns,
+        batch_size=batch_size,
+        auto_apply_high=auto_apply_high,
+        mqg_column=mqg_column,
+        mqg_manual_column=mqg_manual_column,
+        force=force,
+    )
+
+
+@app.command()
 def clean_identifiers(
     search: Annotated[
         str,
