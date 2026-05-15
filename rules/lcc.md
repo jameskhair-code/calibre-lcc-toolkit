@@ -119,17 +119,17 @@ PRI-02: Derive the primary class from the leading letter of the LCC call
           number. The mapping is mechanical:
 
             A → A - General Works
-            B → B - Philosophy / Psychology / Religion
+            B → B - Philosophy, Psychology & Religion
             C → C - Auxiliary Sciences of History
-            D → D - World History / History of Europe / Asia / Africa / Australia / New Zealand / Etc
+            D → D - World History & Area Studies
             E → E - History of the Americas
             F → F - History of the Americas
-            G → G - Geography / Anthropology / Recreation
+            G → G - Geography, Anthropology & Recreation
             H → H - Social Sciences
             J → J - Political Science
             K → K - Law
             L → L - Education
-            M → M - Music and Books on Music
+            M → M - Music
             N → N - Fine Arts
             P → P - Language and Literature
             Q → Q - Science
@@ -138,7 +138,7 @@ PRI-02: Derive the primary class from the leading letter of the LCC call
             T → T - Technology
             U → U - Military Science
             V → V - Naval Science
-            Z → Z - Bibliography / Library Science / Information Resources
+            Z → Z - Bibliography & Library Science
 
 PRI-03: E and F both map to "E - History of the Americas" / "F - History of
           the Americas". Use the letter that matches the actual call number.
@@ -162,26 +162,26 @@ SEC-01: lcc_secondary_class is a controlled drop-down. You MUST return one
 SEC-02: Derive the secondary class from the subclass letters of the LCC call
           number (the letters immediately preceding the first digit).
           Examples:
-            "DK189 .W67 2003"      → subclass "DK"  → "DK - Russia / Soviet Union / Former Soviet Republics / Poland"
+            "DK189 .W67 2003"      → subclass "DK"  → "DK - Russia, Soviet Union & Former Republics"
             "BM197.5 .K64 2003"    → subclass "BM"  → "BM - Judaism"
             "PS3563.O8749 B45"     → subclass "PS"  → "PS - American Literature"
-            "HD8390.B73 K63 1990"  → subclass "HD"  → "HD - Industries / Land Use / Labor"
+            "HD8390.B73 K63 1990"  → subclass "HD"  → "HD - Industries, Land Use & Labor"
 
 SEC-03: Special cases — range-coded secondaries for E and F:
-            E11-143      → "E11-143 - America"
-            E151-909     → "E151-909 - United States"
-            F1-975       → "F1-975 - United States Local History"
-            F1001-1145   → "F1001-1145 - British America Including Canada / Dutch America"
+            E11-143      → "E11-143 - Americas: Pre-Colonial & Colonial"
+            E151-909     → "E151-909 - United States: History"
+            F1-975       → "F1-975 - United States: Local & Regional History"
+            F1001-1145   → "F1001-1145 - Canada & British America"
             F1170        → "F1170 - French America"
-            F1201-3799   → "F1201-3799 - Latin America / Spanish America"
+            F1201-3799   → "F1201-3799 - Latin America & Caribbean"
           When the lcc number falls in one of these ranges, prefer the range-
           coded secondary over the bare "E" or "F" value.
 
 SEC-04: Special cases — combined-range secondaries:
-            KD or KDK    → "KD-KDK - United Kingdom and Ireland"
-            KG through KKH → "KG-KKH - Latin America / Mexico and Central America / West Indies / Caribbean Area"
-            KJ through KKZ → "KJ-KKZ - Europe"
-            KL through KWX → "KL-KWX - Asia and Eurasia / Africa / Pacific Area / Antarctica"
+            KD or KDK    → "KD-KDK - Law: United Kingdom & Ireland"
+            KG through KKH → "KG-KKH - Law: Latin America & Caribbean"
+            KJ through KKZ → "KJ-KKZ - Law: Europe"
+            KL through KWX → "KL-KWX - Law: Asia, Africa & Pacific"
           When the subclass letters fall in one of these combined ranges,
           use the combined-range secondary.
 
@@ -199,9 +199,9 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             AP    → "AP - Periodicals"
             AS    → "AS - Academies and Learned Societies"
             AY    → "AY - Yearbooks / Almanacs / Directories"
-            AZ    → "AZ - History of Scholarship and Learning / The Humanities"
+            AZ    → "AZ - History of Scholarship & The Humanities"
 
-          B — Philosophy / Psychology / Religion
+          B — Philosophy, Psychology & Religion
             B     → "B - Philosophy General"
             BC    → "BC - Logic"
             BD    → "BD - Speculative Philosophy"
@@ -210,7 +210,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             BJ    → "BJ - Ethics"
             BL    → "BL - Religions / Mythology / Rationalism"
             BM    → "BM - Judaism"
-            BP    → "BP - Islam / Bahaism / Theosophy / Etc"
+            BP    → "BP - Islam, Bahai Faith & Theosophy"
             BQ    → "BQ - Buddhism"
             BR    → "BR - Christianity"
             BS    → "BS - The Bible"
@@ -230,149 +230,149 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             CS    → "CS - Genealogy"
             CT    → "CT - Biography"
 
-          D — World History / Europe / Asia / Africa / Oceania
+          D — World History & Area Studies
             D     → "D - History General"
             DA    → "DA - Great Britain"
             DAW   → "DAW - Central Europe"
-            DB    → "DB - Austria / Liechtenstein / Hungary / Czechoslovakia"
-            DC    → "DC - France / Andorra / Monaco"
+            DB    → "DB - Austria, Hungary & Central Europe"
+            DC    → "DC - France, Andorra & Monaco"
             DD    → "DD - Germany"
             DE    → "DE - Greco-Roman World"
             DF    → "DF - Greece"
-            DG    → "DG - Italy / Malta"
-            DH    → "DH - Low Countries / Benelux Countries"
-            DJ    → "DJ - Netherlands / Holland"
+            DG    → "DG - Italy & Malta"
+            DH    → "DH - Low Countries & Benelux"
+            DJ    → "DJ - Netherlands"
             DJK   → "DJK - Eastern Europe General"
-            DK    → "DK - Russia / Soviet Union / Former Soviet Republics / Poland"
-            DL    → "DL - Northern Europe / Scandinavia"
-            DP    → "DP - Spain / Portugal"
+            DK    → "DK - Russia, Soviet Union & Former Republics"
+            DL    → "DL - Northern Europe & Scandinavia"
+            DP    → "DP - Spain & Portugal"
             DQ    → "DQ - Switzerland"
             DR    → "DR - Balkan Peninsula"
             DS    → "DS - Asia"
             DT    → "DT - Africa"
-            DU    → "DU - Oceania / South Seas"
+            DU    → "DU - Oceania & Pacific"
             DX    → "DX - Romanies"
 
           E — History of the Americas (general)
-            E         → "E - History of the Americas General"
-            E11-143   → "E11-143 - America"
-            E151-909  → "E151-909 - United States"
+            E         → "E - Americas: General History"
+            E11-143   → "E11-143 - Americas: Pre-Colonial & Colonial"
+            E151-909  → "E151-909 - United States: History"
 
           F — History of the Americas (local)
-            F             → "F - United States Local History"
-            F1-975        → "F1-975 - United States Local History"
-            F1001-1145    → "F1001-1145 - British America Including Canada / Dutch America"
+            F             → "F - Americas: Local History"
+            F1-975        → "F1-975 - United States: Local & Regional History"
+            F1001-1145    → "F1001-1145 - Canada & British America"
             F1170         → "F1170 - French America"
-            F1201-3799    → "F1201-3799 - Latin America / Spanish America"
+            F1201-3799    → "F1201-3799 - Latin America & Caribbean"
 
-          G — Geography / Anthropology / Recreation
-            G     → "G - Geography General / Atlases / Maps"
+          G — Geography, Anthropology & Recreation
+            G     → "G - Geography: General, Atlases & Maps"
             GA    → "GA - Mathematical Geography / Cartography"
             GB    → "GB - Physical Geography"
             GC    → "GC - Oceanography"
             GE    → "GE - Environmental Sciences"
-            GF    → "GF - Human Ecology / Anthropogeography"
+            GF    → "GF - Human Ecology & Anthropogeography"
             GN    → "GN - Anthropology"
             GR    → "GR - Folklore"
-            GT    → "GT - Manners and Customs General"
-            GV    → "GV - Recreation / Leisure"
+            GT    → "GT - Manners & Customs"
+            GV    → "GV - Recreation & Leisure"
 
           H — Social Sciences
             H     → "H - Social Sciences General"
             HA    → "HA - Statistics"
-            HB    → "HB - Economic Theory / Demography"
+            HB    → "HB - Economic Theory & Demography"
             HC    → "HC - Economic History and Conditions"
-            HD    → "HD - Industries / Land Use / Labor"
-            HE    → "HE - Transportation and Communications"
+            HD    → "HD - Industries, Land Use & Labor"
+            HE    → "HE - Transportation & Communications"
             HF    → "HF - Commerce"
             HG    → "HG - Finance"
             HJ    → "HJ - Public Finance"
-            HM    → "HM - Sociology General"
-            HN    → "HN - Social History and Conditions / Social Problems / Social Reform"
-            HQ    → "HQ - The Family / Marriage / Women"
-            HS    → "HS - Societies / Secret / Benevolent / Etc"
-            HT    → "HT - Communities / Classes / Races"
-            HV    → "HV - Social Pathology / Social and Public Welfare / Criminology"
-            HX    → "HX - Socialism / Communism / Anarchism"
+            HM    → "HM - Sociology: General"
+            HN    → "HN - Social History & Social Reform"
+            HQ    → "HQ - Family, Marriage & Women"
+            HS    → "HS - Societies & Organizations"
+            HT    → "HT - Communities, Classes & Races"
+            HV    → "HV - Criminology & Social Welfare"
+            HX    → "HX - Socialism, Communism & Anarchism"
 
           J — Political Science
-            J     → "J - General Legislative and Executive Papers"
+            J     → "J - Legislative & Executive Papers"
             JA    → "JA - Political Science General"
             JC    → "JC - Political Theory"
-            JF    → "JF - Political Institutions and Public Administration"
-            JJ    → "JJ - Political Institutions and Public Administration / North America"
-            JK    → "JK - Political Institutions and Public Administration / United States"
-            JL    → "JL - Political Institutions and Public Administration / Canada / Latin America / Etc"
-            JN    → "JN - Political Institutions and Public Administration / Europe"
-            JQ    → "JQ - Political Institutions and Public Administration / Asia / Africa / Australia / Pacific Area / Etc"
-            JS    → "JS - Local Government / Municipal Government"
-            JV    → "JV - Colonies and Colonization / Emigration and Immigration / International Migration"
+            JF    → "JF - Political Institutions & Administration"
+            JJ    → "JJ - Political Administration: North America"
+            JK    → "JK - Political Administration: United States"
+            JL    → "JL - Political Administration: Canada & Latin America"
+            JN    → "JN - Political Administration: Europe"
+            JQ    → "JQ - Political Administration: Asia, Africa & Pacific"
+            JS    → "JS - Local & Municipal Government"
+            JV    → "JV - Colonization & Immigration"
             JZ    → "JZ - International Relations"
 
           K — Law
-            K           → "K - Law General / Comparative and Uniform Law / Jurisprudence"
-            KB          → "KB - Religious Law General / Comparative Religious Law / Jurisprudence"
+            K           → "K - Law: General & Jurisprudence"
+            KB          → "KB - Religious Law: General"
             KBM         → "KBM - Jewish Law"
             KBP         → "KBP - Islamic Law"
             KBR         → "KBR - History of Canon Law"
-            KBU         → "KBU - Law of the Roman Catholic Church / The Holy See"
-            KD / KDK    → "KD-KDK - United Kingdom and Ireland"
-            KDZ         → "KDZ - America / North America"
-            KE          → "KE - Canada"
-            KF          → "KF - United States"
-            KG-KKH      → "KG-KKH - Latin America / Mexico and Central America / West Indies / Caribbean Area"
-            KJ-KKZ      → "KJ-KKZ - Europe"
-            KL-KWX      → "KL-KWX - Asia and Eurasia / Africa / Pacific Area / Antarctica"
+            KBU         → "KBU - Catholic Church Law & The Holy See"
+            KD / KDK    → "KD-KDK - Law: United Kingdom & Ireland"
+            KDZ         → "KDZ - Law: North America"
+            KE          → "KE - Law: Canada"
+            KF          → "KF - Law: United States"
+            KG-KKH      → "KG-KKH - Law: Latin America & Caribbean"
+            KJ-KKZ      → "KJ-KKZ - Law: Europe"
+            KL-KWX      → "KL-KWX - Law: Asia, Africa & Pacific"
             KZ          → "KZ - Law of Nations"
 
           L — Education
             L     → "L - Education General"
             LA    → "LA - History of Education"
-            LB    → "LB - Theory and Practice of Education"
+            LB    → "LB - Theory & Practice of Education"
             LC    → "LC - Special Aspects of Education"
-            LD    → "LD - Individual Institutions / United States"
-            LE    → "LE - Individual Institutions / America Except United States"
-            LF    → "LF - Individual Institutions / Europe"
-            LG    → "LG - Individual Institutions / Asia / Africa / Indian Ocean Islands / Australia / New Zealand / Pacific Islands"
-            LH    → "LH - College and School Magazines and Papers"
-            LJ    → "LJ - Student Fraternities and Societies / United States"
+            LD    → "LD - Educational Institutions: United States"
+            LE    → "LE - Educational Institutions: Americas (excl. US)"
+            LF    → "LF - Educational Institutions: Europe"
+            LG    → "LG - Educational Institutions: Asia, Africa & Pacific"
+            LH    → "LH - College & School Publications"
+            LJ    → "LJ - Student Organizations: United States"
             LT    → "LT - Textbooks"
 
           M — Music
             M     → "M - Music"
             ML    → "ML - Literature on Music"
-            MT    → "MT - Instruction and Study"
+            MT    → "MT - Music Instruction & Study"
 
           N — Fine Arts
             N     → "N - Visual Arts"
             NA    → "NA - Architecture"
             NB    → "NB - Sculpture"
-            NC    → "NC - Drawing / Design / Illustration"
+            NC    → "NC - Drawing, Design & Illustration"
             ND    → "ND - Painting"
             NE    → "NE - Print Media"
             NK    → "NK - Decorative Arts"
-            NX    → "NX - Arts in General"
+            NX    → "NX - Arts: General"
 
           P — Language and Literature
-            P     → "P - Philology / Linguistics"
-            PA    → "PA - Greek Language and Literature / Latin Language and Literature"
-            PB    → "PB - Modern Languages / Celtic Languages"
+            P     → "P - Philology & Linguistics"
+            PA    → "PA - Classical Languages & Literature"
+            PB    → "PB - Modern & Celtic Languages"
             PC    → "PC - Romanic Languages"
-            PD    → "PD - Germanic Languages / Scandinavian Languages"
+            PD    → "PD - Germanic & Scandinavian Languages"
             PE    → "PE - English Language"
             PF    → "PF - West Germanic Languages"
-            PG    → "PG - Slavic Languages / Baltic Languages / Albanian Language"
-            PH    → "PH - Uralic Languages / Basque Language"
-            PJ    → "PJ - Oriental Languages and Literatures"
-            PK    → "PK - Indo-Iranian Languages and Literatures"
-            PL    → "PL - Languages and Literatures of Eastern Asia / Africa / Oceania"
-            PM    → "PM - Hyperborean / Indian / Artificial Languages"
+            PG    → "PG - Slavic & Baltic Languages"
+            PH    → "PH - Uralic & Basque Languages"
+            PJ    → "PJ - Oriental Languages & Literature"
+            PK    → "PK - Indo-Iranian Languages & Literature"
+            PL    → "PL - Languages: East Asia, Africa & Oceania"
+            PM    → "PM - Indigenous & Constructed Languages"
             PN    → "PN - Literature General"
-            PQ    → "PQ - French Literature / Italian Literature / Spanish Literature / Portuguese Literature"
+            PQ    → "PQ - Romance Literatures"
             PR    → "PR - English Literature"
             PS    → "PS - American Literature"
-            PT    → "PT - German / Dutch / Flemish / Afrikaans / Scandinavian / Old Norse / Icelandic / Faroese / Danish / Norwegian / Swedish Literature"
-            PZ    → "PZ - Fiction and Juvenile Belles Lettres"
+            PT    → "PT - Germanic & Scandinavian Literatures"
+            PZ    → "PZ - Fiction & Juvenile Literature"
 
           Q — Science
             Q     → "Q - Science General"
@@ -381,7 +381,7 @@ SEC-05: Canonical secondary-class list, organised by primary class.
             QC    → "QC - Physics"
             QD    → "QD - Chemistry"
             QE    → "QE - Geology"
-            QH    → "QH - Natural History / Biology"
+            QH    → "QH - Natural History & Biology"
             QK    → "QK - Botany"
             QL    → "QL - Zoology"
             QM    → "QM - Human Anatomy"
@@ -390,75 +390,75 @@ SEC-05: Canonical secondary-class list, organised by primary class.
 
           R — Medicine
             R     → "R - Medicine General"
-            RA    → "RA - Public Aspects of Medicine"
+            RA    → "RA - Public Health & Medicine"
             RB    → "RB - Pathology"
             RC    → "RC - Internal Medicine"
             RD    → "RD - Surgery"
             RE    → "RE - Ophthalmology"
             RF    → "RF - Otorhinolaryngology"
-            RG    → "RG - Gynecology and Obstetrics"
+            RG    → "RG - Gynecology & Obstetrics"
             RJ    → "RJ - Pediatrics"
             RK    → "RK - Dentistry"
             RL    → "RL - Dermatology"
-            RM    → "RM - Therapeutics / Pharmacology"
-            RS    → "RS - Pharmacy and Materia Medica"
+            RM    → "RM - Therapeutics & Pharmacology"
+            RS    → "RS - Pharmacy & Materia Medica"
             RT    → "RT - Nursing"
-            RV    → "RV - Botanic / Thomsonian / Eclectic Medicine"
+            RV    → "RV - Botanical & Alternative Medicine"
             RX    → "RX - Homeopathy"
-            RZ    → "RZ - Other Systems of Medicine"
+            RZ    → "RZ - Other Medical Systems"
 
           S — Agriculture
             S     → "S - Agriculture General"
             SB    → "SB - Plant Culture"
             SD    → "SD - Forestry"
-            SF    → "SF - Animal Culture"
-            SH    → "SH - Aquaculture / Fisheries / Angling"
-            SK    → "SK - Hunting Sports"
+            SF    → "SF - Animal Husbandry & Culture"
+            SH    → "SH - Aquaculture, Fisheries & Angling"
+            SK    → "SK - Hunting & Field Sports"
 
           T — Technology
             T     → "T - Technology General"
-            TA    → "TA - Engineering General / Civil Engineering"
-            TC    → "TC - Hydraulic Engineering / Ocean Engineering"
-            TD    → "TD - Environmental Technology / Sanitary Engineering"
-            TE    → "TE - Highway Engineering / Roads and Pavements"
+            TA    → "TA - Engineering: General & Civil"
+            TC    → "TC - Hydraulic & Ocean Engineering"
+            TD    → "TD - Environmental & Sanitary Engineering"
+            TE    → "TE - Highway Engineering & Roads"
             TF    → "TF - Railroad Engineering and Operation"
             TG    → "TG - Bridge Engineering"
             TH    → "TH - Building Construction"
             TJ    → "TJ - Mechanical Engineering and Machinery"
-            TK    → "TK - Electrical Engineering / Electronics / Nuclear Engineering"
-            TL    → "TL - Motor Vehicles / Aeronautics / Astronautics"
-            TN    → "TN - Mining Engineering / Metallurgy"
+            TK    → "TK - Electrical, Electronics & Nuclear Engineering"
+            TL    → "TL - Vehicles, Aviation & Space"
+            TN    → "TN - Mining & Metallurgy"
             TP    → "TP - Chemical Technology"
             TR    → "TR - Photography"
             TS    → "TS - Manufactures"
-            TT    → "TT - Handicrafts / Arts and Crafts"
+            TT    → "TT - Handicrafts & Arts and Crafts"
             TX    → "TX - Home Economics"
 
           U — Military Science
             U     → "U - Military Science General"
-            UA    → "UA - Armies / Organization / Distribution / Military Situation"
+            UA    → "UA - Armies & Military Organization"
             UB    → "UB - Military Administration"
-            UC    → "UC - Maintenance and Transportation"
+            UC    → "UC - Military Maintenance & Transport"
             UD    → "UD - Infantry"
-            UE    → "UE - Cavalry / Armor"
+            UE    → "UE - Cavalry & Armor"
             UF    → "UF - Artillery"
-            UG    → "UG - Military Engineering / Air Forces"
-            UH    → "UH - Other Services"
+            UG    → "UG - Military Engineering & Air Forces"
+            UH    → "UH - Other Military Services"
 
           V — Naval Science
             V     → "V - Naval Science General"
-            VA    → "VA - Navies / Organization / Distribution / Naval Situation"
+            VA    → "VA - Navies & Naval Organization"
             VB    → "VB - Naval Administration"
             VC    → "VC - Naval Maintenance"
             VD    → "VD - Naval Seamen"
             VE    → "VE - Marines"
             VF    → "VF - Naval Ordnance"
-            VG    → "VG - Minor Services of Navies"
-            VK    → "VK - Navigation / Merchant Marine"
-            VM    → "VM - Naval Architecture / Shipbuilding / Marine Engineering"
+            VG    → "VG - Minor Naval Services"
+            VK    → "VK - Navigation & Merchant Marine"
+            VM    → "VM - Naval Architecture & Shipbuilding"
 
-          Z — Bibliography / Library Science
-            Z     → "Z - Books General / Writing / Paleography / Book Industries and Trade / Libraries / Bibliography"
+          Z — Bibliography & Library Science
+            Z     → "Z - Books, Libraries & Bibliography"
             ZA    → "ZA - Information Resources General"
 
 SEC-06: If lcc is empty, lcc_secondary_class should still be your best
@@ -524,10 +524,10 @@ PATH-05: Second level (secondary class, short form).
            Format: "<Letters>. <Topic>" where the topic is the same as the
            drop-down value but with the leading code stripped and trimmed.
            Examples:
-             "BM - Judaism"                    → "BM. Judaism"
-             "DK - Russia / Soviet Union / …"  → "DK. Russia / Soviet Union / Former Soviet Republics"
-             "PS - American Literature"        → "PS. American Literature"
-             "HD - Industries / Land Use / …"  → "HD. Industries / Land Use / Labor"
+             "BM - Judaism"                         → "BM. Judaism"
+             "DK - Russia, Soviet Union & …"        → "DK. Russia, Soviet Union & Former Republics"
+             "PS - American Literature"             → "PS. American Literature"
+             "HD - Industries, Land Use & Labor"    → "HD. Industries, Land Use & Labor"
 
 PATH-06: Third level and below — narrative subject narrowing.
            These come from the LCC schedule structure for the specific
@@ -551,21 +551,21 @@ PATH-07: Examples spanning different classes:
             Path:  "P. Language and Literature > PS. American Literature > 20th-Century Fiction > Postmodern Novel > Toni Morrison"
 
             LCC:   "HD8390.B73 K63 1990"
-            Path:  "H. Social Sciences > HD. Industries / Land Use / Labor > Labor History > Brazil > 20th-Century Working-Class Movements"
+            Path:  "H. Social Sciences > HD. Industries, Land Use & Labor > Labor History > Brazil > 20th-Century Working-Class Movements"
 
             LCC:   "ND653.G7 S447 2000"
             Path:  "N. Fine Arts > ND. Painting > Painters by Country > Netherlands > Vincent van Gogh"
 
             LCC:   "QH366.2 .D38 1996"
-            Path:  "Q. Science > QH. Natural History / Biology > Evolution > Evolutionary Theory > Popular Science Writing on Darwinism"
+            Path:  "Q. Science > QH. Natural History & Biology > Evolution > Evolutionary Theory > Popular Science Writing on Darwinism"
 
 PATH-08: Calibration — when evidence is weak, keep the path SHORTER rather
            than inventing depth. A three-level path with high confidence is
            better than a five-level path that fabricates subject narrowing.
              Acceptable shallow path:
-               "D. World History > DC. France / Andorra / Monaco > Modern France"
+               "D. World History > DC. France, Andorra & Monaco > Modern France"
              NOT acceptable (invented detail):
-               "D. World History > DC. France / Andorra / Monaco > Third Republic > Belle Époque Cultural Life > Parisian Café Society"
+               "D. World History > DC. France, Andorra & Monaco > Third Republic > Belle Époque Cultural Life > Parisian Café Society"
                (when no source supports that narrowing)
 
 PATH-09: When lcc is empty, still propose a path using the best subject-based
@@ -621,9 +621,9 @@ GEN-01: Return one JSON object per book, in the same order as the input.
 GEN-02: Required keys per book object:
           {
             "lcc": "DK189 .W67 2003",
-            "lcc_primary_class": "D - World History / History of Europe / Asia / Africa / Australia / New Zealand / Etc",
-            "lcc_secondary_class": "DK - Russia / Soviet Union / Former Soviet Republics / Poland",
-            "lcc_class_path": "D. World History > DK. Russia / Soviet Union / Former Soviet Republics > Russia - History > Imperial Russia / Romanov Monarchy > Court Ceremony / Political Myth / Monarchical Representation",
+            "lcc_primary_class": "D - World History & Area Studies",
+            "lcc_secondary_class": "DK - Russia, Soviet Union & Former Republics",
+            "lcc_class_path": "D. World History > DK. Russia, Soviet Union & Former Republics > Russia - History > Imperial Russia / Romanov Monarchy > Court Ceremony / Political Myth / Monarchical Representation",
             "confidence": "high",
             "source": "Library of Congress catalog, exact ISBN match",
             "notes": "LC record confirms class for this edition."

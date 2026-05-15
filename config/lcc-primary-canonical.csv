@@ -1,16 +1,16 @@
-﻿Code,CanonicalValue,LegacyValues
+Code,CanonicalValue,LegacyValues
 A,A - General Works,A - General Works
-B,B - Philosophy / Psychology / Religion,B - Philosophy/Psychology/Religion
+B,B - Philosophy, Psychology & Religion,B - Philosophy / Psychology / Religion|B - Philosophy/Psychology/Religion
 C,C - Auxiliary Sciences of History,C - Auxiliary Sciences of History
-D,D - World History / History of Europe / Asia / Africa / Australia / New Zealand / Etc,D - World History and History of Europe/Asia/Africa/Australia/New Zealand/Etc
+D,D - World History & Area Studies,D - World History / History of Europe / Asia / Africa / Australia / New Zealand / Etc|D - World History and History of Europe/Asia/Africa/Australia/New Zealand/Etc
 E,E - History of the Americas,E - History of the Americas
 F,F - History of the Americas,F - History of the Americas
-G,G - Geography / Anthropology / Recreation,G - Geography/Anthropology/Recreation
-H,H - Social Sciences,H - Social Science
+G,G - Geography, Anthropology & Recreation,G - Geography / Anthropology / Recreation|G - Geography/Anthropology/Recreation
+H,H - Social Sciences,H - Social Sciences|H - Social Science
 J,J - Political Science,J - Political Science
 K,K - Law,K - Law
 L,L - Education,L - Education
-M,M - Music and Books on Music,M - Music and Books on Music
+M,M - Music,M - Music and Books on Music
 N,N - Fine Arts,N - Fine Arts
 P,P - Language and Literature,P - Language and Literature
 Q,Q - Science,Q - Science
@@ -19,4 +19,4 @@ S,S - Agriculture,S - Agriculture
 T,T - Technology,T - Technology
 U,U - Military Science,U - Military Science
 V,V - Naval Science,V - Naval Science
-Z,Z - Bibliography / Library Science / Information Resources,Z - Bibliography/Library Science/Information Resources
+Z,Z - Bibliography & Library Science,Z - Bibliography / Library Science / Information Resources|Z - Bibliography/Library Science/Information Resources
