@@ -35,6 +35,7 @@ class StepAction:
     label: str
     cli_args: list[str]   # args appended after  python -m calibre_toolkit.cli
     description: str = ""
+    prompt_limit: bool = False  # if True, ask for a book count before running
 
 
 @dataclass
@@ -70,9 +71,10 @@ def _build_steps(cfg: dict) -> list[StepDef]:
             mqg_column=ta_col,
             actions=[
                 StepAction(
-                    "Enrich next 50 unprocessed",
-                    ["clean-titles", f"not {ta_col}:true", "--limit", "50"],
-                    f"Processes the next 50 books where {ta_col} is not yet set",
+                    "Enrich next N unprocessed",
+                    ["clean-titles", f"not {ta_col}:true"],
+                    f"Processes the next N books where {ta_col} is not yet set",
+                    prompt_limit=True,
                 ),
                 StepAction(
                     "Enrich all unprocessed",
@@ -511,18 +513,28 @@ class CalibreToolkitApp(App):
             self._run_action(action)
 
     def _run_action(self, action: StepAction) -> None:
-        # Insert --config after the subcommand name (first element of cli_args)
-        # so Typer routes it to the right command before parsing its options.
         subcommand, *rest = action.cli_args
-        cmd = [
-            sys.executable, "-m", "calibre_toolkit.cli",
-            subcommand, "--config", str(self._config_path),
-        ] + rest
 
         with self.suspend():
-            # Print a clear divider so the command output is clearly framed
+            limit_args: list[str] = []
+            if action.prompt_limit:
+                print(f"\n{'─' * 72}")
+                while True:
+                    raw = input("  How many books to process? ").strip()
+                    if raw.isdigit() and int(raw) > 0:
+                        limit_args = ["--limit", raw]
+                        break
+                    print("  Please enter a positive number.")
+
+            # Insert --config after the subcommand so Typer routes it correctly.
+            cmd = [
+                sys.executable, "-m", "calibre_toolkit.cli",
+                subcommand, "--config", str(self._config_path),
+            ] + rest + limit_args
+
             print(f"\n{'─' * 72}")
-            print(f"  Running: {' '.join(action.cli_args)}")
+            display_args = action.cli_args + (limit_args if limit_args else [])
+            print(f"  Running: {' '.join(display_args)}")
             print(f"{'─' * 72}\n")
             subprocess.run(cmd)
             print(f"\n{'─' * 72}")
