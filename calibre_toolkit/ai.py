@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from .db import Book
+from .db import Book, BookDetails
 from .normalize import normalize_text
 
 # Rules file lives alongside the package root
@@ -48,6 +48,22 @@ class LccSuggestion:
             self.proposed.get(k, "") != self.current.get(k, "")
             for k in ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_summary")
         )
+
+
+@dataclass
+class CommentsSuggestion:
+    book_id: int
+    title: str
+    authors: list[str]
+    sections: dict[str, str]   # {"the_book": "...", "why_it_matters": "...", ...}
+    html: str                   # formatted HTML ready to write
+    confidence: Literal["high", "medium", "low"]
+    notes: str = ""
+    parse_error: str = ""
+
+    @property
+    def authors_display(self) -> str:
+        return " & ".join(self.authors)
 
 
 @dataclass
@@ -271,16 +287,49 @@ class AIClient:
             raw = self._call_anthropic(user_msg, system_prompt)
         return _parse_lcc_response(raw, books, current_map)
 
-    def _call_anthropic(self, user_msg: str, system_prompt: str) -> str:
+    def _call_anthropic(self, user_msg: str, system_prompt: str, max_tokens: int = 4096) -> str:
         from anthropic import Anthropic
         client = Anthropic(api_key=self.api_key)
         response = client.messages.create(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=max_tokens,
             system=system_prompt,
             messages=[{"role": "user", "content": user_msg}],
         )
         return response.content[0].text.strip()
+
+    def suggest_comments(
+        self,
+        books: list[Book],
+        details_map: dict[int, BookDetails],
+        lcc_summary_map: dict[int, str] | None = None,
+        batch_size: int = 5,
+        tone_override: str | None = None,
+    ) -> list["CommentsSuggestion"]:
+        """Process books in batches and return Comments suggestions."""
+        results: list[CommentsSuggestion] = []
+        batches = [books[i:i + batch_size] for i in range(0, len(books), batch_size)]
+        for batch in batches:
+            results.extend(
+                self._process_comments_batch(batch, details_map, lcc_summary_map, tone_override)
+            )
+        return results
+
+    def _process_comments_batch(
+        self,
+        books: list[Book],
+        details_map: dict[int, BookDetails],
+        lcc_summary_map: dict[int, str] | None = None,
+        tone_override: str | None = None,
+    ) -> list["CommentsSuggestion"]:
+        system_prompt = _build_comments_system_prompt(tone_override)
+        user_msg = _build_comments_user_message(books, details_map, lcc_summary_map)
+        if self.provider == "openai":
+            raw = self._call_openai(user_msg, system_prompt)
+        else:
+            # Comments are longer — allow more output tokens
+            raw = self._call_anthropic(user_msg, system_prompt, max_tokens=8192)
+        return _parse_comments_response(raw, books)
 
 
 # ── LCC prompt + parsing ─────────────────────────────────────────────────────
@@ -375,6 +424,138 @@ def _parse_lcc_response(
             proposed=proposed,
             confidence=item.get("confidence", "low"),
             source=item.get("source", "").strip(),
+            notes=item.get("notes", "").strip(),
+        ))
+    return suggestions
+
+
+# ── Comments prompt + parsing ─────────────────────────────────────────────────
+
+_COMMENTS_SECTION_KEYS = [
+    ("the_book",                   "The Book"),
+    ("why_it_matters",             "Why It Matters"),
+    ("award_context",              "Award Context"),
+    ("something_you_might_not_know", "Something You Might Not Know"),
+    ("why_read_it",                "Why Read It"),
+    ("source_notes",               "Source Notes"),
+]
+
+_COMMENTS_PROMPT_PREAMBLE = """\
+You are a metadata librarian generating book descriptions for a personal Calibre
+library called "Collection – Literary Awards and Nominees". The reader profile
+and structural rules below define what to write and how. Apply them to every book.
+"""
+
+_COMMENTS_OUTPUT_FORMAT = """\
+
+---
+## OUTPUT FORMAT
+
+Respond with a JSON array, one object per book, in the SAME ORDER as the input.
+Each object must have exactly these keys:
+{
+  "id": <integer>,
+  "the_book": "<plain prose — no HTML tags>",
+  "why_it_matters": "<plain prose — no HTML tags>",
+  "award_context": "<plain prose — no HTML tags>",
+  "something_you_might_not_know": "<plain prose, or empty string if nothing noteworthy>",
+  "why_read_it": "<plain prose — no HTML tags>",
+  "source_notes": "<plain prose — no HTML tags>",
+  "confidence": "high" | "medium" | "low",
+  "notes": "<one short sentence — main caveat or key evidence>"
+}
+
+Return ONLY the JSON array. No markdown fences, no commentary outside the array.
+"""
+
+
+def _build_comments_system_prompt(tone_override: str | None = None) -> str:
+    reader_profile = _load_rules("reader_profile.md")
+    comments_rules = _load_rules("comments.md")
+
+    preamble = _COMMENTS_PROMPT_PREAMBLE
+    if tone_override:
+        preamble += f"\n\n### TONE OVERRIDE FOR THIS CALL\n{tone_override}\n"
+
+    return (
+        preamble
+        + "\n\n## READER PROFILE\n\n"
+        + reader_profile
+        + "\n\n## STRUCTURAL RULES\n\n"
+        + comments_rules
+        + _COMMENTS_OUTPUT_FORMAT
+    )
+
+
+def _build_comments_user_message(
+    books: list[Book],
+    details_map: dict[int, BookDetails],
+    lcc_summary_map: dict[int, str] | None = None,
+) -> str:
+    payload = []
+    for b in books:
+        d = details_map.get(b.id)
+        item: dict = {"id": b.id, "title": b.title, "authors": b.authors}
+        if d:
+            if d.tags:
+                item["tags"] = d.tags
+            if d.series:
+                item["series"] = d.series
+            if d.pubdate:
+                item["pubdate"] = d.pubdate
+            if d.publisher:
+                item["publisher"] = d.publisher
+            if d.existing_comments:
+                # Truncate long existing comments to keep prompt size reasonable
+                item["existing_comments"] = d.existing_comments[:600]
+        if lcc_summary_map:
+            lcc_s = lcc_summary_map.get(b.id, "")
+            if lcc_s:
+                item["lcc_summary"] = lcc_s
+        payload.append(item)
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _format_comments_html(sections: dict[str, str]) -> str:
+    parts = []
+    for key, label in _COMMENTS_SECTION_KEYS:
+        text = (sections.get(key) or "").strip()
+        if not text:
+            continue
+        parts.append(f"<h3>{label}</h3>\n<p>{text}</p>")
+    return "\n".join(parts)
+
+
+def _parse_comments_response(raw: str, books: list[Book]) -> list[CommentsSuggestion]:
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:]
+        cleaned = cleaned.strip()
+    try:
+        items = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
+
+    book_map = {b.id: b for b in books}
+    suggestions: list[CommentsSuggestion] = []
+    for item in items:
+        book_id = item.get("id")
+        book = book_map.get(book_id)
+        if book is None:
+            continue
+        sections = {
+            key: (item.get(key) or "").strip()
+            for key, _ in _COMMENTS_SECTION_KEYS
+        }
+        suggestions.append(CommentsSuggestion(
+            book_id=book_id,
+            title=book.title,
+            authors=book.authors,
+            sections=sections,
+            html=_format_comments_html(sections),
+            confidence=item.get("confidence", "low"),
             notes=item.get("notes", "").strip(),
         ))
     return suggestions

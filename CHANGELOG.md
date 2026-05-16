@@ -20,6 +20,17 @@ Complete rewrite from the original PowerShell-based toolkit. The new toolkit is 
 - `unflag-manual` command to re-queue manually fixed books
 - `clean-identifiers` utility for malformed identifier cleanup
 
+**MQG-04 — Comments Enrichment** (`comments-enrich`)
+- AI generates a structured 6-section HTML comment per book: The Book, Why It Matters, Award Context, Something You Might Not Know (conditional), Why Read It, Source Notes
+- Tone governed by `rules/reader_profile.md` — witty/opinionated (Hitchens/O'Rourke register), moderate right-of-center framing, no identity-first openings
+- `--tone-test` flag: generates 3 voice variants (witty-opinionated, neutral-professional, warm-accessible) for one book side-by-side; no writes
+- `--dry-run`, `--force`, `--limit` flags matching LCC workflow
+- `--ai-provider` / `--ai-model` overrides with same provider-key routing as LCC
+- Reads tags, series, publisher, pubdate, existing comments from Calibre for AI context
+- Optionally reads `#lcc_summary` as additional subject context
+- Confidence tiers: high / medium / low with same tier-based review flow
+- `#mqg_comments` completion flag; `#mqg_comments_manual` for flagged books
+
 **MQG-03 — LCC Enrichment** (`lcc-enrich`)
 - AI proposes LCC call number, primary class, secondary class, and subject summary
 - Primary and secondary class derived from the call number and validated against canonical CSVs

@@ -375,6 +375,113 @@ def lcc_enrich(
 
 
 @app.command()
+def comments_enrich(
+    search: Annotated[
+        str,
+        typer.Argument(help='Calibre search string, e.g. "#mqg_lcc:true and not #mqg_comments:true"'),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    batch_size: Annotated[
+        int,
+        typer.Option("--batch-size", "-b", help="Books per AI request (default 5)"),
+    ] = 5,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Re-process books that already have comments"),
+    ] = False,
+    limit: Annotated[
+        Optional[int],
+        typer.Option("--limit", "-n", help="Cap total books processed in this run (for testing)"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show what the AI would write — no changes saved"),
+    ] = False,
+    tone_test: Annotated[
+        bool,
+        typer.Option("--tone-test", help="Generate 3 voice variants for one book; no writes"),
+    ] = False,
+    ai_provider: Annotated[
+        Optional[str],
+        typer.Option("--ai-provider", help="Override AI provider for this run (e.g. openai, anthropic)"),
+    ] = None,
+    ai_model: Annotated[
+        Optional[str],
+        typer.Option("--ai-model", help="Override AI model for this run"),
+    ] = None,
+):
+    """
+    MQG-04: AI-assisted book comments / description enrichment.
+
+    For each book, generates a structured HTML comment with six sections:
+      • The Book          — what it is and its core argument
+      • Why It Matters    — its significance
+      • Award Context     — the award(s) and year
+      • Something You Might Not Know  — (conditional) surprising fact
+      • Why Read It       — the honest sell
+      • Source Notes      — transparency about AI generation
+
+    Tone follows rules/reader_profile.md. Use --tone-test to see three voice
+    variants for one book before committing to a style.
+
+    Examples:
+
+        calibre-toolkit comments-enrich "#mqg_lcc:true" --limit 5 --dry-run
+
+        calibre-toolkit comments-enrich "#mqg_lcc:true" --tone-test
+
+        calibre-toolkit comments-enrich "#mqg_lcc:true and not #mqg_comments:true"
+    """
+    from .modules.comments import run_comments_enrichment
+
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+    ai = _make_ai(cfg, command_key="comments", provider_override=ai_provider, model_override=ai_model)
+
+    comments_cfg = cfg.get("comments", {})
+    mqg_column         = comments_cfg.get("mqg_column")
+    mqg_manual_column  = comments_cfg.get("mqg_manual_column")
+    lcc_summary_column = comments_cfg.get("lcc_summary_column", "#lcc_summary")
+
+    _base = cfg.get("ai", {})
+    _comments_ai = {**_base, **_base.get("comments", {})}
+    _effective_provider = ai_provider or _comments_ai.get("provider", "openai")
+    _effective_model = ai_model or _comments_ai.get("model", "(default)")
+
+    mode_label = "Tone Test" if tone_test else ("Dry Run" if dry_run else "Enrich")
+    console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                f" — MQG-04 Comments ({mode_label})\n\n",
+                ("Search:    ", "dim"),
+                (search, "bold"),
+                ("\nProvider:  ", "dim"),
+                (f"{_effective_provider} / {_effective_model}", "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_comments_enrichment(
+        db=db,
+        ai=ai,
+        search_query=search,
+        batch_size=batch_size,
+        limit=limit,
+        force=force,
+        dry_run=dry_run,
+        tone_test=tone_test,
+        mqg_column=mqg_column,
+        mqg_manual_column=mqg_manual_column,
+        lcc_summary_column=lcc_summary_column,
+    )
+
+
+@app.command()
 def clean_identifiers(
     search: Annotated[
         str,

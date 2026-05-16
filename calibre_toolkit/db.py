@@ -11,6 +11,18 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class BookDetails:
+    """Extended metadata for a single book, used by the Comments module."""
+    book_id: int
+    tags: list[str] = field(default_factory=list)
+    series: str = ""
+    series_index: float | None = None
+    publisher: str = ""
+    pubdate: str = ""           # "YYYY" or empty
+    existing_comments: str = "" # raw HTML from Calibre
+
+
+@dataclass
 class Book:
     id: int
     title: str
@@ -242,6 +254,95 @@ class CalibreDB:
         ]
         for label, value in fields.items():
             cmd += ["--field", f"{label}:{value}"]
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
+            )
+
+    def get_book_details_batch(self, book_ids: list[int]) -> dict[int, "BookDetails"]:
+        """Return tags, series, publisher, pubdate, and existing comments for many books.
+
+        Returns {book_id: BookDetails} for every requested ID (missing fields default
+        to empty).  All reads go through the read-only SQLite connection.
+        """
+        if not book_ids:
+            return {}
+        ph = ",".join("?" * len(book_ids))
+        details: dict[int, BookDetails] = {bid: BookDetails(book_id=bid) for bid in book_ids}
+
+        with self._connect() as conn:
+            # Tags
+            for row in conn.execute(
+                f"SELECT btl.book, t.name FROM books_tags_link btl "
+                f"JOIN tags t ON t.id = btl.tag "
+                f"WHERE btl.book IN ({ph}) ORDER BY btl.book, t.name",
+                book_ids,
+            ).fetchall():
+                bid, tag = row
+                if bid in details:
+                    details[bid].tags.append(tag)
+
+            # Series
+            for row in conn.execute(
+                f"SELECT bsl.book, s.name, b.series_index "
+                f"FROM books_series_link bsl "
+                f"JOIN series s ON s.id = bsl.series "
+                f"JOIN books b ON b.id = bsl.book "
+                f"WHERE bsl.book IN ({ph})",
+                book_ids,
+            ).fetchall():
+                bid, sname, sidx = row
+                if bid in details:
+                    details[bid].series = sname or ""
+                    try:
+                        details[bid].series_index = float(sidx) if sidx is not None else None
+                    except (TypeError, ValueError):
+                        pass
+
+            # Publisher
+            for row in conn.execute(
+                f"SELECT bpl.book, p.name "
+                f"FROM books_publishers_link bpl "
+                f"JOIN publishers p ON p.id = bpl.publisher "
+                f"WHERE bpl.book IN ({ph})",
+                book_ids,
+            ).fetchall():
+                bid, pname = row
+                if bid in details:
+                    details[bid].publisher = pname or ""
+
+            # Publication year (stored as ISO datetime string)
+            for row in conn.execute(
+                f"SELECT id, pubdate FROM books WHERE id IN ({ph})",
+                book_ids,
+            ).fetchall():
+                bid, pubdate_raw = row
+                if bid in details and pubdate_raw:
+                    year = str(pubdate_raw)[:4]
+                    if year.isdigit() and int(year) > 1000:
+                        details[bid].pubdate = year
+
+            # Existing comments
+            for row in conn.execute(
+                f"SELECT book, text FROM comments WHERE book IN ({ph})",
+                book_ids,
+            ).fetchall():
+                bid, ctext = row
+                if bid in details and ctext:
+                    details[bid].existing_comments = ctext
+
+        return details
+
+    def apply_comments(self, book_id: int, comments_html: str) -> None:
+        """Write the native Calibre comments/description field via calibredb."""
+        cmd = [
+            self.calibredb_path,
+            "set_metadata",
+            "--library-path", str(self.library_path),
+            str(book_id),
+            "--field", f"comments:{comments_html}",
+        ]
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if result.returncode != 0:
             raise RuntimeError(

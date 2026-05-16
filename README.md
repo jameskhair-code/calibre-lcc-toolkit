@@ -13,7 +13,7 @@ The toolkit runs a structured enrichment pipeline ("MQG") across four metadata a
 | MQG-01 | `clean-titles` | AI-assisted author and title normalization |
 | MQG-02 | `enrich-identifiers` | Finds and adds ISBNs, Goodreads IDs, Amazon IDs |
 | MQG-03 | `lcc-enrich` | Library of Congress Classification — call number, primary class, secondary class, subject summary |
-| MQG-04 | *(planned)* | Book description / comments narrative |
+| MQG-04 | `comments-enrich` | AI-generated book description with 6 structured sections |
 
 Each step is human-in-the-loop: the AI proposes, the tool displays a review table, and you decide before anything is written to Calibre.
 
@@ -131,6 +131,57 @@ py -m calibre_toolkit.cli clean-titles "tag:booker"
 py -m calibre_toolkit.cli clean-titles "series:Man Booker Prize" --auto-apply-high
 ```
 
+### `comments-enrich`
+
+AI-assisted book comments / description enrichment.
+
+```bash
+# Tone test — 3 voice variants for one book, no writes
+py -m calibre_toolkit.cli comments-enrich "#mqg_lcc:true" --tone-test
+
+# Dry run — see proposed comments without writing
+py -m calibre_toolkit.cli comments-enrich "#mqg_lcc:true" --limit 5 --dry-run
+
+# Normal run
+py -m calibre_toolkit.cli comments-enrich "#mqg_lcc:true and not #mqg_comments:true"
+
+# Re-process books that already have comments
+py -m calibre_toolkit.cli comments-enrich "#mqg_lcc:true" --force --limit 10
+```
+
+Generates a structured HTML comment with six sections:
+
+| Section | Description |
+|---------|-------------|
+| The Book | What it is and its core argument (2–4 sentences) |
+| Why It Matters | Its significance in its field |
+| Award Context | Award(s), year, won/shortlisted |
+| Something You Might Not Know | (Conditional) Surprising or memorable fact |
+| Why Read It | The honest sell |
+| Source Notes | AI transparency |
+
+Tone is set in `rules/reader_profile.md`. Use `--tone-test` to compare three voice registers (witty-opinionated, neutral-professional, warm-accessible) before committing.
+
+Config block (add to config.json):
+
+```json
+"comments": {
+  "mqg_column": "#mqg_comments",
+  "mqg_manual_column": "#mqg_comments_manual",
+  "lcc_summary_column": "#lcc_summary"
+}
+```
+
+AI override (optional, add inside the `ai` block):
+
+```json
+"comments": {
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "api_key": ""
+}
+```
+
 ### `clean-identifiers`
 
 Scans and fixes malformed identifiers (UUIDs in identifier fields, `urnisbn/` format, empty values).
@@ -169,6 +220,8 @@ The toolkit expects these custom columns to exist in your Calibre library:
 | `#lcc_summary` | Long text | One-sentence subject summary |
 | `#mqg_lcc` | Yes/No | MQG-03 completion flag |
 | `#mqg_lcc_manual` | Yes/No | Manual review flag for LCC |
+| `#mqg_comments` | Yes/No | MQG-04 completion flag |
+| `#mqg_comments_manual` | Yes/No | Manual review flag for comments |
 | `#mqg_identifiers` | Yes/No | MQG-02 completion flag |
 | `#mqg_identifiers_manual` | Yes/No | Manual review flag for identifiers |
 | `#mqg_title_author` | Yes/No | MQG-01 completion flag |
@@ -187,6 +240,7 @@ calibre_toolkit/
   fetcher.py              fetch-ebook-metadata wrapper
   modules/
     lcc.py                MQG-03 LCC enrichment
+    comments.py           MQG-04 comments enrichment
     identifiers.py        MQG-02 identifier enrichment
     authors.py            MQG-01 author/title cleanup
     clean_identifiers.py  Identifier cleanup utility
@@ -197,5 +251,7 @@ config/
 
 rules/
   lcc.md                  AI prompt rules for LCC enrichment
+  comments.md             AI prompt rules for comments enrichment
+  reader_profile.md       Reader profile — tone and framing for comments
   author_title.md         AI prompt rules for author/title cleanup
 ```
