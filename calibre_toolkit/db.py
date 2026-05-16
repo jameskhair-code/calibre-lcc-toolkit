@@ -391,6 +391,82 @@ class CalibreDB:
                 f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
             )
 
+    def _connect_write(self) -> sqlite3.Connection:
+        """Open a writable connection to the Calibre database.
+
+        Only safe when Calibre's GUI is not running — direct writes bypass
+        the in-memory cache. calibredb already refuses to run while Calibre
+        is open, so by the time tag-cleanup reaches the apply phase the GUI
+        is guaranteed closed.
+        """
+        conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        return conn
+
+    def rename_tag(self, old_name: str, new_name: str) -> int:
+        """Rename a tag library-wide in a single SQL operation.
+
+        If new_name already exists, old_name's books are merged into it
+        (duplicates on the same book are dropped). Returns the number of
+        book-tag link rows that were changed.
+        """
+        with self._connect_write() as conn:
+            old = conn.execute(
+                "SELECT id FROM tags WHERE name = ?", [old_name]
+            ).fetchone()
+            if not old:
+                return 0
+            old_id = old[0]
+
+            existing = conn.execute(
+                "SELECT id FROM tags WHERE name = ?", [new_name]
+            ).fetchone()
+
+            if not existing:
+                # Simple rename: no collision
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM books_tags_link WHERE tag = ?", [old_id]
+                ).fetchone()[0]
+                conn.execute("UPDATE tags SET name = ? WHERE id = ?", [new_name, old_id])
+            else:
+                # Merge into existing target tag
+                new_id = existing[0]
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM books_tags_link WHERE tag = ?", [old_id]
+                ).fetchone()[0]
+                # Drop rows where the book already carries new_id (avoid UNIQUE violation)
+                conn.execute(
+                    "DELETE FROM books_tags_link WHERE tag = ? AND book IN "
+                    "(SELECT book FROM books_tags_link WHERE tag = ?)",
+                    [old_id, new_id],
+                )
+                # Re-point remaining rows to the target tag
+                conn.execute(
+                    "UPDATE books_tags_link SET tag = ? WHERE tag = ?",
+                    [new_id, old_id],
+                )
+                conn.execute("DELETE FROM tags WHERE id = ?", [old_id])
+            conn.commit()
+        return count
+
+    def drop_tag(self, name: str) -> int:
+        """Remove a tag from all books library-wide. Returns affected link count."""
+        with self._connect_write() as conn:
+            row = conn.execute(
+                "SELECT id FROM tags WHERE name = ?", [name]
+            ).fetchone()
+            if not row:
+                return 0
+            tag_id = row[0]
+            count = conn.execute(
+                "SELECT COUNT(*) FROM books_tags_link WHERE tag = ?", [tag_id]
+            ).fetchone()[0]
+            conn.execute("DELETE FROM books_tags_link WHERE tag = ?", [tag_id])
+            conn.execute("DELETE FROM tags WHERE id = ?", [tag_id])
+            conn.commit()
+        return count
+
     def apply_comments(self, book_id: int, comments_html: str) -> None:
         """Write the native Calibre comments/description field via calibredb."""
         cmd = [

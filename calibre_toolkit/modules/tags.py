@@ -495,58 +495,43 @@ def _review_ops_individually(ops: list[TagOperation]) -> list[TagOperation]:
 
 
 def _apply_operations(db: CalibreDB, ops: list[TagOperation]) -> None:
-    """Execute approved operations against the library.
+    """Execute approved operations via direct SQLite tag-table writes.
 
-    For each op: find all books carrying any source_tag, remove the source(s)
-    from each book's tag list, add the target_tags, write back.
+    Each op touches the tags / books_tags_link tables directly — no
+    per-book subprocess calls. One SQL statement per source tag regardless
+    of how many books carry it.
     """
-    total_books_updated = 0
+    total_affected = 0
     errors: list[str] = []
 
     for i, op in enumerate(ops, 1):
-        # Collect affected book IDs across all source tags
-        affected: dict[int, list[str]] = {}
-        for src in op.source_tags:
-            for bid in db.get_books_with_tag(src):
-                affected.setdefault(bid, []).append(src)
+        try:
+            count = 0
+            if not op.target_tags:
+                # DROP: remove each source tag from all books
+                for src in op.source_tags:
+                    count += db.drop_tag(src)
+            else:
+                # RENAME / MERGE: fold each source into the single target
+                target = op.target_tags[0]
+                for src in op.source_tags:
+                    count += db.rename_tag(src, target)
 
-        if not affected:
-            continue
-
-        with console.status(
-            f"[cyan]({i}/{len(ops)}) {op.display_arrow} "
-            f"— updating {len(affected)} book(s)…"
-        ):
-            tags_map = db.get_tags_batch(list(affected.keys()))
-            updated = 0
-            for bid, sources_present in affected.items():
-                current = tags_map.get(bid, [])
-                # Remove all source tags
-                new_tags = [t for t in current if t not in sources_present]
-                # Add all target tags (preserve order, deduplicate)
-                for tgt in op.target_tags:
-                    if tgt not in new_tags:
-                        new_tags.append(tgt)
-                try:
-                    db.apply_tags(bid, new_tags)
-                    updated += 1
-                except RuntimeError as e:
-                    errors.append(f"book {bid}: {e}")
-
-        total_books_updated += updated
-        console.print(
-            f"  [green]✓[/green] {op.display_arrow}  "
-            f"[dim]({updated} book(s))[/dim]"
-        )
+            total_affected += count
+            console.print(
+                f"  [green]✓[/green] {op.display_arrow}  "
+                f"[dim]({count} book(s))[/dim]"
+            )
+        except Exception as e:
+            errors.append(f"{op.display_arrow}: {e}")
+            console.print(f"  [red]✗[/red] {op.display_arrow}: {e}")
 
     console.print(
         f"\n[bold green]Done![/bold green] "
-        f"{len(ops)} operation(s), {total_books_updated} book write(s)."
+        f"{len(ops)} operation(s), {total_affected} book-tag link(s) changed."
     )
     if errors:
-        console.print(
-            f"[red]{len(errors)} error(s) during apply:[/red]"
-        )
+        console.print(f"[red]{len(errors)} error(s) during apply:[/red]")
         for err in errors[:10]:
             console.print(f"  [red]✗[/red] {err}")
         if len(errors) > 10:
