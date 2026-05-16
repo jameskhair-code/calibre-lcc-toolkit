@@ -93,7 +93,7 @@ def run_cleanup(
     total_batches = (len(books) + batch_size - 1) // batch_size
     console.print(
         f"Sending to AI in [cyan]{total_batches}[/cyan] batch(es) "
-        f"of up to [cyan]{batch_size}[/cyan] books each "
+        f"of [cyan]{batch_size}[/cyan] books "
         f"([cyan]{ai.max_concurrency}[/cyan] in flight)…\n"
     )
 
@@ -101,7 +101,7 @@ def run_cleanup(
     all_suggestions: list[CleanupSuggestion] = []
     with Progress(
         SpinnerColumn(),
-        TextColumn("[cyan]Batches"),
+        TextColumn("[cyan]Books processed"),
         BarColumn(),
         MofNCompleteColumn(),
         TimeElapsedColumn(),
@@ -109,10 +109,10 @@ def run_cleanup(
         console=console,
         transient=True,
     ) as progress:
-        task = progress.add_task("ai", total=total_batches, failed=0)
+        task = progress.add_task("ai", total=len(books), failed=0)
 
-        def _on_progress(done, total, failed):
-            progress.update(task, completed=done, failed=failed)
+        def _on_progress(done_batches, total_batches, failed):
+            progress.update(task, completed=min(done_batches * batch_size, len(books)), failed=failed)
 
         all_suggestions = ai.suggest_cleanup(books, batch_size=batch_size, progress_callback=_on_progress)
 

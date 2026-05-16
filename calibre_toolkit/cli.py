@@ -123,8 +123,8 @@ def clean_titles(
     ] = DEFAULT_CONFIG_PATH,
     batch_size: Annotated[
         int,
-        typer.Option("--batch-size", "-b", help="Books per AI request (default 50)"),
-    ] = 50,
+        typer.Option("--batch-size", "-b", help="Books per AI request (default 10)"),
+    ] = 10,
     auto_apply_high: Annotated[
         bool,
         typer.Option("--auto-apply-high", help="Apply high-confidence changes without prompting"),
