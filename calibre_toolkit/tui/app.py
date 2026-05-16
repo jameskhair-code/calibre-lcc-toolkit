@@ -364,6 +364,8 @@ class CalibreToolkitApp(App):
     _stats: reactive[dict[str, tuple[int, int]]] = reactive({})
     _total_books: reactive[int] = reactive(0)
     _selected_idx: reactive[int] = reactive(0)
+    _btn_counter: int = 0                     # increments each render; avoids duplicate IDs
+    _action_map: dict[str, StepAction]        # btn_id → action
 
     def __init__(
         self,
@@ -378,6 +380,7 @@ class CalibreToolkitApp(App):
         self._config_path = config_path
         self._steps       = _build_steps(cfg)
         self._lib_name    = Path(cfg.get("library_path", "Library")).name
+        self._action_map  = {}
 
     # ── Compose ───────────────────────────────────────────────────────────────
 
@@ -400,11 +403,10 @@ class CalibreToolkitApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.title    = self._lib_name
+        self.title     = self._lib_name
         self.sub_title = "Calibre Toolkit"
         self._load_stats()
-        # Select first step to populate right panel
-        self._update_right(0)
+        # ListView fires Highlighted automatically on mount, which calls _update_right
 
     # ── Stats loading ─────────────────────────────────────────────────────────
 
@@ -475,35 +477,28 @@ class CalibreToolkitApp(App):
 
         self.query_one("#r-progress", Static).update(progress_text)
 
-        # Rebuild action buttons
+        # Rebuild action buttons — use a monotonic counter so IDs are always unique
         container = self.query_one("#r-actions", ScrollableContainer)
         container.remove_children()
-        for i, action in enumerate(step.actions):
+        self._action_map.clear()
+        for action in step.actions:
+            self._btn_counter += 1
+            btn_id = f"btn-{self._btn_counter}"
+            self._action_map[btn_id] = action
             btn = Button(
                 f"[bold]{action.label}[/bold]\n[dim]{action.description}[/dim]",
-                id=f"action-{idx}-{i}",
+                id=btn_id,
                 classes="action-btn",
             )
-            btn.tooltip = action.description
             container.mount(btn)
 
     # ── Button press → run command ────────────────────────────────────────────
 
     @on(Button.Pressed, ".action-btn")
     def on_action_pressed(self, event: Button.Pressed) -> None:
-        btn_id = event.button.id or ""
-        # Parse "action-{step_idx}-{action_idx}"
-        parts = btn_id.split("-")
-        if len(parts) != 3:
-            return
-        try:
-            step_idx   = int(parts[1])
-            action_idx = int(parts[2])
-        except ValueError:
-            return
-        step   = self._steps[step_idx]
-        action = step.actions[action_idx]
-        self._run_action(action)
+        action = self._action_map.get(event.button.id or "")
+        if action:
+            self._run_action(action)
 
     def _run_action(self, action: StepAction) -> None:
         cmd = [
