@@ -302,6 +302,10 @@ def _rule_trailing_punct(tag: str, count: int) -> TagOperation | None:
     BISAC prefix) produce a drop immediately rather than a two-pass rename→drop.
     """
     stripped = tag.strip()
+    # Don't strip a trailing period that is an abbreviation dot (follows a capital letter).
+    # e.g. "Franklin D." / "W. E. B." / "Mass." should keep the final dot.
+    if stripped.endswith(".") and len(stripped) >= 2 and stripped[-2].isupper():
+        return None
     cleaned = _TRAILING_NOISE_RE.sub("", stripped).strip()
     if not cleaned:
         return TagOperation(
