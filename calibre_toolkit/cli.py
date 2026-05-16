@@ -91,17 +91,24 @@ def _make_ai(
 
     provider = ai_cfg.get("provider", "openai")
 
-    # Allow API key from env var as override (more secure than config file)
-    # Config supports provider-specific keys: ai.openai_api_key / ai.anthropic_api_key
-    # falling back to ai.api_key for whichever provider is currently default.
+    # Build a provider→key map so switching providers doesn't use the wrong key.
+    # ai.api_key belongs to the top-level ai.provider.
+    # ai.lcc.api_key (or other command override) belongs to that block's provider.
+    # Explicit ai.openai_api_key / ai.anthropic_api_key always win.
+    provider_keys: dict[str, str] = {}
+    top_provider = base_cfg.get("provider", "openai")
+    if base_cfg.get("api_key"):
+        provider_keys[top_provider] = base_cfg["api_key"]
+    if override.get("provider") and override.get("api_key"):
+        provider_keys[override["provider"]] = override["api_key"]
+    for p in ("openai", "anthropic"):
+        if ai_cfg.get(f"{p}_api_key"):
+            provider_keys[p] = ai_cfg[f"{p}_api_key"]
+
     if provider == "openai":
-        api_key = (os.environ.get("OPENAI_API_KEY")
-                   or ai_cfg.get("openai_api_key")
-                   or (ai_cfg.get("api_key", "") if ai_cfg.get("provider", "openai") == "openai" else ""))
+        api_key = os.environ.get("OPENAI_API_KEY") or provider_keys.get("openai", "")
     else:
-        api_key = (os.environ.get("ANTHROPIC_API_KEY")
-                   or ai_cfg.get("anthropic_api_key")
-                   or (ai_cfg.get("api_key", "") if ai_cfg.get("provider", "openai") != "openai" else ""))
+        api_key = os.environ.get("ANTHROPIC_API_KEY") or provider_keys.get("anthropic", "")
 
     if not api_key:
         console.print(
