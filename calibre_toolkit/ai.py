@@ -256,13 +256,13 @@ def _build_user_message(books: list[Book]) -> str:
 
 
 def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
-    # Strip markdown code fences if the model wrapped the JSON
-    stripped = raw.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.split("\n", 1)[-1]  # drop opening fence line
-        stripped = stripped.rsplit("```", 1)[0]  # drop closing fence
+    # Extract the outermost JSON array regardless of fences or trailing text.
+    start = raw.find("[")
+    end = raw.rfind("]")
+    if start == -1 or end == -1 or end <= start:
+        raise RuntimeError(f"AI returned no JSON array.\n\nRaw response:\n{raw[:500]}")
     try:
-        items = json.loads(stripped)
+        items = json.loads(raw[start : end + 1])
     except json.JSONDecodeError as e:
         raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
 
