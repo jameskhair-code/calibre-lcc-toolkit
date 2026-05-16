@@ -471,110 +471,78 @@ SEC-07: When only a single letter (e.g. "B") is supportable, use the
 
 
 ---
-## SECTION PATH — LCC Classification Path (Narrative Breadcrumb)
+## SECTION PATH — LCC Subject Descriptor
 ---
 
-PATH-01: lcc_class_path is the most informative field. It is free text — a
-           human-readable breadcrumb that starts broad and gets specific.
-           The goal: a reader scanning the path should immediately understand
-           where the book sits in LCC and what it is actually about.
+PATH-01: lcc_class_path is a subject descriptor — 3 to 5 short noun-based
+           phrases (2–4 words each) that name the specific intellectual
+           territory of this book. The goal: a reader scanning these phrases
+           should immediately understand what this book is actually about at
+           its most specific level.
 
-PATH-02: Canonical format:
-            "<Letter>. <Primary Topic> > <Letters>. <Secondary Topic> > <Subject Area> > <More Specific Subject> > <Most Specific Subject>"
-           Each level is separated by " > " (space, greater-than, space).
-           The first two levels mirror the primary and secondary class but
-           in a SHORTER, more readable form.
+PATH-02: Do NOT repeat what the primary or secondary class already
+           communicates. Those fields cover the broad LCC category (e.g.
+           "Military Science", "Home Economics"). The descriptor opens where
+           those leave off and goes deeper into the book's actual subject.
 
-PATH-03: Anchor reference example (from the existing library):
-            Book:  "Scenarios of Power: Myth and Ceremony in Russian Monarchy
-                    From Peter the Great to the Abdication of Nicholas II"
-            LCC:   "DK189 .W67 2003"
-            Path:  "D. World History > DK. Russia / Soviet Union / Former Soviet Republics > Russia - History > Imperial Russia / Romanov Monarchy > Court Ceremony, Political Myth, and Monarchical Representation"
-           Notice:
-             - "D. World History" — short form of the primary class.
-             - "DK. Russia / Soviet Union / Former Soviet Republics" — short
-               form of the secondary class.
-             - The next three levels narrow from country-scope to historical
-               period to specific topic of the book.
+PATH-03: Canonical format:
+           "<Phrase one> · <Phrase two> · <Phrase three>"
+           Separator is " · " (space, middle dot U+00B7, space).
+           3 phrases minimum, 5 maximum.
+           Each phrase 2–4 words, title case, no trailing punctuation.
 
-PATH-04: First level (primary class, short form). Use these exact strings:
-            A. General Works
-            B. Philosophy / Psychology / Religion
-            C. Auxiliary Sciences of History
-            D. World History
-            E. History of the Americas
-            F. History of the Americas
-            G. Geography / Anthropology / Recreation
-            H. Social Sciences
-            J. Political Science
-            K. Law
-            L. Education
-            M. Music
-            N. Fine Arts
-            P. Language & Literature
-            Q. Science
-            R. Medicine
-            S. Agriculture
-            T. Technology
-            U. Military Science
-            V. Naval Science
-            Z. Bibliography / Library Science
+PATH-04: Include time period and geography ONLY when they add information
+           the LCC secondary class does not already communicate AND when they
+           are genuinely distinctive to this book's subject.
+           Include:
+             - Period when it is the subject ("Cold War · 1945–1990")
+             - Geography when it is the subject and not implied by the
+               secondary class ("Early modern Spain · Atlantic empire")
+           Omit:
+             - Geography already implied by the secondary class
+               (DK already means Russia — don't add "Russia" as a phrase)
+             - Period obvious from the call number year alone
+             - Contemporary/present-day books where period adds no meaning
 
-PATH-05: Second level (secondary class, short form).
-           Format: "<Letters>. <Topic>" where the topic is the same as the
-           drop-down value but with the leading code stripped and trimmed.
-           Examples:
-             "BM - Judaism"                         → "BM. Judaism"
-             "DK - Russia & Soviet Union & …"        → "DK. Russia & Soviet Union & Former Republics"
-             "PS - American Literature"             → "PS. American Literature"
-             "HD - Industries & Land Use & Labor"    → "HD. Industries & Land Use & Labor"
+PATH-05: Write noun-based phrases as you would if they might become subject
+           tags. Prefer specific, concrete terms over abstract or generic ones.
+           Good:  "Fast food franchising"  "Strategic deterrence"  "Print culture"
+           Avoid: "Historical analysis"  "Cultural context"  "Various topics"
 
-PATH-06: Third level and below — narrative subject narrowing.
-           These come from the LCC schedule structure for the specific
-           number range AND from the actual subject of the book.
-           - Aim for 4–5 additional levels after the secondary class
-             (so total path depth is typically 6–7 levels including
-             primary and secondary). Lean toward MORE specificity over
-             less when evidence supports it.
-           - Each level should be more specific than the last.
-           - Use short noun-phrase headings, title case, no trailing
-             punctuation.
-           - Do NOT use commas (commas conflict with downstream parsing).
-             Use " / " (spaced slash) for compound headings.
+PATH-06: Examples spanning different classes:
 
-PATH-07: Examples spanning different classes:
+           Book:  "Danger and Survival: Choices About the Bomb in the First Fifty Years"
+           LCC:   "UA23 .B7862 1990"  Sec: "UA - Armies & Military Organization"
+           Desc:  "Nuclear policy · Strategic deterrence · Cold War decision-making · 1945–1990"
 
-            LCC:   "BM197.5 .K64 2003"
-            Path:  "B. Philosophy / Psychology / Religion > BM. Judaism > Reform Judaism > Modern Period > 20th-Century North America"
+           Book:  "Franchise: The Golden Arches in Black America"
+           LCC:   "TX945.5.M33 C43 2020"  Sec: "TX - Home Economics"
+           Desc:  "Fast food franchising · McDonald's Corporation · Race and capitalism · Black economic history"
 
-            LCC:   "PS3563.O8749 B45 1987"
-            Path:  "P. Language & Literature > PS. American Literature > 20th-Century Fiction > Postmodern Novel > Toni Morrison"
+           Book:  "Six Galleons for the King of Spain"
+           LCC:   "VA583 .P48 1986"  Sec: "VA - Navies & Naval Organization"
+           Desc:  "Spanish naval logistics · Atlantic empire · Early modern defense · 17th-century galleons"
 
-            LCC:   "HD8390.B73 K63 1990"
-            Path:  "H. Social Sciences > HD. Industries & Land Use & Labor > Labor History > Brazil > 20th-Century Working-Class Movements"
+           Book:  "The Nature of the Book: Print and Knowledge in the Making"
+           LCC:   "Z124 .J64 1998"  Sec: "Z - Books & Libraries & Bibliography"
+           Desc:  "Print culture · Knowledge production · Early modern England · Authorship and the press"
 
-            LCC:   "ND653.G7 S447 2000"
-            Path:  "N. Fine Arts > ND. Painting > Painters by Country > Netherlands > Vincent van Gogh"
+           Book:  "Sailing School: Navigating Science and Skill, 1550–1800"
+           LCC:   "VK455 .S36 2019"  Sec: "VK - Navigation & Merchant Marine"
+           Desc:  "Nautical instruction · Navigation science · Early modern Europe · 1550–1800"
 
-            LCC:   "QH366.2 .D38 1996"
-            Path:  "Q. Science > QH. Natural History & Biology > Evolution > Evolutionary Theory > Popular Science Writing on Darwinism"
+           Book:  "Scenarios of Power: Myth and Ceremony in Russian Monarchy"
+           LCC:   "DK189 .W67 2003"  Sec: "DK - Russia & Soviet Union & Former Republics"
+           Desc:  "Imperial monarchy · Court ceremony · Political myth · Romanov dynasty"
+           (geography omitted — DK already implies Russia)
 
-PATH-08: Calibration — when evidence is weak, keep the path SHORTER rather
-           than inventing depth. A three-level path with high confidence is
-           better than a five-level path that fabricates subject narrowing.
-             Acceptable shallow path:
-               "D. World History > DC. France, Andorra & Monaco > Modern France"
-             NOT acceptable (invented detail):
-               "D. World History > DC. France, Andorra & Monaco > Third Republic > Belle Époque Cultural Life > Parisian Café Society"
-               (when no source supports that narrowing)
+PATH-07: When lcc is empty, derive the descriptor from the best available
+           subject evidence — title, author, known subject. Flag "low"
+           confidence.
 
-PATH-09: When lcc is empty, still propose a path using the best subject-based
-           primary + secondary, with one or two narrative levels reflecting
-           the book's subject. Flag "low" confidence.
-
-PATH-10: Do not use commas anywhere in the path. Do not use semicolons.
-           The only level separator is " > ". Compound topics within a level
-           use " / ".
+PATH-08: Do not use commas, semicolons, or " > " separators anywhere in the
+           descriptor. The only separator is " · ". Do not use slashes within
+           phrases.
 
 
 ---
