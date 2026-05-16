@@ -92,10 +92,16 @@ def _make_ai(
     provider = ai_cfg.get("provider", "openai")
 
     # Allow API key from env var as override (more secure than config file)
+    # Config supports provider-specific keys: ai.openai_api_key / ai.anthropic_api_key
+    # falling back to ai.api_key for whichever provider is currently default.
     if provider == "openai":
-        api_key = os.environ.get("OPENAI_API_KEY") or ai_cfg.get("api_key", "")
+        api_key = (os.environ.get("OPENAI_API_KEY")
+                   or ai_cfg.get("openai_api_key")
+                   or (ai_cfg.get("api_key", "") if ai_cfg.get("provider", "openai") == "openai" else ""))
     else:
-        api_key = os.environ.get("ANTHROPIC_API_KEY") or ai_cfg.get("api_key", "")
+        api_key = (os.environ.get("ANTHROPIC_API_KEY")
+                   or ai_cfg.get("anthropic_api_key")
+                   or (ai_cfg.get("api_key", "") if ai_cfg.get("provider", "openai") != "openai" else ""))
 
     if not api_key:
         console.print(
