@@ -79,6 +79,11 @@ def _build_steps(cfg: dict) -> list[StepDef]:
                     ["clean-titles", "all"],
                     "Re-processes every book regardless of status",
                 ),
+                StepAction(
+                    "Enrich metadata queue",
+                    ["clean-titles", "#metadata_queue:true"],
+                    "Runs on books currently in your metadata queue",
+                ),
             ],
         ),
         StepDef(
