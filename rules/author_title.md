@@ -24,7 +24,7 @@ T-CAP-04: Prepositions of five or more letters are capitalised
            Behind, Below, Beneath, Beside, Between, Beyond, During, Inside,
            Outside, Through, Throughout, Under, Until, Within, Without).
 
-T-CAP-05: The first word after a colon or em-dash is always capitalised,
+T-CAP-05: The first word after a colon is always capitalised,
            even if it would normally be lowercase.
 
 T-CAP-06: Hyphenated compound words: capitalise both parts
@@ -150,26 +150,49 @@ T-SUB-01: Preserve substantive subtitles — those that add specific meaning
            Example to KEEP: "The Warmth of Other Suns: The Epic Story of
            America's Great Migration"
 
-T-SUB-02: Remove generic subtitles that add no meaningful information.
-           Matching is case-insensitive — remove regardless of capitalisation.
-           Patterns to remove (the colon and everything after):
-             ": A Novel"  /  ": a Novel"  /  ": a novel"
+T-SUB-02: Subtitles fall into three tiers depending on whether they are
+           generic publisher form-labels, meaningful form/genre information,
+           or potentially part of the canonical published title.
+           Matching is case-insensitive — apply regardless of capitalisation.
+
+           TIER A — ALWAYS REMOVE (generic publisher tags, high confidence):
+             ": A Novel"   /  ": a novel"
              ": A Story"
-             ": Stories"
-             ": Essays"
-             ": Poems"
-             ": A Collection"
              ": Nonfiction"
              ": Fiction"
-           DO NOT remove — these add meaningful genre/form information:
-             ": A Memoir"   (distinguishes memoir from fiction about the same subject)
-             ": A Life"     (equivalent to biography — keep)
-             ": A Biography" (clarifies this is a biography, not a novel)
-             ": A History"  (clarifies this is a history, not a novel)
+             ": A Thriller"
+             ": A Romance"
+             ": A Mystery"
+
+           TIER B — ALWAYS KEEP (meaningful genre/form, high confidence):
+             ": A Memoir"     (distinguishes memoir from fiction)
+             ": A Life"       (equivalent to biography)
+             ": A Biography"  (clarifies this is a biography, not a novel)
+             ": A History"    (clarifies this is a history, not a novel)
+
+           TIER C — JUDGMENT CALL (often part of the canonical published
+           title — default to KEEP unless clearly a generic publisher tag,
+           use "medium" or "low" confidence):
+             ": Essays"        (e.g. Didion, "Slouching Towards Bethlehem: Essays")
+             ": Poems"         (often part of poetry collection titles)
+             ": Stories"       (often part of short-story collection titles)
+             ": A Collection"
+             ": A Tale"        (often integral — e.g. Dickens used as subtitles)
+             ": A Fable"
+             ": A Fairy Tale"
+             ": A Play"        (some plays use this canonically)
+           For Tier C: if you recognise the book and the subtitle appears in
+           its published title, KEEP it. If you cannot tell, KEEP it and note
+           the uncertainty. Removing a Tier C subtitle should be rare and
+           only when you are confident it was added by a publisher, not the author.
+
            WRONG: "Halcyon: A novel"  →  "Halcyon: A Novel"  (capitalising ≠ removing)
            RIGHT: "Halcyon: A novel"  →  "Halcyon"
-           Do NOT capitalise the subtitle word and leave it — always remove the
-           entire ": A <generic-word>" phrase entirely.
+           WRONG: "Slouching Towards Bethlehem: Essays"  →  "Slouching Towards Bethlehem"
+                  (the published title includes ": Essays" — Tier C, keep)
+           RIGHT: "Slouching Towards Bethlehem: Essays"  →  unchanged
+           For Tier A removals, do NOT capitalise the subtitle word and leave
+           it — always remove the entire ": A <generic-word>" phrase entirely.
 
 T-SUB-03: When in doubt about a subtitle's value, retain it and use
            "medium" or "low" confidence. Do not remove subtitles
@@ -378,6 +401,18 @@ A-MUL-02: Replace all other separators with " & ":
              "/" → "&"
              "|" → "&"
              "," between full names → "&"
+           COMMA AMBIGUITY — when the field contains multiple commas, decide
+           whether each comma is an inversion marker ("Last, First") or an
+           author separator:
+             • Even number of commas with each consecutive pair forming a
+               plausible "Last, First" name → treat as multiple inverted
+               authors. Example:
+                 "Morrison, Toni, Rushdie, Salman"
+                  → "Toni Morrison & Salman Rushdie"
+             • Odd or otherwise ambiguous comma count → flag with "medium"
+               confidence, make your best inference based on which parse
+               yields valid-looking names, and note the ambiguity in the
+               notes field.
 
 A-MUL-03: Do NOT use "&" inside a single person's name.
            "Ursula K. Le Guin" is one author — no ampersand.
@@ -407,7 +442,12 @@ A-ROL-01: Remove role labels appended to author names, but keep the name:
 
 A-ROL-02: Remove "Edited by" prefix: "Edited by Hilary Mantel" → "Hilary Mantel"
 
-A-ROL-03: Remove "Translated by" prefix: "Translated by Gregory Rabassa" → "Gregory Rabassa"
+A-ROL-03: Remove role-prefix phrases that introduce the actual contributor
+           and keep only the name that follows. Common forms:
+             "Translated by Gregory Rabassa" → "Gregory Rabassa"
+             "Compiled by John Smith"        → "John Smith"
+             "Selected by Mary Lee"          → "Mary Lee"
+             "Adapted by Jane Doe"           → "Jane Doe"
 
 A-ROL-04: Remove "Introduction by [Name]" entirely — the introducer is not a
            primary author and should not appear in the authors field.
@@ -559,7 +599,12 @@ GEN-06: Treat each book independently. Do not infer corrections for one book
         based on patterns in other books in the same batch.
 
 GEN-07: The "notes" field should briefly explain what was changed and why,
-        or confirm "No changes needed." Keep notes to one sentence.
+        or confirm "No changes needed." Keep notes concise — one sentence
+        when only one type of change was made; a brief semicolon-separated
+        list when multiple distinct changes were applied.
+        EXAMPLE (one change):  "Removed marketing suffix."
+        EXAMPLE (several):     "Removed marketing suffix; inverted author
+                                name to First Last; stripped honorific."
 
 GEN-08: Return results in the same order as the input. Do not reorder books.
 
