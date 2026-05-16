@@ -70,19 +70,24 @@ def _build_steps(cfg: dict) -> list[StepDef]:
             mqg_column=ta_col,
             actions=[
                 StepAction(
-                    "Enrich unprocessed books",
-                    ["clean-titles", f"not {ta_col}:true"],
-                    f"Runs on books where {ta_col} is not yet set",
+                    "Enrich next 50 unprocessed",
+                    ["clean-titles", f"not {ta_col}:true", "--limit", "50"],
+                    f"Processes the next 50 books where {ta_col} is not yet set",
                 ),
                 StepAction(
-                    "Re-enrich all books",
-                    ["clean-titles", "all"],
-                    "Re-processes every book regardless of status",
+                    "Enrich all unprocessed",
+                    ["clean-titles", f"not {ta_col}:true"],
+                    f"Runs on all books where {ta_col} is not yet set",
                 ),
                 StepAction(
                     "Enrich metadata queue",
                     ["clean-titles", "#metadata_queue:true"],
                     "Runs on books currently in your metadata queue",
+                ),
+                StepAction(
+                    "Re-enrich all books",
+                    ["clean-titles", "all"],
+                    "Re-processes every book regardless of status",
                 ),
             ],
         ),

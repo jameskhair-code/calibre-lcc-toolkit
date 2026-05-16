@@ -68,6 +68,7 @@ def run_cleanup(
     batch_size: int = 50,
     auto_apply_high: bool = False,
     mqg_column: str | None = None,
+    limit: int | None = None,
 ) -> None:
     """Full Author/Title cleanup flow for a given Calibre search string."""
 
@@ -82,6 +83,9 @@ def run_cleanup(
     if not books:
         console.print("[yellow]No books matched that search. Nothing to do.[/yellow]")
         raise typer.Exit()
+
+    if limit is not None:
+        books = books[:limit]
 
     console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
 

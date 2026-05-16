@@ -145,6 +145,10 @@ def clean_titles(
         bool,
         typer.Option("--auto-apply-high", help="Apply high-confidence changes without prompting"),
     ] = False,
+    limit: Annotated[
+        Optional[int],
+        typer.Option("--limit", "-n", help="Cap the number of books processed (e.g. 50)"),
+    ] = None,
 ):
     """
     AI-assisted author and title cleanup.
@@ -184,6 +188,7 @@ def clean_titles(
         batch_size=batch_size,
         auto_apply_high=auto_apply_high,
         mqg_column=mqg_column,
+        limit=limit,
     )
 
 
