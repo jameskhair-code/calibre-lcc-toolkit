@@ -609,7 +609,7 @@ def _prompt_and_apply(
             if v.secondary_mismatch: warns.append("secondary mismatch")
             if v.primary_invalid:    warns.append("primary not in canonical list")
             if v.secondary_invalid:  warns.append("secondary not in canonical list")
-console.print(f"  [yellow]Warnings: {'; '.join(warns)}[/yellow]")
+            console.print(f"  [yellow]Warnings: {'; '.join(warns)}[/yellow]")
         if s.notes:
             console.print(f"  [dim]Note: {s.notes}[/dim]")
 
