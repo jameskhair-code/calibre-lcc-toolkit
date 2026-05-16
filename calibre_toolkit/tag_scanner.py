@@ -125,8 +125,19 @@ CALIBRE_TAXONOMY: dict[str, str] = {
 
 _DATE_RANGE_RE = re.compile(r"^\s*(\d{4})\s*-\s*(\d{4})\b")
 _DATE_RANGE_ONLY_RE = re.compile(r"^\s*\d{4}\s*-\s*\d{4}\s*$")
-_LCSH_SEPARATOR_RE = re.compile(r"\s+--\s+|\s*;\s+")
+# Covers: double-dash subdivisions, semicolons (with or without spaces),
+# and space-dash-space (older LCSH form, e.g. "Boston (Mass.) - Fiction").
+_LCSH_SEPARATOR_RE = re.compile(r"\s+--\s+|\s*;\s*|\s+-\s+")
 _HAS_ALPHA_RE = re.compile(r"[A-Za-z]")
+
+_TRAILING_NOISE_RE = re.compile(r"[*;.,]+$")
+_BISAC_PREFIX_RE = re.compile(r"^[A-Z]{2,}\d{3,}\b")
+_FICTION_SLASH_RE = re.compile(r"^Fiction\s*/", re.IGNORECASE)
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+# No \b: Python \b treats CJK chars as word chars so ".com沉金" wouldn't match
+_URL_RE = re.compile(r"://|\.com|\.net|\.org")
+_PUBLISHER_YEAR_RE = re.compile(r"\b(?:University\s+Press|University\s+of|Press)\b.{0,60}\b\d{4}\b", re.IGNORECASE)
+_LCSH_INITIALS_NAME_RE = re.compile(r"^[A-Z]\.\s+[A-Z]\.\s*\(")
 
 
 # ── Rules ────────────────────────────────────────────────────────────────────
@@ -223,13 +234,12 @@ def _rule_lcsh_person_date(tag: str, count: int) -> TagOperation | None:
 
 
 def _rule_lcsh_chain(tag: str, count: int) -> TagOperation | None:
-    """Drop LCSH chains with 2+ subdivision separators (e.g., -- or ;)."""
-    sep_count = len(_LCSH_SEPARATOR_RE.findall(tag))
-    if sep_count >= 2:
+    """Drop any tag containing an LCSH subdivision separator (-- ; or ' - ')."""
+    if _LCSH_SEPARATOR_RE.search(tag):
         return TagOperation(
             source_tags=[tag],
             target_tags=[],
-            reason="LCSH chain with multiple subdivisions",
+            reason="LCSH subdivision chain",
             pattern_group="lcsh-chain",
         )
     return None
@@ -269,6 +279,121 @@ def _rule_case_normalize(tag: str, count: int) -> TagOperation | None:
     )
 
 
+def _rule_trailing_punct(tag: str, count: int) -> TagOperation | None:
+    """Strip trailing noise characters (* ; . ,) and rename, or drop if empty.
+
+    If the cleaned result is itself a droppable pattern (BISAC Fiction code,
+    BISAC prefix) produce a drop immediately rather than a two-pass rename→drop.
+    """
+    stripped = tag.strip()
+    cleaned = _TRAILING_NOISE_RE.sub("", stripped).strip()
+    if not cleaned:
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="Trailing noise → empty after strip",
+            pattern_group="formatting",
+        )
+    if cleaned != stripped:
+        if _FICTION_SLASH_RE.match(cleaned) or _BISAC_PREFIX_RE.match(cleaned):
+            return TagOperation(
+                source_tags=[tag],
+                target_tags=[],
+                reason="Trailing noise stripped; result is BISAC code",
+                pattern_group="bisac-code",
+            )
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[cleaned],
+            reason="Strip trailing noise characters",
+            pattern_group="formatting",
+        )
+    return None
+
+
+def _rule_garbage_encoding(tag: str, count: int) -> TagOperation | None:
+    """Drop tags with control characters, URLs, or predominantly non-ASCII content."""
+    stripped = tag.strip()
+    if not stripped:
+        return None
+    if _CONTROL_CHAR_RE.search(stripped):
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="Contains control characters",
+            pattern_group="garbage",
+        )
+    if _URL_RE.search(stripped):
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="URL or domain in tag",
+            pattern_group="garbage",
+        )
+    non_ascii = sum(1 for c in stripped if ord(c) > 127)
+    if len(stripped) > 3 and non_ascii / len(stripped) > 0.4:
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="Predominantly non-ASCII / encoding garbage",
+            pattern_group="garbage",
+        )
+    return None
+
+
+def _rule_bisac_code(tag: str, count: int) -> TagOperation | None:
+    """Drop BISAC classification codes (e.g. HIS036140 HISTORY / ...)."""
+    if _BISAC_PREFIX_RE.match(tag.strip()):
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="BISAC classification code",
+            pattern_group="bisac-code",
+        )
+    return None
+
+
+def _rule_publisher_tag(tag: str, count: int) -> TagOperation | None:
+    """Drop publisher-name + year tags (e.g. 'McGill-Queen's University Press 2023')."""
+    if _PUBLISHER_YEAR_RE.search(tag):
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="Publisher name / year tag",
+            pattern_group="garbage",
+        )
+    return None
+
+
+def _rule_lcsh_initials_name(tag: str, count: int) -> TagOperation | None:
+    """Drop LCSH personal name entries in 'A. A. (Full Name)' initials format."""
+    if _LCSH_INITIALS_NAME_RE.match(tag.strip()):
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="LCSH personal name initials entry",
+            pattern_group="lcsh-date-subject",
+        )
+    return None
+
+
+def _rule_fiction_bisac(tag: str, count: int) -> TagOperation | None:
+    """Drop Fiction/... BISAC taxonomy tags not handled by the taxonomy lookup.
+
+    Must run AFTER _rule_calibre_taxonomy so known mappings (Fiction / Fantasy
+    → Fantasy) are applied first. This catches the long tail of unmapped BISAC
+    Fiction sub-codes (Fiction / Men's Adventure, Fiction / Absurdist, etc.).
+    """
+    if _FICTION_SLASH_RE.match(tag.strip()):
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="Unmapped BISAC Fiction sub-code",
+            pattern_group="bisac-code",
+        )
+    return None
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 _MINOR_WORDS = {"a", "an", "the", "and", "or", "of", "in", "on", "at", "to", "for", "by"}
@@ -291,13 +416,21 @@ def _title_case(s: str) -> str:
 # ── Rule registry ────────────────────────────────────────────────────────────
 
 # Order matters: more specific rules first, formatting last.
+# _rule_fiction_bisac MUST come after _rule_calibre_taxonomy so known
+# Fiction/X mappings are applied before the catch-all drop fires.
 _RULES: list[Callable[[str, int], TagOperation | None]] = [
     _rule_whitespace,
-    _rule_lcsh_person_date,    # specific date-prefixed LCSH
-    _rule_lcsh_chain,          # multi-subdivision chains
+    _rule_trailing_punct,      # strip trailing * ; . before other rules see the tag
+    _rule_garbage_encoding,    # control chars, URLs, non-ASCII garbage
+    _rule_bisac_code,          # BISAC classification code prefixes
+    _rule_publisher_tag,       # publisher name + year noise
+    _rule_lcsh_initials_name,  # LCSH "A. A. (Full Name)" person entries
+    _rule_lcsh_person_date,    # date-range-prefixed LCSH headings
+    _rule_lcsh_chain,          # any single LCSH subdivision separator
     _rule_date_range_period,   # bare date range → period (before drop)
     _rule_bare_date_range,     # bare date range → drop
     _rule_calibre_taxonomy,    # known taxonomy noise
+    _rule_fiction_bisac,       # unmapped Fiction/... BISAC codes (after taxonomy)
     _rule_case_normalize,      # last resort: case-only fixes
 ]
 
@@ -305,11 +438,13 @@ _RULES: list[Callable[[str, int], TagOperation | None]] = [
 # Human-readable labels for pattern groups in the UI.
 PATTERN_GROUP_LABELS: dict[str, str] = {
     "formatting":            "Formatting & whitespace",
+    "garbage":               "Garbage / encoding noise",
+    "bisac-code":            "BISAC classification codes",
     "calibre-taxonomy":      "Calibre taxonomy variants",
     "date-range-lookup":     "Date range → period lookup",
     "lcsh-bare-date-range":  "Bare date ranges (lifespans)",
     "lcsh-date-subject":     "LCSH person/subject headings",
-    "lcsh-chain":            "LCSH multi-part chains",
+    "lcsh-chain":            "LCSH subdivision chains",
     "ai-semantic":           "AI semantic analysis",
 }
 

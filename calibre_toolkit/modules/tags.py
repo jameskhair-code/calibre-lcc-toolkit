@@ -399,6 +399,8 @@ def _group_ops(ops: list[TagOperation]) -> dict[str, list[TagOperation]]:
     """Group operations by pattern_group, preserving a sensible display order."""
     order = [
         "formatting",
+        "garbage",
+        "bisac-code",
         "calibre-taxonomy",
         "date-range-lookup",
         "lcsh-bare-date-range",
@@ -423,6 +425,8 @@ def _is_safe_group(group_key: str) -> bool:
     """Pattern groups that default to 'apply all' rather than review."""
     return group_key in {
         "formatting",
+        "garbage",
+        "bisac-code",
         "calibre-taxonomy",
         "date-range-lookup",
         "lcsh-bare-date-range",
