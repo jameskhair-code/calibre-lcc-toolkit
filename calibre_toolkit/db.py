@@ -188,17 +188,20 @@ class CalibreDB:
     def apply_metadata_batch(
         self,
         updates: list[tuple[int, str | None, list[str] | None]],
-        max_workers: int = 6,
+        max_workers: int | None = None,
         progress_callback=None,
     ) -> tuple[list[int], list[tuple[int, str]]]:
-        """Apply many title/authors updates in parallel via calibredb subprocesses.
+        """Apply title/authors updates via calibredb subprocesses.
+
+        Uses parallel workers when a Content Server is configured (it serialises
+        writes), otherwise runs sequentially to avoid SQLite lock conflicts.
 
         updates: list of (book_id, title_or_None, authors_or_None) tuples.
         Returns (applied_ids, failures) where failures is list of (book_id, error).
-        calibredb is itself serialised on the metadata.db lock, but spawning
-        the processes in parallel still wins big on Windows process-startup cost.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        workers = max_workers if max_workers is not None else (6 if self.content_server_url else 1)
 
         def _one(item):
             book_id, title, authors = item
@@ -210,7 +213,7 @@ class CalibreDB:
 
         applied: list[int] = []
         failures: list[tuple[int, str]] = []
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = [pool.submit(_one, u) for u in updates]
             done = 0
             for fut in as_completed(futures):
