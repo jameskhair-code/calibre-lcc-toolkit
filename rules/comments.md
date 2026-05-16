@@ -2,8 +2,8 @@
 # Literary Awards & Nominees Collection — MQG-04
 #
 # Rules for generating the book comments / description field.
+# Three sections (four when the conditional fires).
 # Output is plain prose per section; the tool wraps sections in HTML.
-# Rules are grouped by category and numbered for reference.
 
 
 ---
@@ -11,12 +11,13 @@
 ---
 
 SCOPE-01: For each book, generate a structured comment to populate the
-           Calibre "comments" (book description) field. The comment
-           consists of 5 or 6 sections (see STRUCT section).
+           Calibre "comments" (book description) field. The comment has
+           three sections — four when the conditional section fires
+           (see STRUCT section).
 
 SCOPE-02: The collection is "Collection – Literary Awards and Nominees" — a
            personal library of ~5,000 books nominated for or that won major
-           literary prizes. Award context is always relevant.
+           literary prizes.
 
 SCOPE-03: You are generating library metadata for a specific reader. Tone
            and framing follow the Reader Profile. This is not a generic
@@ -26,23 +27,19 @@ SCOPE-04: Use publicly available information: Library of Congress records,
            Wikipedia, Goodreads descriptions, publisher summaries, award
            archives, and reviews. Do not invent facts about the book.
 
-SCOPE-05: If your information is uncertain — for example you know the book
-           was shortlisted but not the exact year — say so rather than guess.
-           Do not fabricate award positions or years.
+SCOPE-05: If key information is uncertain, say so rather than guess. Do not
+           fabricate specific facts (dates, names, award positions).
 
 
 ---
 ## SECTION STRUCT — Section Structure
 ---
 
-STRUCT-01: The comment must contain these sections, in order:
+STRUCT-01: The comment contains these sections, in order:
 
              1. The Book                       — always present
-             2. Why It Matters                 — always present
-             3. Award Context                  — always present
-             4. Something You Might Not Know   — CONDITIONAL (see STRUCT-05)
-             5. Why Read It                    — always present
-             6. Source Notes                   — always present
+             2. Something You Might Not Know   — CONDITIONAL (see STRUCT-04)
+             3. Why Read It                    — always present
 
 STRUCT-02: Each section is returned as plain-text prose in the corresponding
            JSON field. Do NOT include HTML in the JSON values — the tool
@@ -50,15 +47,7 @@ STRUCT-02: Each section is returned as plain-text prose in the corresponding
 
 STRUCT-03: Do not include section titles in the text. The tool adds headers.
 
-STRUCT-04: Each section should be a single paragraph. Length guidance:
-             - The Book:                    2–4 sentences
-             - Why It Matters:              2–3 sentences
-             - Award Context:               1–3 sentences
-             - Something You Might Not Know: 1–3 sentences (if present)
-             - Why Read It:                 2–3 sentences
-             - Source Notes:                1–2 sentences
-
-STRUCT-05: "Something You Might Not Know" is CONDITIONAL:
+STRUCT-04: "Something You Might Not Know" is CONDITIONAL:
              - Include it when there is a genuinely interesting fact the
                reader is unlikely to know — an unusual origin story, a
                controversy, a surprising reception history, an unexpected
@@ -73,97 +62,52 @@ STRUCT-05: "Something You Might Not Know" is CONDITIONAL:
 ## SECTION BOOK — Section 1: The Book
 ---
 
-BOOK-01: Cover:
-           - What kind of book it is (history, biography, novel, essay
-             collection, reportage, polemic...)
-           - The core subject or narrative (what it is actually about)
-           - The key people, places, period, or argument that define it
+BOOK-01: 3–5 sentences covering three things in natural sequence:
+           a) What kind of book it is (history, biography, novel, polemic...)
+              and its core subject or narrative
+           b) The specific argument, thesis, or story — not just the topic
+           c) Why it landed: what made it significant, what it changed or
+              established, or what made it contested
 
-BOOK-02: Do NOT open with "This book" or "In this book". Lead with the
-          subject or the argument.
+BOOK-02: The significance beat (c) should flow naturally from the argument
+          (b) — it is not a separate "this book is important" declaration.
+          It is the consequence or reception of the argument.
+           Good: "...a reading that most scholars have since accepted."
+           Good: "...which made it deeply uncomfortable for several
+                  governments when it appeared."
+           Good: "...the first account to make this argument to a general
+                  audience, and the one no subsequent treatment has displaced."
+           Bad:  "This is an important and significant contribution to
+                  the field."
 
-BOOK-03: Do NOT repeat the title or authors — they appear in Calibre
+BOOK-03: Do NOT open with "This book" or "In this book". Lead with the
+          subject, the argument, or the person.
+
+BOOK-04: Do NOT repeat the title or authors — they appear in Calibre
           separately.
 
-BOOK-04: Every sentence should add information. Avoid empty openers.
-           Bad:  "A compelling exploration of the history of..."
-           Good: "Traces three centuries of German drainage and river
-                  engineering, arguing that the conquest of wetlands was
-                  central to the making of modern German national identity."
-
-BOOK-05: If the book has a specific central argument (not just a topic),
-          state the argument, not just the topic.
+BOOK-05: Name the argument, not just the topic.
            Bad:  "Examines the history of nuclear deterrence."
            Good: "Argues that American nuclear strategy in the Cold War was
                   driven more by bureaucratic momentum than by coherent
-                  strategic calculation."
+                  strategic calculation — and that this was not an accident."
 
 
 ---
-## SECTION MATTERS — Section 2: Why It Matters
+## SECTION KNOW — Section 2: Something You Might Not Know
 ---
 
-MATTERS-01: Why was this book significant in its field or for its readers?
-             What did it change, establish, or challenge?
-
-MATTERS-02: This can be scholarly, cultural, or political significance —
-             whatever is most genuine for this particular book.
-
-MATTERS-03: Avoid generic statements. Name the specific contribution.
-              Bad:  "A landmark work in the history of science."
-              Good: "The first popular account to argue that the 1954 Salk
-                     vaccine trials were as much about Cold War politics as
-                     about public health — a reading that later scholarship
-                     confirmed."
-
-MATTERS-04: If the book was controversial or received with resistance, that
-             is often a more interesting "why it matters" than a polite note
-             about scholarly contribution.
-
-
----
-## SECTION AWARD — Section 3: Award Context
----
-
-AWARD-01: Always include this section. The book is in a literary awards
-           collection — its award history is part of its identity in this
-           library.
-
-AWARD-02: State the award(s), year, and outcome (won / shortlisted /
-           longlisted / nominated).
-            Examples:
-              "Shortlisted for the Booker Prize in 1984."
-              "Won the Pulitzer Prize for General Nonfiction in 1998."
-              "Longlisted for the National Book Award, Biography, 2003."
-
-AWARD-03: If the award year or position is uncertain, say so clearly rather
-           than guessing.
-            Example: "Listed among Booker Prize nominees in the early 1990s —
-                      exact year not confirmed."
-
-AWARD-04: If the book's presence on a shortlist was itself surprising,
-           or if the award is a lesser-known prize worth explaining briefly,
-           add a sentence of context.
-
-AWARD-05: Use tag and series data from the input to identify the award.
-           If the information is absent or ambiguous, derive it from the
-           title, author, and publication date if possible, or note uncertainty.
-
-
----
-## SECTION KNOW — Section 4: Something You Might Not Know
----
-
-KNOW-01: CONDITIONAL — see STRUCT-05. Only include when genuinely interesting.
+KNOW-01: CONDITIONAL — see STRUCT-04. Only include when genuinely interesting.
 
 KNOW-02: Good candidates:
            - An unusual origin story for the book
            - A controversy about the argument or sources
            - A surprising or ironic reception (loved in one country, reviled
              in another; a bestseller only after the author died)
-           - An unexpected connection (an author's other career, a real event
+           - An unexpected connection (the author's other career, a real event
              the fiction anticipated, a political reaction)
-           - A structural or formal feature that distinguishes the book
+           - A structural or formal feature that genuinely distinguishes
+             the book from others in its class
 
 KNOW-03: Bad candidates — do NOT include:
            - The author's nationality alone
@@ -175,61 +119,50 @@ KNOW-04: 1–3 sentences. The shorter and punchier, the better.
 
 
 ---
-## SECTION SELL — Section 5: Why Read It
+## SECTION SELL — Section 3: Why Read It
 ---
 
-SELL-01: Give a specific reason to pick up this book. See Reader Profile
-          for what "the sell" means for this particular reader.
+SELL-01: 3–5 sentences. This is the sell — give the reader a specific reason
+          to pick up this book. Where relevant, fold in the stakes: why it
+          still matters, what you gain from reading it, what it does that
+          nothing else does.
 
-SELL-02: Be honest. If the book is demanding, slow, or uneven in places,
+SELL-02: See Reader Profile for what "the sell" means for this particular
+          reader. Be honest. If the book is demanding, slow, or uneven,
           acknowledge it and give a genuine reason it is worth the effort.
 
 SELL-03: Do not use: "must-read", "essential", "not to be missed",
-          "a must for any reader of...", "offers insights",
-          "provokes reflection", "will leave you thinking."
+          "offers insights", "provokes reflection", "will leave you thinking",
+          "a must for any reader of...", "anyone interested in X should read."
 
-SELL-04: Lead with a specific reason:
-           "Read it because it is the only account that..."
-           "Worth it for [specific passage / argument / scene] alone."
-           "If [specific thing] interests you, nothing does it better."
-           "Infuriating in places, but the argument in Chapter X makes
-            the whole book worthwhile."
-
-
----
-## SECTION SOURCE — Section 6: Source Notes
----
-
-SOURCE-01: 1–2 sentences. Briefly describe what sources informed the comment.
-             Examples:
-               "Generated from Library of Congress catalog records,
-                Wikipedia, and publisher descriptions."
-               "Generated using Wikipedia, Goodreads, and the Booker Prize
-                archive. Award year confirmed via prize website."
-
-SOURCE-02: Be transparent about AI generation. Do not write this as if it
-            were human research notes.
-
-SOURCE-03: If key information was absent or uncertain, note the gap:
-            "Award year not independently confirmed — based on available
-             prize lists."
+SELL-04: Lead with a specific reason. The stakes — why it still matters —
+          belong here as the argument for reading it, not as a separate
+          declaration.
+           Good: "Read it because it remains the only account that..."
+           Good: "Worth it for the central chapter alone, which does
+                  in forty pages what other books take three hundred to
+                  attempt."
+           Good: "If [specific thing] interests you, nothing does it better,
+                  and the argument has held up better than its critics
+                  predicted."
+           Good: "Demanding in places — the middle section earns patience —
+                  but the payoff is a fully worked argument that changes how
+                  you think about [specific thing]."
 
 
 ---
 ## SECTION CONF — Confidence Levels
 ---
 
-CONF-01: "high" — Strong, specific information available from multiple
-          sources. All five sections can be written with verifiable content.
-          Award history is confirmed.
+CONF-01: "high" — Specific, verifiable information from multiple sources.
+          All three sections can be written with concrete, accurate content.
 
-CONF-02: "medium" — Reasonable information for most sections, but at least
-          one relies on inference or limited sources. Award year or position
-          may be approximate.
+CONF-02: "medium" — Good information for most sections; at least one relies
+          on inference or limited sources.
 
-CONF-03: "low" — Limited information found, or significant uncertainty about
-          award history, publication details, or the book's core argument.
-          Write what can be said with confidence; flag the gaps in notes.
+CONF-03: "low" — Limited information, or significant uncertainty about the
+          book's argument, reception, or key facts. Write what can be said
+          confidently; note gaps in the "notes" field.
 
 
 ---
@@ -242,13 +175,10 @@ GEN-02: Each object must have exactly these keys:
          {
            "id": <integer>,
            "the_book": "<plain prose — no HTML tags>",
-           "why_it_matters": "<plain prose — no HTML tags>",
-           "award_context": "<plain prose — no HTML tags>",
            "something_you_might_not_know": "<plain prose, or empty string>",
            "why_read_it": "<plain prose — no HTML tags>",
-           "source_notes": "<plain prose — no HTML tags>",
            "confidence": "high" | "medium" | "low",
-           "notes": "<one short sentence — main caveat or key fact used>"
+           "notes": "<one short sentence — main caveat or key evidence>"
          }
 
 GEN-03: Do NOT include HTML tags in any JSON string value. Plain prose only.
@@ -256,14 +186,12 @@ GEN-03: Do NOT include HTML tags in any JSON string value. Plain prose only.
 
 GEN-04: No markdown fences. No commentary outside the JSON array.
 
-GEN-05: Treat each book independently. Do not borrow context or award details
-         from other books in the same batch.
+GEN-05: Treat each book independently. Do not borrow context from other books
+         in the same batch.
 
-GEN-06: Never fabricate specific facts (dates, award years, locations, names).
-         If uncertain, use hedged language or flag in notes.
+GEN-06: Never fabricate specific facts. If uncertain, use hedged language or
+         flag in notes.
 
-GEN-07: "notes" is one short sentence: the main caveat or the key evidence
-         used. Keep it concise.
-          Example: "Award year confirmed via Booker Prize archive."
-          Example: "Wikipedia summary used — independent verification of
-                    central argument not attempted."
+GEN-07: "notes" is one short sentence: the key evidence used or the main
+         caveat. Example: "Wikipedia summary used; central argument not
+         independently verified."

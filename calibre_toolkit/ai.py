@@ -432,12 +432,9 @@ def _parse_lcc_response(
 # ── Comments prompt + parsing ─────────────────────────────────────────────────
 
 _COMMENTS_SECTION_KEYS = [
-    ("the_book",                   "The Book"),
-    ("why_it_matters",             "Why It Matters"),
-    ("award_context",              "Award Context"),
+    ("the_book",                     "The Book"),
     ("something_you_might_not_know", "Something You Might Not Know"),
-    ("why_read_it",                "Why Read It"),
-    ("source_notes",               "Source Notes"),
+    ("why_read_it",                  "Why Read It"),
 ]
 
 _COMMENTS_PROMPT_PREAMBLE = """\
@@ -456,11 +453,8 @@ Each object must have exactly these keys:
 {
   "id": <integer>,
   "the_book": "<plain prose — no HTML tags>",
-  "why_it_matters": "<plain prose — no HTML tags>",
-  "award_context": "<plain prose — no HTML tags>",
   "something_you_might_not_know": "<plain prose, or empty string if nothing noteworthy>",
   "why_read_it": "<plain prose — no HTML tags>",
-  "source_notes": "<plain prose — no HTML tags>",
   "confidence": "high" | "medium" | "low",
   "notes": "<one short sentence — main caveat or key evidence>"
 }

@@ -32,11 +32,8 @@ _CONF_DISPLAY = {
 
 _SECTION_LABELS = [
     ("the_book",                     "The Book"),
-    ("why_it_matters",               "Why It Matters"),
-    ("award_context",                "Award Context"),
     ("something_you_might_not_know", "Something You Might Not Know"),
     ("why_read_it",                  "Why Read It"),
-    ("source_notes",                 "Source Notes"),
 ]
 
 # Three tone variants for --tone-test
@@ -91,9 +88,8 @@ def _build_review_table(suggestions: list[CommentsSuggestion]) -> Table:
 
         preview = Text()
         for key, label in [
-            ("the_book",      "Book"),
-            ("award_context", "Award"),
-            ("why_read_it",   "Sell"),
+            ("the_book",    "Book"),
+            ("why_read_it", "Sell"),
         ]:
             val = _truncate(s.sections.get(key, "") or "", 120)
             preview.append(f"{label}: ", style="dim")
