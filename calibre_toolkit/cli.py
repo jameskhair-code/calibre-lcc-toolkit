@@ -470,6 +470,66 @@ def tags_enrich(
 
 
 @app.command()
+def tags_cleanup(
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show proposed merges without applying"),
+    ] = False,
+    min_books: Annotated[
+        int,
+        typer.Option("--min-books", help="Only analyse tags used by at least N books (default 1)"),
+    ] = 1,
+    ai_provider: Annotated[
+        Optional[str],
+        typer.Option("--ai-provider", help="Override AI provider for this run"),
+    ] = None,
+    ai_model: Annotated[
+        Optional[str],
+        typer.Option("--ai-model", help="Override AI model for this run"),
+    ] = None,
+):
+    """
+    MQG-05 maintenance: normalise tag vocabulary across the whole library.
+
+    Reads every unique tag, sends the full list to the AI, and proposes
+    merge groups (case variants, hyphenation differences, near-synonyms).
+    You review and approve each group; approved merges are applied to all
+    affected books.
+
+    Run after enrichment batches to keep the tag vocabulary consistent.
+
+    Examples:
+
+        calibre-toolkit tags-cleanup --dry-run
+
+        calibre-toolkit tags-cleanup --min-books 2
+    """
+    from .modules.tags import run_tags_cleanup
+
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+    ai = _make_ai(cfg, command_key="tags", provider_override=ai_provider, model_override=ai_model)
+
+    console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — MQG-05 Tags Cleanup\n\n",
+                ("Mode: ", "dim"),
+                ("Dry run — no writes" if dry_run else "Interactive review", "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_tags_cleanup(db=db, ai=ai, min_books=min_books, dry_run=dry_run)
+
+
+@app.command()
 def comments_enrich(
     search: Annotated[
         str,

@@ -352,6 +352,29 @@ class CalibreDB:
                     result[bid].append(tag)
         return result
 
+    def get_all_tags(self) -> list[tuple[str, int]]:
+        """Return [(tag_name, book_count), ...] for every tag in the library, count desc."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT t.name, COUNT(btl.book) AS cnt "
+                "FROM tags t "
+                "JOIN books_tags_link btl ON btl.tag = t.id "
+                "GROUP BY t.id, t.name "
+                "ORDER BY cnt DESC, t.name"
+            ).fetchall()
+        return [(row[0], row[1]) for row in rows]
+
+    def get_books_with_tag(self, tag_name: str) -> list[int]:
+        """Return all book IDs that carry an exact-match tag (case-sensitive)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT btl.book FROM books_tags_link btl "
+                "JOIN tags t ON t.id = btl.tag "
+                "WHERE t.name = ?",
+                [tag_name],
+            ).fetchall()
+        return [row[0] for row in rows]
+
     def apply_tags(self, book_id: int, tags: list[str]) -> None:
         """Replace all tags on a book via calibredb (comma-separated list)."""
         tags_str = ",".join(tags)
