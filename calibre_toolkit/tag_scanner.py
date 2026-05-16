@@ -118,6 +118,13 @@ CALIBRE_TAXONOMY: dict[str, str] = {
     "theater": "Drama",
     # Goodreads-style geographic literature tags
     "the united states of america": "United States",
+    # Foreign-language variants
+    "ciencia ficción": "Science Fiction",
+    "ciencia ficcion": "Science Fiction",
+    # BISAC sub-category noise
+    "graphic novels: general": "Graphic Novels",
+    "non-fiction: animals": "Animals",
+    "non-fiction: biography": "Biography",
 }
 
 
@@ -127,7 +134,7 @@ _DATE_RANGE_RE = re.compile(r"^\s*(\d{4})\s*-\s*(\d{4})\b")
 _DATE_RANGE_ONLY_RE = re.compile(r"^\s*\d{4}\s*-\s*\d{4}\s*$")
 # Covers: double-dash (--), semicolons, em/en dashes (—/–) with or without
 # spaces, and space-hyphen-space (older LCSH form "Boston (Mass.) - Fiction").
-_LCSH_SEPARATOR_RE = re.compile(r"\s+--\s+|\s*[;—–]\s*|\s+-\s+")
+_LCSH_SEPARATOR_RE = re.compile(r"\s*--\s*|\s*[;—–]\s*|\s+-\s+")
 _HAS_ALPHA_RE = re.compile(r"[A-Za-z]")
 
 _TRAILING_NOISE_RE = re.compile(r"[*;.,]+$")
@@ -139,6 +146,12 @@ _URL_RE = re.compile(r"://|\.com|\.net|\.org")
 _PUBLISHER_YEAR_RE = re.compile(r"\b(?:University\s+Press|University\s+of|Press)\b.{0,60}\b\d{4}\b", re.IGNORECASE)
 _LCSH_INITIALS_NAME_RE = re.compile(r"^[A-Z]\.\s+[A-Z]\.\s*\(")
 _LCSH_FICTITIOUS_RE = re.compile(r"\((?:Fictitious|Legendary|Mythological|Biblical)\b", re.IGNORECASE)
+# Matches 'London (England)', 'Boston (Mass.)', 'Mars (Planet)' etc.
+_LCSH_GEO_QUAL_RE = re.compile(r'^(.+?)\s+\(([A-Za-z][A-Za-z.,\s-]{0,30})\)\s*$')
+# Matches LCSH corporate/institutional headings: 'United States. Congress. Senate'
+_LCSH_INSTITUTIONAL_RE = re.compile(r'[a-z]{2,}\. [A-Z]')
+# 'Location: New York City' → 'New York City'
+_LOCATION_PREFIX_RE = re.compile(r'^Location:\s+', re.IGNORECASE)
 
 
 # ── Rules ────────────────────────────────────────────────────────────────────
@@ -305,6 +318,24 @@ def _rule_trailing_punct(tag: str, count: int) -> TagOperation | None:
                 reason="Trailing noise stripped; result is BISAC code",
                 pattern_group="bisac-code",
             )
+        if _DATE_RANGE_ONLY_RE.fullmatch(cleaned):
+            # Bare date range after strip — apply period lookup or drop immediately
+            m = _DATE_RANGE_RE.match(cleaned)
+            if m:
+                key = f"{m.group(1)}-{m.group(2)}"
+                if key in DATE_RANGE_PERIODS:
+                    return TagOperation(
+                        source_tags=[tag],
+                        target_tags=[DATE_RANGE_PERIODS[key]],
+                        reason="Trailing noise stripped; date range maps to known period",
+                        pattern_group="date-range-lookup",
+                    )
+            return TagOperation(
+                source_tags=[tag],
+                target_tags=[],
+                reason="Trailing noise stripped; bare date range (lifespan)",
+                pattern_group="lcsh-bare-date-range",
+            )
         return TagOperation(
             source_tags=[tag],
             target_tags=[cleaned],
@@ -421,6 +452,83 @@ def _rule_fiction_bisac(tag: str, count: int) -> TagOperation | None:
     return None
 
 
+def _rule_location_prefix(tag: str, count: int) -> TagOperation | None:
+    """Strip 'Location: ' system-generated prefix, e.g. 'Location: New York City' → 'New York City'."""
+    stripped = tag.strip()
+    m = _LOCATION_PREFIX_RE.match(stripped)
+    if not m:
+        return None
+    base = stripped[m.end():].strip()
+    if not base:
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="Empty after stripping Location: prefix",
+            pattern_group="formatting",
+        )
+    return TagOperation(
+        source_tags=[tag],
+        target_tags=[base],
+        reason="Strip Location: prefix",
+        pattern_group="formatting",
+    )
+
+
+def _rule_unbalanced_parens(tag: str, count: int) -> TagOperation | None:
+    """Drop tags with unbalanced parentheses (truncated LCSH entries like 'N.Y.)')."""
+    stripped = tag.strip()
+    if stripped.count("(") != stripped.count(")"):
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="Unbalanced parentheses (truncated entry)",
+            pattern_group="garbage",
+        )
+    return None
+
+
+def _rule_lcsh_geo_qualifier(tag: str, count: int) -> TagOperation | None:
+    """Strip LCSH geographic/form qualifiers: 'London (England)' → 'London'.
+
+    Fires only when the qualifier is ≤4 words (e.g. Mass., Italy, Planet,
+    New York N.Y.). Must run AFTER _rule_fictitious_character so that
+    'Harry (Fictitious character)' is already dropped.
+    """
+    stripped = tag.strip()
+    m = _LCSH_GEO_QUAL_RE.match(stripped)
+    if not m:
+        return None
+    base = m.group(1).strip()
+    qualifier = m.group(2).strip()
+    if len(qualifier.split()) > 4 or not base:
+        return None
+    # If the base itself contains an LCSH separator, let lcsh_chain handle the whole tag
+    if _LCSH_SEPARATOR_RE.search(base):
+        return None
+    return TagOperation(
+        source_tags=[tag],
+        target_tags=[base],
+        reason=f"Strip LCSH geographic qualifier ({qualifier})",
+        pattern_group="lcsh-date-subject",
+    )
+
+
+def _rule_lcsh_institutional(tag: str, count: int) -> TagOperation | None:
+    """Drop LCSH corporate/institutional headings that use '.' as subdivision separator.
+
+    Catches: 'United States. Congress. Senate', 'United States. Marine Corps',
+    'Science Fiction. Middle East'. Pattern: lowercase word(s) followed by '. [A-Z]'.
+    """
+    if _LCSH_INSTITUTIONAL_RE.search(tag):
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="LCSH corporate/institutional heading",
+            pattern_group="lcsh-chain",
+        )
+    return None
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 _MINOR_WORDS = {"a", "an", "the", "and", "or", "of", "in", "on", "at", "to", "for", "by"}
@@ -448,12 +556,16 @@ def _title_case(s: str) -> str:
 _RULES: list[Callable[[str, int], TagOperation | None]] = [
     _rule_whitespace,
     _rule_trailing_punct,       # strip trailing * ; . before other rules see the tag
+    _rule_location_prefix,      # strip 'Location: ' system prefix
     _rule_garbage_encoding,     # control chars, URLs, non-ASCII garbage
+    _rule_unbalanced_parens,    # truncated entries with unbalanced ()
     _rule_long_phrase,          # sentence-length descriptive phrases
     _rule_bisac_code,           # BISAC classification code prefixes
     _rule_publisher_tag,        # publisher name + year noise
     _rule_lcsh_initials_name,   # LCSH "A. A. (Full Name)" person entries
-    _rule_fictitious_character, # LCSH "Harry (Fictitious character)" headings
+    _rule_fictitious_character, # LCSH "Harry (Fictitious character)" headings (before geo_qualifier)
+    _rule_lcsh_geo_qualifier,   # strip LCSH geographic qualifiers: London (England) → London
+    _rule_lcsh_institutional,   # LCSH corporate headings: United States. Congress. Senate
     _rule_lcsh_person_date,     # date-range-prefixed LCSH headings
     _rule_lcsh_chain,           # any single LCSH subdivision separator
     _rule_date_range_period,    # bare date range → period (before drop)
