@@ -7,6 +7,26 @@
 
 
 ---
+## RULE APPLICATION ORDER
+---
+
+When a title or author field could be touched by rules from multiple
+sections, apply them in the order below. Earlier sections take precedence
+over later ones when there is any conflict.
+
+  1. T-SUB and T-SER  — subtitle and series cleanup (these can reshape
+                        the title structure entirely, so do them first)
+  2. T-AWD and T-EDT  — award, marketing, and edition marker removal
+  3. T-FMT and T-CAP  — formatting, punctuation, and capitalisation
+                        (apply only after the title text is stable)
+  4. A-ORD, A-MUL, A-ROL, A-SPE, A-CLN  — author-field normalisation
+
+Example: a title like "Halcyon: A Novel (Booker Prize Winner)" should
+have its award marker removed (T-AWD-01) and its generic subtitle
+removed (T-SUB-02) before T-CAP rules consider what to capitalise.
+
+
+---
 ## SECTION T-CAP — Title Capitalization
 ---
 
@@ -121,11 +141,14 @@ T-EDT-03: Remove delivery-format indicators — these describe how the same
              "(Kindle Edition)"
              "(eBook)"
              "(Trade Paperback)"
+             "(Film Tie-In)"   (cover redesign for a film release —
+                               the text is the same as the original)
+             "(Movie Tie-In)"
+             "(TV Tie-In)"
            EXCEPTION — do NOT remove adaptation markers that identify a
            genuinely different creative work. Keep these as-is:
              "(Graphic Novel)"
              "(Illustrated Edition)"
-             "(Film Tie-In)"
              "(Manga)"
              "(Comic)"
            Removing an adaptation marker could make the title identical to the
