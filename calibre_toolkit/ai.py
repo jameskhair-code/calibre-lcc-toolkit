@@ -129,6 +129,39 @@ class TagsSuggestion:
 
 
 @dataclass
+class TagsReviewSuggestion:
+    """Result of per-book tag assessment for the interactive review flow."""
+    book_id: int
+    title: str
+    authors: list[str]
+    current_tags: list[str]
+    proposed_tags: list[str]
+    assessment: Literal["complete", "needs_additions", "needs_corrections"]
+    confidence: Literal["high", "medium", "low"]
+    notes: str = ""
+    parse_error: str = ""
+
+    @property
+    def authors_display(self) -> str:
+        return " & ".join(self.authors)
+
+    @property
+    def kept(self) -> list[str]:
+        proposed_lower = {t.lower() for t in self.proposed_tags}
+        return [t for t in self.current_tags if t.lower() in proposed_lower]
+
+    @property
+    def added(self) -> list[str]:
+        current_lower = {t.lower() for t in self.current_tags}
+        return [t for t in self.proposed_tags if t.lower() not in current_lower]
+
+    @property
+    def removed(self) -> list[str]:
+        proposed_lower = {t.lower() for t in self.proposed_tags}
+        return [t for t in self.current_tags if t.lower() not in proposed_lower]
+
+
+@dataclass
 class CommentsSuggestion:
     book_id: int
     title: str
@@ -375,6 +408,29 @@ class AIClient:
             messages=[{"role": "user", "content": user_msg}],
         )
         return response.content[0].text.strip()
+
+    def suggest_tags_review(
+        self,
+        book: "Book",
+        current_tags: list[str],
+        description: str = "",
+        series: str = "",
+        year: str = "",
+        publisher: str = "",
+        lcc_summary: str = "",
+        lcc_primary: str = "",
+        lcc_secondary: str = "",
+    ) -> "TagsReviewSuggestion":
+        """Assess and improve tags for a single book using its full metadata context."""
+        user_msg = _build_tags_review_user_message(
+            book, current_tags, description, series, year, publisher,
+            lcc_summary, lcc_primary, lcc_secondary,
+        )
+        if self.provider == "openai":
+            raw = self._call_openai(user_msg, _TAGS_REVIEW_SYSTEM_PROMPT)
+        else:
+            raw = self._call_anthropic(user_msg, _TAGS_REVIEW_SYSTEM_PROMPT, max_tokens=1024)
+        return _parse_tags_review_response(raw, book, current_tags)
 
     def suggest_tag_cleanup(
         self,
@@ -792,6 +848,115 @@ def _parse_tag_cleanup_response(
             pattern_group="ai-semantic",
         ))
     return ops
+
+
+# ── Tags Review prompt + parsing ─────────────────────────────────────────────
+
+_TAGS_REVIEW_SYSTEM_PROMPT = """\
+You are a metadata librarian assessing subject tags for a personal Calibre library
+called "Collection – Literary Awards and Nominees".
+
+Given a single book's full metadata — title, authors, description, current tags,
+and Library of Congress classification — assess whether the current tags are
+complete and accurate, then propose the ideal final tag set.
+
+Tag rules:
+- 4–8 flat tags per book. No prefixes, no nesting, no category labels.
+- Four implicit categories (use the values, not the category names as prefixes):
+  • Form     — Novel, Biography, Memoir, Short Stories, Poetry, Nonfiction, etc.
+  • Subject  — What the book is about (Military History, Cold War, Immigration, etc.)
+  • Period   — Historical period if central (World War II, Victorian Era, etc.)
+  • Geography — Region if central (United States, Russia, Sub-Saharan Africa, etc.)
+- Preserve sub-genre specificity: "Space Opera" ≠ "Science Fiction";
+  "Literary Fiction" ≠ "Fiction"; "Historical Mystery" ≠ "Mystery"
+- Avoid over-general tags that add no value ("Book", "Read", "Literature")
+- Assessment values:
+  • "complete"           — current tags are accurate and sufficient; no change needed
+  • "needs_additions"    — good base but missing important tags; keep current + add
+  • "needs_corrections"  — current tags have inaccurate or noisy entries to replace
+
+---
+## OUTPUT FORMAT
+
+Respond with a single JSON object (NOT an array):
+{
+  "assessment": "complete" | "needs_additions" | "needs_corrections",
+  "proposed_tags": ["Tag1", "Tag2", ...],
+  "confidence": "high" | "medium" | "low",
+  "notes": "<one sentence: what changed and why, or confirming completeness>"
+}
+
+Return ONLY the JSON object. No markdown fences, no commentary.
+"""
+
+
+def _build_tags_review_user_message(
+    book: "Book",
+    current_tags: list[str],
+    description: str,
+    series: str,
+    year: str,
+    publisher: str,
+    lcc_summary: str,
+    lcc_primary: str,
+    lcc_secondary: str,
+) -> str:
+    item: dict = {"id": book.id, "title": book.title, "authors": book.authors}
+    if year:
+        item["year"] = year
+    if series:
+        item["series"] = series
+    if publisher:
+        item["publisher"] = publisher
+    if current_tags:
+        item["current_tags"] = current_tags
+    if description:
+        item["description"] = description[:800]
+    if lcc_summary:
+        item["lcc_summary"] = lcc_summary
+    if lcc_primary:
+        item["lcc_primary_class"] = lcc_primary
+    if lcc_secondary:
+        item["lcc_secondary_class"] = lcc_secondary
+    return json.dumps(item, ensure_ascii=False, indent=2)
+
+
+def _parse_tags_review_response(
+    raw: str,
+    book: "Book",
+    current_tags: list[str],
+) -> "TagsReviewSuggestion":
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:]
+        cleaned = cleaned.strip()
+    try:
+        item = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        return TagsReviewSuggestion(
+            book_id=book.id, title=book.title, authors=book.authors,
+            current_tags=current_tags, proposed_tags=list(current_tags),
+            assessment="complete", confidence="low",
+            parse_error=str(e),
+        )
+    proposed = [
+        t.strip() for t in (item.get("proposed_tags") or [])
+        if isinstance(t, str) and t.strip()
+    ]
+    if not proposed:
+        proposed = list(current_tags)
+    return TagsReviewSuggestion(
+        book_id=book.id,
+        title=book.title,
+        authors=book.authors,
+        current_tags=list(current_tags),
+        proposed_tags=proposed,
+        assessment=item.get("assessment", "complete"),
+        confidence=item.get("confidence", "medium"),
+        notes=(item.get("notes") or "").strip(),
+    )
 
 
 def _parse_tags_response(

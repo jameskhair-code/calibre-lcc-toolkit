@@ -760,6 +760,116 @@ def unflag_manual(
 
 
 @app.command()
+def tags_review(
+    search: Annotated[
+        Optional[str],
+        typer.Argument(
+            help="Calibre search string (default: books where #tags_reviewed is not set)"
+        ),
+    ] = None,
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    limit: Annotated[
+        Optional[int],
+        typer.Option("--limit", "-n", help="Max books per session"),
+    ] = None,
+    no_ai: Annotated[
+        bool,
+        typer.Option("--no-ai", help="Skip AI assessment; manual review only"),
+    ] = False,
+    auto_approve: Annotated[
+        bool,
+        typer.Option("--auto-approve", help="Auto-lock books where AI says complete + high confidence"),
+    ] = False,
+    ai_provider: Annotated[
+        Optional[str],
+        typer.Option("--ai-provider", help="Override AI provider for this run"),
+    ] = None,
+    ai_model: Annotated[
+        Optional[str],
+        typer.Option("--ai-model", help="Override AI model for this run"),
+    ] = None,
+):
+    """
+    MQG-05: Interactive per-book tag review with AI assessment and locking.
+
+    For each unreviewed book, shows the full metadata context (title, authors,
+    description, current tags, LCC classification) and runs an AI assessment
+    of tag completeness. You choose to:
+
+      [a] approve AI suggestions (apply proposed tags + lock)
+      [k] keep current tags as-is (lock without changes)
+      [e] edit tags inline (pre-filled from AI suggestion, then lock)
+      [s] skip this book (leave unreviewed)
+      [q] quit the session
+
+    Books are ordered by tag count ascending (fewest tags first).
+    The #tags_reviewed column is set to Yes for every locked book.
+
+    Examples:
+
+        calibre-toolkit tags-review
+
+        calibre-toolkit tags-review "tag:Booker" --limit 20
+
+        calibre-toolkit tags-review --no-ai --limit 50
+
+        calibre-toolkit tags-review --auto-approve --limit 100
+    """
+    from .modules.tags_review import run_tags_review
+
+    cfg = _load_config(config)
+    db  = _make_db(cfg)
+    ai  = (
+        _make_ai(cfg, command_key="tags", provider_override=ai_provider, model_override=ai_model)
+        if not no_ai else None
+    )
+
+    tags_cfg = cfg.get("tags", {})
+    lcc_cfg  = cfg.get("lcc",  {})
+    reviewed_column = tags_cfg.get("reviewed_column", "#tags_reviewed")
+
+    effective_search = search or f"not {reviewed_column}:true"
+
+    _base = cfg.get("ai", {})
+    _tags_ai = {**_base, **_base.get("tags", {})}
+    _effective_provider = ai_provider or _tags_ai.get("provider", "openai")
+    _effective_model    = ai_model    or _tags_ai.get("model", "(default)")
+
+    mode_label = "Manual only" if no_ai else f"{_effective_provider} / {_effective_model}"
+    console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — MQG-05 Tags Review\n\n",
+                ("Search:   ", "dim"),
+                (effective_search, "bold"),
+                ("\nProvider: ", "dim"),
+                (mode_label, "bold"),
+                ("\nColumn:   ", "dim"),
+                (reviewed_column, "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_tags_review(
+        db=db,
+        ai=ai,
+        search_query=effective_search,
+        reviewed_column=reviewed_column,
+        lcc_summary_column=lcc_cfg.get("lcc_summary_column", "#lcc_summary"),
+        lcc_primary_column=lcc_cfg.get("primary_class_column", "#lcc_primary_class"),
+        lcc_secondary_column=lcc_cfg.get("secondary_class_column", "#lcc_secondary_class"),
+        limit=limit,
+        no_ai=no_ai,
+        auto_approve_complete=auto_approve,
+    )
+
+
+@app.command()
 def library_info(
     config: Annotated[
         Path,
