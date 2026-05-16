@@ -171,6 +171,45 @@ class CalibreDB:
                 f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
             )
 
+    def apply_metadata_batch(
+        self,
+        updates: list[tuple[int, str | None, list[str] | None]],
+        max_workers: int = 6,
+        progress_callback=None,
+    ) -> tuple[list[int], list[tuple[int, str]]]:
+        """Apply many title/authors updates in parallel via calibredb subprocesses.
+
+        updates: list of (book_id, title_or_None, authors_or_None) tuples.
+        Returns (applied_ids, failures) where failures is list of (book_id, error).
+        calibredb is itself serialised on the metadata.db lock, but spawning
+        the processes in parallel still wins big on Windows process-startup cost.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _one(item):
+            book_id, title, authors = item
+            try:
+                self.apply_metadata(book_id, title, authors)
+                return (book_id, None)
+            except RuntimeError as e:
+                return (book_id, str(e))
+
+        applied: list[int] = []
+        failures: list[tuple[int, str]] = []
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(_one, u) for u in updates]
+            done = 0
+            for fut in as_completed(futures):
+                book_id, err = fut.result()
+                if err is None:
+                    applied.append(book_id)
+                else:
+                    failures.append((book_id, err))
+                done += 1
+                if progress_callback:
+                    progress_callback(done, len(updates), len(failures))
+        return applied, failures
+
     def mark_mqg_complete(self, book_ids: list[int], column: str) -> None:
         """Mark a list of books as complete for a given MQG column.
 

@@ -1,13 +1,18 @@
 """
-AI provider abstraction. Supports OpenAI (default) and Anthropic (Claude).
-Books are sent in batches to minimise API calls and cost.
+AI client (Anthropic-only).
+
+Books are sent in batches and processed concurrently to minimise wall time.
+The system prompt for each command is cached via Anthropic prompt caching so
+that successive batches in the same run pay near-zero for the (large) rules
+file portion of the prompt.
 """
 
 from __future__ import annotations
 import json
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 from .db import Book, BookDetails
 from .normalize import normalize_text
@@ -26,17 +31,48 @@ def _load_rules(rules_file: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+# ── Shared JSON extraction ──────────────────────────────────────────────────
+#
+# Models occasionally wrap output in ```json fences, prepend a sentence of
+# commentary, or trail explanation after the closing bracket. Rather than
+# defending against each variant, find the outermost array (or object) and
+# parse exactly that substring.
+
+def _extract_json_array(raw: str) -> list:
+    start = raw.find("[")
+    end = raw.rfind("]")
+    if start == -1 or end == -1 or end <= start:
+        raise RuntimeError(f"AI returned no JSON array.\n\nRaw response:\n{raw[:1000]}")
+    try:
+        return json.loads(raw[start : end + 1])
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:1000]}")
+
+
+def _extract_json_object(raw: str) -> dict:
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise RuntimeError(f"AI returned no JSON object.\n\nRaw response:\n{raw[:1000]}")
+    try:
+        return json.loads(raw[start : end + 1])
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:1000]}")
+
+
+# ── Data classes ────────────────────────────────────────────────────────────
+
 @dataclass
 class LccSuggestion:
     book_id: int
     title: str
     authors: list[str]
-    current: dict[str, str]            # current values for the four LCC fields
-    proposed: dict[str, str]           # AI-proposed values for the four LCC fields
+    current: dict[str, str]
+    proposed: dict[str, str]
     confidence: Literal["high", "medium", "low"]
     source: str = ""
     notes: str = ""
-    parse_error: str = ""              # populated if AI output failed validation
+    parse_error: str = ""
 
     @property
     def authors_display(self) -> str:
@@ -52,14 +88,6 @@ class LccSuggestion:
 
 @dataclass
 class TagOperation:
-    """One cleanup operation on the tag vocabulary.
-
-    Models all four kinds via source_tags / target_tags:
-      rename: 1 source → 1 target          ("WWII" → "World War II")
-      merge:  N sources → 1 target         ("Sci-Fi","Scifi","Sf" → "Science Fiction")
-      drop:   N sources → 0 targets        ("1843-1916; Balfour" → ∅)
-      split:  1 source → N targets         ("17th Century; Family" → ["17th Century","Family"])
-    """
     source_tags: list[str]
     target_tags: list[str]
     reason: str
@@ -111,26 +139,22 @@ class TagsSuggestion:
 
     @property
     def kept(self) -> list[str]:
-        """Current tags that survive into the proposed set (case-insensitive)."""
         proposed_lower = {t.lower() for t in self.proposed_tags}
         return [t for t in self.current_tags if t.lower() in proposed_lower]
 
     @property
     def added(self) -> list[str]:
-        """Proposed tags not present in the current set."""
         current_lower = {t.lower() for t in self.current_tags}
         return [t for t in self.proposed_tags if t.lower() not in current_lower]
 
     @property
     def removed(self) -> list[str]:
-        """Current tags being dropped from the proposed set."""
         proposed_lower = {t.lower() for t in self.proposed_tags}
         return [t for t in self.current_tags if t.lower() not in proposed_lower]
 
 
 @dataclass
 class TagsReviewSuggestion:
-    """Result of per-book tag assessment for the interactive review flow."""
     book_id: int
     title: str
     authors: list[str]
@@ -166,8 +190,8 @@ class CommentsSuggestion:
     book_id: int
     title: str
     authors: list[str]
-    sections: dict[str, str]   # {"the_book": "...", "why_it_matters": "...", ...}
-    html: str                   # formatted HTML ready to write
+    sections: dict[str, str]
+    html: str
     confidence: Literal["high", "medium", "low"]
     notes: str = ""
     parse_error: str = ""
@@ -201,6 +225,8 @@ class CleanupSuggestion:
     def suggested_authors_display(self) -> str:
         return " & ".join(self.suggested_authors)
 
+
+# ── Prompts ─────────────────────────────────────────────────────────────────
 
 _PROMPT_PREAMBLE = """\
 You are a metadata librarian specialising in literary fiction and award-winning books.
@@ -256,16 +282,7 @@ def _build_user_message(books: list[Book]) -> str:
 
 
 def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
-    # Extract the outermost JSON array regardless of fences or trailing text.
-    start = raw.find("[")
-    end = raw.rfind("]")
-    if start == -1 or end == -1 or end <= start:
-        raise RuntimeError(f"AI returned no JSON array.\n\nRaw response:\n{raw[:500]}")
-    try:
-        items = json.loads(raw[start : end + 1])
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
-
+    items = _extract_json_array(raw)
     book_map = {b.id: b for b in books}
     suggestions = []
     for item in items:
@@ -274,9 +291,7 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
         if book is None:
             continue
 
-        # What the AI returned (before code normalization)
         raw_title = item.get("title", book.title).strip()
-        # AI sometimes collapses multiple authors into one semicolon-separated string
         raw_authors = []
         for a in item.get("authors", book.authors):
             if ";" in a:
@@ -284,7 +299,6 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
             else:
                 raw_authors.append(a.strip())
 
-        # Apply code normalization (diacritics, dashes) on top of AI suggestion
         suggested_title = normalize_text(raw_title)
         suggested_authors = [normalize_text(a) for a in raw_authors]
 
@@ -302,7 +316,6 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
 
         if (title_changed or authors_changed) and no_changes_note:
             if not ai_changed_title and not ai_changed_authors:
-                # AI left it alone; code normalization made the change
                 parts = []
                 if code_changed_title:
                     parts.append("title")
@@ -310,7 +323,6 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
                     parts.append("authors")
                 notes = f"Americanized special characters in {' and '.join(parts)} (diacritics and dashes converted to plain ASCII)."
             else:
-                # AI made changes but wrote "no changes needed" — generate a clean fallback
                 parts = []
                 if title_changed:
                     parts.append("title")
@@ -332,91 +344,148 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
     return suggestions
 
 
-class AIClient:
-    def __init__(self, provider: str, api_key: str, model: str | None = None):
-        self.provider = provider.lower()
-        self.api_key = api_key
-        if self.provider == "openai":
-            self.model = model or "gpt-4o-mini"
-        elif self.provider == "anthropic":
-            self.model = model or "claude-sonnet-4-6"
-        else:
-            raise ValueError(f"Unknown provider '{provider}'. Use 'openai' or 'anthropic'.")
+# ── AIClient ────────────────────────────────────────────────────────────────
 
-    def suggest_cleanup(self, books: list[Book], batch_size: int = 50) -> list[CleanupSuggestion]:
-        """Process books in batches and return all suggestions."""
-        results: list[CleanupSuggestion] = []
-        batches = [books[i:i + batch_size] for i in range(0, len(books), batch_size)]
-        for batch in batches:
-            results.extend(self._process_batch(batch))
+
+@dataclass
+class BatchFailure:
+    """One AI batch that failed to return parseable output."""
+    batch_index: int
+    book_ids: list[int]
+    error: str
+
+
+class AIClient:
+    """Anthropic-only client with batch concurrency and prompt caching.
+
+    `max_concurrency` controls how many in-flight requests run at once for
+    multi-batch suggest_* calls. The Anthropic SDK is thread-safe.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str | None = None,
+        max_concurrency: int = 5,
+    ):
+        self.api_key = api_key
+        self.model = model or "claude-sonnet-4-6"
+        self.max_concurrency = max_concurrency
+        self._client = None
+        # Populated by the last suggest_* call so callers can surface failures.
+        self.last_failures: list[BatchFailure] = []
+
+    def _anthropic(self):
+        if self._client is None:
+            from anthropic import Anthropic
+            # max_retries handles transient 429/5xx with built-in backoff.
+            self._client = Anthropic(api_key=self.api_key, max_retries=3, timeout=120.0)
+        return self._client
+
+    def _call(self, user_msg: str, system_prompt: str, max_tokens: int = 8192) -> str:
+        """Single Anthropic call with prompt caching on the system block."""
+        response = self._anthropic().messages.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        return response.content[0].text.strip()
+
+    def _run_batches_concurrent(
+        self,
+        fn: Callable[[list], list],
+        batches: list[list],
+        progress_callback: Callable[[int, int, int], None] | None = None,
+    ) -> list:
+        """Run `fn(batch)` for each batch concurrently. Returns flat list of
+        results from successful batches. Failures are stored on self.last_failures.
+
+        progress_callback(completed, total, failed) is called after each batch.
+        """
+        self.last_failures = []
+        results: list = []
+        # Map: future → (batch_index, batch)
+        with ThreadPoolExecutor(max_workers=self.max_concurrency) as pool:
+            futures = {
+                pool.submit(fn, batch): (idx, batch)
+                for idx, batch in enumerate(batches)
+            }
+            completed = 0
+            for fut in as_completed(futures):
+                idx, batch = futures[fut]
+                try:
+                    results.extend(fut.result())
+                except Exception as e:
+                    book_ids = [getattr(b, "id", b.get("id") if isinstance(b, dict) else 0) for b in batch]
+                    self.last_failures.append(BatchFailure(
+                        batch_index=idx,
+                        book_ids=book_ids,
+                        error=str(e),
+                    ))
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, len(batches), len(self.last_failures))
         return results
 
-    def _process_batch(self, books: list[Book], rules_file: str = "author_title.md") -> list[CleanupSuggestion]:
+    # ── Clean-titles ──────────────────────────────────────────────────────
+
+    def suggest_cleanup(
+        self,
+        books: list[Book],
+        batch_size: int = 50,
+        progress_callback: Callable[[int, int, int], None] | None = None,
+    ) -> list[CleanupSuggestion]:
+        if not books:
+            return []
+        batches = [books[i : i + batch_size] for i in range(0, len(books), batch_size)]
+        return self._run_batches_concurrent(self._process_batch, batches, progress_callback)
+
+    def _process_batch(self, books: list[Book]) -> list[CleanupSuggestion]:
         user_msg = _build_user_message(books)
-        system_prompt = _build_system_prompt(rules_file)
-        if self.provider == "openai":
-            raw = self._call_openai(user_msg, system_prompt)
-        else:
-            raw = self._call_anthropic(user_msg, system_prompt)
+        system_prompt = _build_system_prompt("author_title.md")
+        raw = self._call(user_msg, system_prompt, max_tokens=8192)
         return _parse_response(raw, books)
 
-    def _call_openai(self, user_msg: str, system_prompt: str) -> str:
-        from openai import OpenAI
-        client = OpenAI(api_key=self.api_key)
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_msg},
-            ],
-            temperature=0.1,
-        )
-        return response.choices[0].message.content.strip()
+    # ── LCC ───────────────────────────────────────────────────────────────
 
     def suggest_lcc(
         self,
         books: list[Book],
         current_map: dict[int, dict[str, str]],
         batch_size: int = 10,
-    ) -> list["LccSuggestion"]:
-        """Process books in batches and return LCC suggestions.
+        progress_callback: Callable[[int, int, int], None] | None = None,
+    ) -> list[LccSuggestion]:
+        if not books:
+            return []
+        batches = [books[i : i + batch_size] for i in range(0, len(books), batch_size)]
 
-        current_map[book_id] = dict of current values for the four LCC fields
-        (used to give the model context about what's already there).
-        """
-        results: list[LccSuggestion] = []
-        batches = [books[i:i + batch_size] for i in range(0, len(books), batch_size)]
-        for batch in batches:
-            results.extend(self._process_lcc_batch(batch, current_map))
-        return results
+        def _run(batch):
+            return self._process_lcc_batch(batch, current_map)
+
+        return self._run_batches_concurrent(_run, batches, progress_callback)
 
     def _process_lcc_batch(
         self,
         books: list[Book],
         current_map: dict[int, dict[str, str]],
-    ) -> list["LccSuggestion"]:
+    ) -> list[LccSuggestion]:
         system_prompt = _build_lcc_system_prompt()
         user_msg = _build_lcc_user_message(books, current_map)
-        if self.provider == "openai":
-            raw = self._call_openai(user_msg, system_prompt)
-        else:
-            raw = self._call_anthropic(user_msg, system_prompt)
+        raw = self._call(user_msg, system_prompt, max_tokens=8192)
         return _parse_lcc_response(raw, books, current_map)
 
-    def _call_anthropic(self, user_msg: str, system_prompt: str, max_tokens: int = 4096) -> str:
-        from anthropic import Anthropic
-        client = Anthropic(api_key=self.api_key)
-        response = client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_msg}],
-        )
-        return response.content[0].text.strip()
+    # ── Tags-review (single book, no batching) ────────────────────────────
 
     def suggest_tags_review(
         self,
-        book: "Book",
+        book: Book,
         current_tags: list[str],
         description: str = "",
         series: str = "",
@@ -425,39 +494,28 @@ class AIClient:
         lcc_summary: str = "",
         lcc_primary: str = "",
         lcc_secondary: str = "",
-    ) -> "TagsReviewSuggestion":
-        """Assess and improve tags for a single book using its full metadata context."""
+    ) -> TagsReviewSuggestion:
         user_msg = _build_tags_review_user_message(
             book, current_tags, description, series, year, publisher,
             lcc_summary, lcc_primary, lcc_secondary,
         )
-        if self.provider == "openai":
-            raw = self._call_openai(user_msg, _TAGS_REVIEW_SYSTEM_PROMPT)
-        else:
-            raw = self._call_anthropic(user_msg, _TAGS_REVIEW_SYSTEM_PROMPT, max_tokens=1024)
+        raw = self._call(user_msg, _TAGS_REVIEW_SYSTEM_PROMPT, max_tokens=1024)
         return _parse_tags_review_response(raw, book, current_tags)
+
+    # ── Tag-cleanup (single big call, no batching) ────────────────────────
 
     def suggest_tag_cleanup(
         self,
         tags: list[tuple[str, int]],
-    ) -> list["TagOperation"]:
-        """Analyse remaining tags and propose semantic merge/drop operations.
-
-        `tags` is the tag list AFTER the deterministic scanner has handled
-        obvious patterns. The AI focuses on fuzzy matches the scanner cannot
-        catch (variant spellings, near-synonyms, semantic noise).
-        """
+    ) -> list[TagOperation]:
         if not tags:
             return []
         system_prompt = _build_tag_cleanup_system_prompt()
         user_msg = _build_tag_cleanup_user_message(tags)
-        if self.provider == "openai":
-            raw = self._call_openai(user_msg, system_prompt)
-        else:
-            # Cleanup output can be long (one entry per merge/drop). Bump
-            # the cap well past the default so we don't truncate the array.
-            raw = self._call_anthropic(user_msg, system_prompt, max_tokens=16384)
+        raw = self._call(user_msg, system_prompt, max_tokens=16384)
         return _parse_tag_cleanup_response(raw, {t: c for t, c in tags})
+
+    # ── Tags (batch) ──────────────────────────────────────────────────────
 
     def suggest_tags(
         self,
@@ -465,31 +523,30 @@ class AIClient:
         tags_map: dict[int, list[str]],
         context_map: dict[int, dict[str, str]] | None = None,
         batch_size: int = 20,
-    ) -> list["TagsSuggestion"]:
-        """Process books in batches and return Tags suggestions.
+        progress_callback: Callable[[int, int, int], None] | None = None,
+    ) -> list[TagsSuggestion]:
+        if not books:
+            return []
+        ctx = context_map or {}
+        batches = [books[i : i + batch_size] for i in range(0, len(books), batch_size)]
 
-        context_map[book_id] may contain "lcc_summary", "lcc_secondary_class",
-        "lcc_primary_class" for richer AI context.
-        """
-        results: list[TagsSuggestion] = []
-        batches = [books[i:i + batch_size] for i in range(0, len(books), batch_size)]
-        for batch in batches:
-            results.extend(self._process_tags_batch(batch, tags_map, context_map or {}))
-        return results
+        def _run(batch):
+            return self._process_tags_batch(batch, tags_map, ctx)
+
+        return self._run_batches_concurrent(_run, batches, progress_callback)
 
     def _process_tags_batch(
         self,
         books: list[Book],
         tags_map: dict[int, list[str]],
         context_map: dict[int, dict[str, str]],
-    ) -> list["TagsSuggestion"]:
+    ) -> list[TagsSuggestion]:
         system_prompt = _build_tags_system_prompt()
         user_msg = _build_tags_user_message(books, tags_map, context_map)
-        if self.provider == "openai":
-            raw = self._call_openai(user_msg, system_prompt)
-        else:
-            raw = self._call_anthropic(user_msg, system_prompt)
+        raw = self._call(user_msg, system_prompt, max_tokens=8192)
         return _parse_tags_response(raw, books, tags_map)
+
+    # ── Comments (batch) ──────────────────────────────────────────────────
 
     def suggest_comments(
         self,
@@ -498,15 +555,16 @@ class AIClient:
         lcc_summary_map: dict[int, str] | None = None,
         batch_size: int = 5,
         tone_override: str | None = None,
-    ) -> list["CommentsSuggestion"]:
-        """Process books in batches and return Comments suggestions."""
-        results: list[CommentsSuggestion] = []
-        batches = [books[i:i + batch_size] for i in range(0, len(books), batch_size)]
-        for batch in batches:
-            results.extend(
-                self._process_comments_batch(batch, details_map, lcc_summary_map, tone_override)
-            )
-        return results
+        progress_callback: Callable[[int, int, int], None] | None = None,
+    ) -> list[CommentsSuggestion]:
+        if not books:
+            return []
+        batches = [books[i : i + batch_size] for i in range(0, len(books), batch_size)]
+
+        def _run(batch):
+            return self._process_comments_batch(batch, details_map, lcc_summary_map, tone_override)
+
+        return self._run_batches_concurrent(_run, batches, progress_callback)
 
     def _process_comments_batch(
         self,
@@ -514,14 +572,10 @@ class AIClient:
         details_map: dict[int, BookDetails],
         lcc_summary_map: dict[int, str] | None = None,
         tone_override: str | None = None,
-    ) -> list["CommentsSuggestion"]:
+    ) -> list[CommentsSuggestion]:
         system_prompt = _build_comments_system_prompt(tone_override)
         user_msg = _build_comments_user_message(books, details_map, lcc_summary_map)
-        if self.provider == "openai":
-            raw = self._call_openai(user_msg, system_prompt)
-        else:
-            # Comments are longer — allow more output tokens
-            raw = self._call_anthropic(user_msg, system_prompt, max_tokens=8192)
+        raw = self._call(user_msg, system_prompt, max_tokens=8192)
         return _parse_comments_response(raw, books)
 
 
@@ -584,18 +638,7 @@ def _parse_lcc_response(
     books: list[Book],
     current_map: dict[int, dict[str, str]],
 ) -> list[LccSuggestion]:
-    # Strip optional markdown fences in case the model ignores instructions
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:]
-        cleaned = cleaned.strip()
-    try:
-        items = json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
-
+    items = _extract_json_array(raw)
     book_map = {b.id: b for b in books}
     suggestions: list[LccSuggestion] = []
     for item in items:
@@ -693,7 +736,6 @@ def _build_comments_user_message(
             if d.publisher:
                 item["publisher"] = d.publisher
             if d.existing_comments:
-                # Truncate long existing comments to keep prompt size reasonable
                 item["existing_comments"] = d.existing_comments[:600]
         if lcc_summary_map:
             lcc_s = lcc_summary_map.get(b.id, "")
@@ -714,17 +756,7 @@ def _format_comments_html(sections: dict[str, str]) -> str:
 
 
 def _parse_comments_response(raw: str, books: list[Book]) -> list[CommentsSuggestion]:
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:]
-        cleaned = cleaned.strip()
-    try:
-        items = json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
-
+    items = _extract_json_array(raw)
     book_map = {b.id: b for b in books}
     suggestions: list[CommentsSuggestion] = []
     for item in items:
@@ -823,17 +855,7 @@ def _parse_tag_cleanup_response(
     raw: str,
     counts: dict[str, int],
 ) -> list[TagOperation]:
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:]
-        cleaned = cleaned.strip()
-    try:
-        items = json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
-
+    items = _extract_json_array(raw)
     ops: list[TagOperation] = []
     for item in items:
         sources = [t.strip() for t in (item.get("source_tags") or []) if t.strip()]
@@ -841,7 +863,6 @@ def _parse_tag_cleanup_response(
         reason = (item.get("reason") or "").strip()
         if not sources:
             continue
-        # No-op guard: single source == single target
         if len(sources) == 1 and len(targets) == 1 and sources[0] == targets[0]:
             continue
         total = sum(counts.get(t, 0) for t in sources)
@@ -896,7 +917,7 @@ Return ONLY the JSON object. No markdown fences, no commentary.
 
 
 def _build_tags_review_user_message(
-    book: "Book",
+    book: Book,
     current_tags: list[str],
     description: str,
     series: str,
@@ -928,18 +949,12 @@ def _build_tags_review_user_message(
 
 def _parse_tags_review_response(
     raw: str,
-    book: "Book",
+    book: Book,
     current_tags: list[str],
-) -> "TagsReviewSuggestion":
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:]
-        cleaned = cleaned.strip()
+) -> TagsReviewSuggestion:
     try:
-        item = json.loads(cleaned)
-    except json.JSONDecodeError as e:
+        item = _extract_json_object(raw)
+    except RuntimeError as e:
         return TagsReviewSuggestion(
             book_id=book.id, title=book.title, authors=book.authors,
             current_tags=current_tags, proposed_tags=list(current_tags),
@@ -969,17 +984,7 @@ def _parse_tags_response(
     books: list[Book],
     tags_map: dict[int, list[str]],
 ) -> list[TagsSuggestion]:
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:]
-        cleaned = cleaned.strip()
-    try:
-        items = json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
-
+    items = _extract_json_array(raw)
     book_map = {b.id: b for b in books}
     suggestions: list[TagsSuggestion] = []
     for item in items:

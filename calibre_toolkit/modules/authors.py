@@ -89,19 +89,44 @@ def run_cleanup(
 
     console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
 
-    # ── 2. AI analysis ────────────────────────────────────────────────────────
+    # ── 2. AI analysis (concurrent batches, partial-failure tolerant) ────────
     total_batches = (len(books) + batch_size - 1) // batch_size
     console.print(
         f"Sending to AI in [cyan]{total_batches}[/cyan] batch(es) "
-        f"of up to [cyan]{batch_size}[/cyan] books each…\n"
+        f"of up to [cyan]{batch_size}[/cyan] books each "
+        f"([cyan]{ai.max_concurrency}[/cyan] in flight)…\n"
     )
 
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
     all_suggestions: list[CleanupSuggestion] = []
-    batches = [books[i:i + batch_size] for i in range(0, len(books), batch_size)]
-    for idx, batch in enumerate(batches, 1):
-        with console.status(f"[cyan]Processing batch {idx}/{total_batches}…"):
-            suggestions = ai.suggest_cleanup(batch, batch_size=batch_size)
-            all_suggestions.extend(suggestions)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[cyan]Batches"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TextColumn("[red]{task.fields[failed]} failed"),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("ai", total=total_batches, failed=0)
+
+        def _on_progress(done, total, failed):
+            progress.update(task, completed=done, failed=failed)
+
+        all_suggestions = ai.suggest_cleanup(books, batch_size=batch_size, progress_callback=_on_progress)
+
+    if ai.last_failures:
+        console.print(
+            f"[red]Warning: {len(ai.last_failures)} of {total_batches} batches failed.[/red]"
+        )
+        for f in ai.last_failures:
+            console.print(
+                f"  [dim]Batch {f.batch_index+1} ({len(f.book_ids)} books): {f.error[:200]}[/dim]"
+            )
+        console.print(
+            "  [dim]Books in failed batches will not be marked complete — re-run to retry them.[/dim]\n"
+        )
 
     changes = [s for s in all_suggestions if s.any_change]
     no_changes = [s for s in all_suggestions if not s.any_change]
@@ -176,19 +201,40 @@ def run_cleanup(
 
 
 def _apply_suggestions(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> list[int]:
-    """Apply a list of suggestions. Returns IDs of successfully updated books."""
-    applied: list[int] = []
-    for s in suggestions:
-        with console.status(f"Updating book {s.book_id}…"):
-            try:
-                db.apply_metadata(
-                    book_id=s.book_id,
-                    title=s.suggested_title if s.title_changed else None,
-                    authors=s.suggested_authors if s.authors_changed else None,
-                )
-                applied.append(s.book_id)
-            except RuntimeError as e:
-                console.print(f"[red]Error on book {s.book_id}: {e}[/red]")
+    """Apply a list of suggestions in parallel. Returns IDs of successfully updated books."""
+    if not suggestions:
+        return []
+
+    updates = [
+        (
+            s.book_id,
+            s.suggested_title if s.title_changed else None,
+            s.suggested_authors if s.authors_changed else None,
+        )
+        for s in suggestions
+    ]
+
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[cyan]Applying"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TextColumn("[red]{task.fields[failed]} failed"),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("apply", total=len(updates), failed=0)
+
+        def _on_progress(done, total, failed):
+            progress.update(task, completed=done, failed=failed)
+
+        applied, failures = db.apply_metadata_batch(updates, progress_callback=_on_progress)
+
+    for book_id, err in failures:
+        console.print(f"[red]Error on book {book_id}: {err}[/red]")
     console.print(f"[green]Applied {len(applied)}/{len(suggestions)} changes.[/green]")
     return applied
 

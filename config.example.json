@@ -8,9 +8,13 @@
   "_comment_windows": "On Windows use full paths, e.g. C:\\Program Files\\Calibre2\\calibredb.exe",
 
   "ai": {
-    "provider": "openai",
-    "model": "gpt-4o-mini",
-    "api_key": ""
+    "_comment": "Anthropic-only. The api_key here is the default; per-command blocks (title_author, lcc, comments, tags) can override model or api_key.",
+    "model": "claude-sonnet-4-6",
+    "api_key": "",
+    "title_author": { "model": "claude-sonnet-4-6", "api_key": "" },
+    "lcc":          { "model": "claude-sonnet-4-6", "api_key": "" },
+    "comments":     { "model": "claude-sonnet-4-6", "api_key": "" },
+    "tags":         { "model": "claude-sonnet-4-6", "api_key": "" }
   },
 
   "identifiers": {

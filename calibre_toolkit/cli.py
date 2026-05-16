@@ -73,53 +73,37 @@ def _make_ai(
 ):
     """Build an AIClient from config.
 
-    command_key — if provided, look for an override block at ai.<command_key>
-    (e.g. "lcc") before falling back to the top-level ai block.
-    provider_override / model_override — CLI flags that take precedence over config.
+    Anthropic-only. provider_override is accepted for backwards-compatible
+    CLI flags but ignored. command_key — if provided, look for an override
+    block at ai.<command_key> (e.g. "lcc") before falling back to top-level.
+    model_override takes precedence over config.
     """
     from .ai import AIClient
     base_cfg = cfg.get("ai", {})
 
-    # Merge: command-specific block overrides the top-level block
     override = base_cfg.get(command_key, {}) if command_key else {}
     ai_cfg = {**base_cfg, **override}
 
-    if provider_override:
-        ai_cfg["provider"] = provider_override
     if model_override:
         ai_cfg["model"] = model_override
 
-    provider = ai_cfg.get("provider", "openai")
-
-    # Build a provider→key map so switching providers doesn't use the wrong key.
-    # ai.api_key belongs to the top-level ai.provider.
-    # ai.lcc.api_key (or other command override) belongs to that block's provider.
-    # Explicit ai.openai_api_key / ai.anthropic_api_key always win.
-    provider_keys: dict[str, str] = {}
-    top_provider = base_cfg.get("provider", "openai")
-    if base_cfg.get("api_key"):
-        provider_keys[top_provider] = base_cfg["api_key"]
-    if override.get("provider") and override.get("api_key"):
-        provider_keys[override["provider"]] = override["api_key"]
-    for p in ("openai", "anthropic"):
-        if ai_cfg.get(f"{p}_api_key"):
-            provider_keys[p] = ai_cfg[f"{p}_api_key"]
-
-    if provider == "openai":
-        api_key = os.environ.get("OPENAI_API_KEY") or provider_keys.get("openai", "")
-    else:
-        api_key = os.environ.get("ANTHROPIC_API_KEY") or provider_keys.get("anthropic", "")
+    # Prefer the most specific api_key: command override → top-level → env.
+    api_key = (
+        override.get("api_key")
+        or base_cfg.get("api_key")
+        or os.environ.get("ANTHROPIC_API_KEY")
+        or ""
+    )
 
     if not api_key:
         console.print(
-            f"[red]No API key found for provider '{provider}'.[/red]\n"
-            f"Set [bold]OPENAI_API_KEY[/bold] (or ANTHROPIC_API_KEY) as an environment variable, "
-            f"or add it to config.json under ai.api_key."
+            "[red]No Anthropic API key found.[/red]\n"
+            "Set [bold]ANTHROPIC_API_KEY[/bold] as an environment variable, "
+            "or add it to config.json under ai.api_key (or a command override block)."
         )
         raise typer.Exit(1)
 
     return AIClient(
-        provider=provider,
         api_key=api_key,
         model=ai_cfg.get("model"),
     )

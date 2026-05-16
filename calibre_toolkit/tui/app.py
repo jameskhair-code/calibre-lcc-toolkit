@@ -536,8 +536,13 @@ class CalibreToolkitApp(App):
             display_args = action.cli_args + (limit_args if limit_args else [])
             print(f"  Running: {' '.join(display_args)}")
             print(f"{'─' * 72}\n")
-            subprocess.run(cmd)
+            result = subprocess.run(cmd)
             print(f"\n{'─' * 72}")
+            if result.returncode != 0:
+                print(f"  \033[31m✗ Command exited with code {result.returncode}.\033[0m")
+                print(f"  \033[31m  Check the output above for the error.\033[0m")
+            else:
+                print(f"  \033[32m✓ Done.\033[0m")
             input("  Press Enter to return to the menu…")
 
         # Refresh stats after returning
