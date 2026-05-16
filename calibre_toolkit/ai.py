@@ -256,8 +256,13 @@ def _build_user_message(books: list[Book]) -> str:
 
 
 def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
+    # Strip markdown code fences if the model wrapped the JSON
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[-1]  # drop opening fence line
+        stripped = stripped.rsplit("```", 1)[0]  # drop closing fence
     try:
-        items = json.loads(raw)
+        items = json.loads(stripped)
     except json.JSONDecodeError as e:
         raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
 
