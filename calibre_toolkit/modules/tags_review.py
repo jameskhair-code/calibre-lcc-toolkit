@@ -122,18 +122,19 @@ def _show_assessment(s: TagsReviewSuggestion) -> None:
 
 
 def _prompt_action(has_ai: bool) -> str:
-    """Return one of: 'a' approve-AI, 'k' keep, 'e' edit, 's' skip, 'q' quit."""
+    """Return one of: 'A' approve-all, 'a' approve-AI, 'k' keep, 'e' edit, 's' skip, 'q' quit."""
     parts = []
     if has_ai:
         parts.append("[a]pprove AI")
+        parts.append("[A]ll remaining")
     parts += ["[k]eep as-is", "[e]dit", "[s]kip", "[q]uit"]
     # Use Text so Rich doesn't interpret [a], [k], etc. as markup tags
     console.print(Text("\n  " + "   ".join(parts)))
-    valid = (["a"] if has_ai else []) + ["k", "e", "s", "q"]
+    valid = (["a", "A"] if has_ai else []) + ["k", "e", "s", "q"]
     default = "a" if has_ai else "k"
     while True:
         raw = Prompt.ask("  Action", default=default, show_choices=False, show_default=True)
-        c = raw.strip().lower()[:1]
+        c = raw.strip()[:1]
         if c in valid:
             return c
         console.print(f"  [red]Please enter one of: {', '.join(valid)}[/red]")
@@ -191,6 +192,7 @@ def run_tags_review(
     console.print(f"\n[bold]Found [green]{shown}[/green] books to review{cap_note}.[/bold]\n")
 
     locked = skipped = 0
+    approve_all = False  # set to True when user chooses [A]ll remaining
 
     for idx, book in enumerate(books_sorted, 1):
         tags    = tags_map.get(book.id, [])
@@ -236,6 +238,14 @@ def run_tags_review(
 
         if suggestion:
             _show_assessment(suggestion)
+            # Honour approve_all: apply this book's AI suggestion silently
+            if approve_all:
+                final_tags = suggestion.proposed_tags
+                db.apply_tags(book.id, final_tags)
+                db.mark_mqg_complete([book.id], reviewed_column)
+                console.print(f"[green]✓[/green] [dim]Auto-approved.[/dim]  [dim]{', '.join(final_tags)}[/dim]\n")
+                locked += 1
+                continue
             if (auto_approve_complete
                     and suggestion.assessment == "complete"
                     and suggestion.confidence == "high"
@@ -257,6 +267,18 @@ def run_tags_review(
             skipped += 1
             console.print("[dim]Skipped.[/dim]\n")
             continue
+        elif choice == "A" and suggestion:
+            # Approve this book and set flag for all subsequent
+            approve_all = True
+            final_tags = suggestion.proposed_tags
+            db.apply_tags(book.id, final_tags)
+            db.mark_mqg_complete([book.id], reviewed_column)
+            remaining = total - idx
+            console.print(
+                f"[green]✓[/green] Applied AI tags + locked.  [dim]{', '.join(final_tags)}[/dim]\n"
+                f"[dim]  Approve-all active — {remaining} remaining book(s) will be auto-approved.[/dim]\n"
+            )
+            locked += 1
         elif choice == "a" and suggestion:
             final_tags = suggestion.proposed_tags
             db.apply_tags(book.id, final_tags)
