@@ -425,6 +425,9 @@ def _is_safe_group(group_key: str) -> bool:
         "formatting",
         "calibre-taxonomy",
         "date-range-lookup",
+        "lcsh-bare-date-range",
+        "lcsh-date-subject",
+        "lcsh-chain",
     }
 
 
