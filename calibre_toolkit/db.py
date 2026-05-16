@@ -352,6 +352,21 @@ class CalibreDB:
                     result[bid].append(tag)
         return result
 
+    def count_column_true(self, label: str) -> int:
+        """Return the number of books where a boolean custom column is set to true."""
+        label_clean = label.lstrip("#")
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id FROM custom_columns WHERE label = ?", [label_clean]
+            ).fetchone()
+            if row is None:
+                return 0
+            col_id = row[0]
+            result = conn.execute(
+                f"SELECT COUNT(*) FROM custom_column_{col_id} WHERE value = 1"
+            ).fetchone()
+            return result[0] if result else 0
+
     def get_all_tags(self) -> list[tuple[str, int]]:
         """Return [(tag_name, book_count), ...] for every tag in the library, count desc."""
         with self._connect() as conn:

@@ -871,6 +871,29 @@ def tags_review(
 
 
 @app.command()
+def menu(
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+):
+    """
+    Launch the interactive Terminal UI menu.
+
+    Full-screen two-panel interface showing MQG pipeline progress and
+    letting you run any command without remembering CLI syntax.
+
+    Examples:
+
+        calibre-toolkit menu
+
+        py -m calibre_toolkit.tui
+    """
+    from .tui.app import main as tui_main
+    tui_main(config_path=config)
+
+
+@app.command()
 def library_info(
     config: Annotated[
         Path,
