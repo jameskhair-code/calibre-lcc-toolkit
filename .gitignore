@@ -31,3 +31,6 @@ __pycache__/
 *.pyc
 *.egg-info/
 config.json
+
+# One-off exports
+tags_export.txt
