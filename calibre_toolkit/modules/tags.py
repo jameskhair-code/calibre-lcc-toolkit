@@ -13,8 +13,9 @@ from rich.text import Text
 from rich import box
 from rich.prompt import Prompt
 
-from ..ai import AIClient, TagsSuggestion, TagMergeGroup
+from ..ai import AIClient, TagsSuggestion, TagOperation
 from ..db import CalibreDB
+from ..tag_scanner import scan_tags, PATTERN_GROUP_LABELS
 
 console = Console()
 
@@ -300,11 +301,12 @@ def _prompt_and_apply(
 
 def run_tags_cleanup(
     db: CalibreDB,
-    ai: AIClient,
+    ai: AIClient | None,
     min_books: int = 1,
     dry_run: bool = False,
+    skip_ai: bool = False,
 ) -> None:
-    """Read every tag in the library, ask the AI to propose merge groups, apply."""
+    """Two-layer tag cleanup: deterministic scanner first, then AI semantic pass."""
 
     # ── 1. Read all tags ──────────────────────────────────────────────────────
     with console.status("[cyan]Reading all tags in library…"):
@@ -314,117 +316,238 @@ def run_tags_cleanup(
         console.print("[yellow]No tags found in library.[/yellow]")
         raise typer.Exit()
 
-    # Filter by minimum book count if requested
-    working_tags = [(t, c) for t, c in all_tags if c >= min_books]
     console.print(
         f"\n[bold]Found [green]{len(all_tags)}[/green] unique tags "
-        f"across the library"
-        + (f" — sending {len(working_tags)} with ≥{min_books} book(s) to AI" if min_books > 1 else "")
-        + ".[/bold]\n"
+        f"across the library.[/bold]"
     )
 
-    # ── 2. AI analysis ────────────────────────────────────────────────────────
-    with console.status("[cyan]Analysing tag vocabulary for normalization issues…"):
-        try:
-            groups = ai.suggest_tag_cleanup(working_tags)
-        except RuntimeError as e:
-            console.print(Panel(str(e), title="[red]AI analysis failed[/red]", border_style="red"))
-            raise typer.Exit(1)
+    # ── 2. Scanner pass (deterministic) ───────────────────────────────────────
+    with console.status("[cyan]Running deterministic scanner…"):
+        scanner_ops, handled = scan_tags(all_tags)
 
-    if not groups:
-        console.print("[green]AI found no normalization issues — vocabulary looks clean.[/green]")
+    console.print(
+        f"[dim]Scanner: [green]{len(scanner_ops)}[/green] operation(s) on "
+        f"[green]{len(handled)}[/green] tag(s).[/dim]"
+    )
+
+    # ── 3. AI semantic pass (on tags scanner didn't touch) ────────────────────
+    ai_ops: list[TagOperation] = []
+    if not skip_ai and ai is not None:
+        remaining = [(t, c) for t, c in all_tags if t not in handled and c >= min_books]
+        if remaining:
+            with console.status(
+                f"[cyan]AI semantic analysis on {len(remaining)} remaining tag(s)…"
+            ):
+                try:
+                    ai_ops = ai.suggest_tag_cleanup(remaining)
+                except RuntimeError as e:
+                    console.print(Panel(
+                        str(e), title="[red]AI analysis failed[/red]",
+                        border_style="red",
+                    ))
+                    raise typer.Exit(1)
+            console.print(
+                f"[dim]AI: [green]{len(ai_ops)}[/green] operation(s) proposed.[/dim]"
+            )
+
+    all_ops = scanner_ops + ai_ops
+    if not all_ops:
+        console.print(
+            "\n[green]No cleanup operations proposed — vocabulary looks clean.[/green]"
+        )
         return
 
-    console.print(f"[bold]{len(groups)} merge group(s) proposed:[/bold]\n")
+    # ── 4. Group operations by pattern_group and display ──────────────────────
+    grouped = _group_ops(all_ops)
 
-    # ── 3. Display proposals ──────────────────────────────────────────────────
-    table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan",
-                  expand=True, show_lines=True)
-    table.add_column("#",          style="dim", width=4, no_wrap=True)
-    table.add_column("Keep",       ratio=3)
-    table.add_column("Merge from", ratio=4)
-    table.add_column("Books",      width=7, no_wrap=True)
-    table.add_column("Reason",     ratio=4)
-
-    for i, g in enumerate(groups, 1):
-        table.add_row(
-            str(i),
-            Text(g.canonical, style="bold green"),
-            ", ".join(g.merge_from),
-            str(g.book_count),
-            Text(g.reason, style="dim"),
-        )
-    console.print(table)
+    console.print(
+        f"\n[bold]{len(all_ops)} operation(s) across "
+        f"{len(grouped)} pattern group(s):[/bold]\n"
+    )
+    for group_key in grouped:
+        _display_pattern_group(group_key, grouped[group_key])
 
     if dry_run:
         console.print("\n[dim]Dry-run — no changes written.[/dim]")
         return
 
-    # ── 4. Apply ──────────────────────────────────────────────────────────────
-    choice = Prompt.ask(
-        "\nApply merge proposals?",
-        choices=["all", "review", "skip"],
-        default="review",
-        show_choices=True,
-    )
-    if choice == "skip":
-        console.print("[dim]No changes made.[/dim]")
-        return
+    # ── 5. Per-group bulk approval ────────────────────────────────────────────
+    to_apply: list[TagOperation] = []
+    for group_key, ops in grouped.items():
+        label = PATTERN_GROUP_LABELS.get(group_key, group_key)
+        default = "all" if _is_safe_group(group_key) else "review"
+        choice = Prompt.ask(
+            f"\n[bold]{label}[/bold] — {len(ops)} op(s). Apply?",
+            choices=["all", "review", "skip"],
+            default=default,
+            show_choices=True,
+        )
+        if choice == "all":
+            to_apply.extend(ops)
+        elif choice == "review":
+            to_apply.extend(_review_ops_individually(ops))
 
-    to_apply = groups if choice == "all" else _review_merge_groups(groups)
     if not to_apply:
-        console.print("[dim]No merges selected.[/dim]")
+        console.print("\n[dim]No operations approved. Nothing changed.[/dim]")
         return
 
-    total_books_updated = 0
-    for g in to_apply:
-        for old_tag in g.merge_from:
-            book_ids = db.get_books_with_tag(old_tag)
-            if not book_ids:
-                continue
-            tags_map = db.get_tags_batch(book_ids)
-            updated = 0
-            with console.status(
-                f"Renaming [bold]{old_tag}[/bold] → [bold]{g.canonical}[/bold] "
-                f"across {len(book_ids)} book(s)…"
-            ):
-                for bid in book_ids:
-                    current = tags_map.get(bid, [])
-                    # Replace old_tag with canonical; skip if canonical already present
-                    new_tags = [g.canonical if t == old_tag else t for t in current]
-                    # Deduplicate while preserving order
-                    seen: set[str] = set()
-                    deduped = [t for t in new_tags if not (t in seen or seen.add(t))]  # type: ignore[func-returns-value]
-                    try:
-                        db.apply_tags(bid, deduped)
-                        updated += 1
-                    except RuntimeError as e:
-                        console.print(f"[red]Error on book {bid}: {e}[/red]")
-            total_books_updated += updated
-            console.print(
-                f"  [green]✓[/green] [bold]{old_tag}[/bold] → [bold]{g.canonical}[/bold] "
-                f"([green]{updated}[/green] book(s))"
-            )
-
-    console.print(f"\n[bold green]Done![/bold green] {total_books_updated} book(s) updated.")
+    # ── 6. Apply ──────────────────────────────────────────────────────────────
+    _apply_operations(db, to_apply)
 
 
-def _review_merge_groups(groups: list[TagMergeGroup]) -> list[TagMergeGroup]:
-    """Walk through each merge group and let the user approve or skip."""
-    approved: list[TagMergeGroup] = []
-    for g in groups:
+def _group_ops(ops: list[TagOperation]) -> dict[str, list[TagOperation]]:
+    """Group operations by pattern_group, preserving a sensible display order."""
+    order = [
+        "formatting",
+        "calibre-taxonomy",
+        "date-range-lookup",
+        "lcsh-bare-date-range",
+        "lcsh-date-subject",
+        "lcsh-chain",
+        "ai-semantic",
+    ]
+    grouped: dict[str, list[TagOperation]] = {}
+    for op in ops:
+        grouped.setdefault(op.pattern_group, []).append(op)
+    # Sort: known groups in defined order, unknown groups last alphabetically
+    result: dict[str, list[TagOperation]] = {}
+    for key in order:
+        if key in grouped:
+            result[key] = grouped.pop(key)
+    for key in sorted(grouped):
+        result[key] = grouped[key]
+    return result
+
+
+def _is_safe_group(group_key: str) -> bool:
+    """Pattern groups that default to 'apply all' rather than review."""
+    return group_key in {
+        "formatting",
+        "calibre-taxonomy",
+        "date-range-lookup",
+    }
+
+
+def _display_pattern_group(group_key: str, ops: list[TagOperation]) -> None:
+    """Show a summary panel + examples for one pattern group."""
+    label = PATTERN_GROUP_LABELS.get(group_key, group_key)
+    total_books = sum(op.book_count for op in ops)
+
+    table = Table(
+        box=box.ROUNDED,
+        show_header=True,
+        header_style="bold cyan",
+        expand=True,
+        show_lines=False,
+        title=f"[bold]{label}[/bold]  "
+              f"[dim]({len(ops)} op(s), {total_books} book(s) affected)[/dim]",
+        title_justify="left",
+    )
+    table.add_column("Kind",  width=8, no_wrap=True)
+    table.add_column("Change", ratio=5)
+    table.add_column("Books", width=7, no_wrap=True, justify="right")
+    table.add_column("Reason", ratio=3, style="dim")
+
+    sample = ops[:8]
+    for op in sample:
+        kind_style = {
+            "drop":   "red",
+            "merge":  "yellow",
+            "rename": "cyan",
+            "split":  "magenta",
+        }.get(op.kind, "white")
+        table.add_row(
+            Text(op.kind, style=kind_style),
+            op.display_arrow,
+            str(op.book_count),
+            op.reason,
+        )
+    if len(ops) > len(sample):
+        table.add_row(
+            "",
+            Text(f"… + {len(ops) - len(sample)} more", style="dim italic"),
+            "",
+            "",
+        )
+    console.print(table)
+
+
+def _review_ops_individually(ops: list[TagOperation]) -> list[TagOperation]:
+    """Walk through ops one at a time. Returns approved subset."""
+    approved: list[TagOperation] = []
+    for op in ops:
         console.rule()
-        console.print(f"  Keep:       [bold green]{g.canonical}[/bold green]")
-        console.print(f"  Merge from: [bold]{', '.join(g.merge_from)}[/bold]")
-        console.print(f"  Books:      {g.book_count}")
-        console.print(f"  [dim]{g.reason}[/dim]")
-        choice = Prompt.ask("  Apply?", choices=["y", "n"], default="y",
-                            show_choices=True, show_default=True)
+        console.print(f"  [bold]{op.kind.upper()}[/bold]  {op.display_arrow}")
+        console.print(f"  Books: {op.book_count}")
+        console.print(f"  [dim]{op.reason}[/dim]")
+        choice = Prompt.ask(
+            "  Apply?", choices=["y", "n"], default="y",
+            show_choices=True, show_default=True,
+        )
         if choice == "y":
-            approved.append(g)
+            approved.append(op)
         else:
             console.print("  [dim]Skipped.[/dim]")
     return approved
+
+
+def _apply_operations(db: CalibreDB, ops: list[TagOperation]) -> None:
+    """Execute approved operations against the library.
+
+    For each op: find all books carrying any source_tag, remove the source(s)
+    from each book's tag list, add the target_tags, write back.
+    """
+    total_books_updated = 0
+    errors: list[str] = []
+
+    for i, op in enumerate(ops, 1):
+        # Collect affected book IDs across all source tags
+        affected: dict[int, list[str]] = {}
+        for src in op.source_tags:
+            for bid in db.get_books_with_tag(src):
+                affected.setdefault(bid, []).append(src)
+
+        if not affected:
+            continue
+
+        with console.status(
+            f"[cyan]({i}/{len(ops)}) {op.display_arrow} "
+            f"— updating {len(affected)} book(s)…"
+        ):
+            tags_map = db.get_tags_batch(list(affected.keys()))
+            updated = 0
+            for bid, sources_present in affected.items():
+                current = tags_map.get(bid, [])
+                # Remove all source tags
+                new_tags = [t for t in current if t not in sources_present]
+                # Add all target tags (preserve order, deduplicate)
+                for tgt in op.target_tags:
+                    if tgt not in new_tags:
+                        new_tags.append(tgt)
+                try:
+                    db.apply_tags(bid, new_tags)
+                    updated += 1
+                except RuntimeError as e:
+                    errors.append(f"book {bid}: {e}")
+
+        total_books_updated += updated
+        console.print(
+            f"  [green]✓[/green] {op.display_arrow}  "
+            f"[dim]({updated} book(s))[/dim]"
+        )
+
+    console.print(
+        f"\n[bold green]Done![/bold green] "
+        f"{len(ops)} operation(s), {total_books_updated} book write(s)."
+    )
+    if errors:
+        console.print(
+            f"[red]{len(errors)} error(s) during apply:[/red]"
+        )
+        for err in errors[:10]:
+            console.print(f"  [red]✗[/red] {err}")
+        if len(errors) > 10:
+            console.print(f"  [dim]… + {len(errors) - 10} more[/dim]")
 
 
 def _mark_complete(

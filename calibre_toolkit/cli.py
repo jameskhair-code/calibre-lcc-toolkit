@@ -481,8 +481,12 @@ def tags_cleanup(
     ] = False,
     min_books: Annotated[
         int,
-        typer.Option("--min-books", help="Only analyse tags used by at least N books (default 1)"),
+        typer.Option("--min-books", help="For the AI pass only: analyse tags used by ≥N books (default 1)"),
     ] = 1,
+    skip_ai: Annotated[
+        bool,
+        typer.Option("--skip-ai", help="Run scanner only; do not call AI for semantic pass"),
+    ] = False,
     ai_provider: Annotated[
         Optional[str],
         typer.Option("--ai-provider", help="Override AI provider for this run"),
@@ -495,16 +499,27 @@ def tags_cleanup(
     """
     MQG-05 maintenance: normalise tag vocabulary across the whole library.
 
-    Reads every unique tag, sends the full list to the AI, and proposes
-    merge groups (case variants, hyphenation differences, near-synonyms).
-    You review and approve each group; approved merges are applied to all
-    affected books.
+    Two-layer pipeline:
 
-    Run after enrichment batches to keep the tag vocabulary consistent.
+      1. Deterministic scanner — runs first on every tag. Handles obvious
+         patterns rule-by-rule: LCSH date+name drops, bare date ranges,
+         Calibre taxonomy noise, date-range→period lookups, formatting.
+         No AI call. Free and fast. Ruleset lives in tag_scanner.py.
+
+      2. AI semantic pass — runs on tags the scanner did not resolve.
+         Handles fuzzy variant matches and near-synonyms the rules cannot
+         catch. Skip this layer with --skip-ai for a pure scanner run.
+
+    Operations are grouped by pattern_group with bulk approval per group
+    (apply all / review individually / skip). Safe groups (formatting,
+    taxonomy, date lookups) default to "all"; everything else defaults
+    to "review".
 
     Examples:
 
         calibre-toolkit tags-cleanup --dry-run
+
+        calibre-toolkit tags-cleanup --skip-ai    # rule-based only
 
         calibre-toolkit tags-cleanup --min-books 2
     """
@@ -512,7 +527,10 @@ def tags_cleanup(
 
     cfg = _load_config(config)
     db = _make_db(cfg)
-    ai = _make_ai(cfg, command_key="tags", provider_override=ai_provider, model_override=ai_model)
+    ai = (
+        _make_ai(cfg, command_key="tags", provider_override=ai_provider, model_override=ai_model)
+        if not skip_ai else None
+    )
 
     console.print(
         Panel(
@@ -521,12 +539,19 @@ def tags_cleanup(
                 " — MQG-05 Tags Cleanup\n\n",
                 ("Mode: ", "dim"),
                 ("Dry run — no writes" if dry_run else "Interactive review", "bold"),
+                ("\nLayers: ", "dim"),
+                ("Scanner only" if skip_ai else "Scanner + AI", "bold"),
             ),
             border_style="cyan",
         )
     )
 
-    run_tags_cleanup(db=db, ai=ai, min_books=min_books, dry_run=dry_run)
+    run_tags_cleanup(
+        db=db, ai=ai,
+        min_books=min_books,
+        dry_run=dry_run,
+        skip_ai=skip_ai,
+    )
 
 
 @app.command()

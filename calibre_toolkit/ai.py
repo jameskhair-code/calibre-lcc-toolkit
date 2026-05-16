@@ -51,11 +51,43 @@ class LccSuggestion:
 
 
 @dataclass
-class TagMergeGroup:
-    canonical: str          # the tag to keep / rename everything to
-    merge_from: list[str]   # tags to replace
+class TagOperation:
+    """One cleanup operation on the tag vocabulary.
+
+    Models all four kinds via source_tags / target_tags:
+      rename: 1 source → 1 target          ("WWII" → "World War II")
+      merge:  N sources → 1 target         ("Sci-Fi","Scifi","Sf" → "Science Fiction")
+      drop:   N sources → 0 targets        ("1843-1916; Balfour" → ∅)
+      split:  1 source → N targets         ("17th Century; Family" → ["17th Century","Family"])
+    """
+    source_tags: list[str]
+    target_tags: list[str]
     reason: str
-    book_count: int = 0     # total books affected (filled in by caller)
+    book_count: int = 0
+    pattern_group: str = "ai-semantic"
+
+    @property
+    def kind(self) -> str:
+        if not self.target_tags:
+            return "drop"
+        if len(self.source_tags) == 1 and len(self.target_tags) == 1:
+            return "rename" if self.source_tags[0] != self.target_tags[0] else "noop"
+        if len(self.source_tags) > 1 and len(self.target_tags) == 1:
+            return "merge"
+        if len(self.source_tags) == 1 and len(self.target_tags) > 1:
+            return "split"
+        return "rewrite"
+
+    @property
+    def display_arrow(self) -> str:
+        sources = ", ".join(self.source_tags)
+        if not self.target_tags:
+            return f"{sources} → (drop)"
+        if len(self.target_tags) > 1:
+            targets = " + ".join(self.target_tags)
+        else:
+            targets = self.target_tags[0]
+        return f"{sources} → {targets}"
 
 
 @dataclass
@@ -347,12 +379,15 @@ class AIClient:
     def suggest_tag_cleanup(
         self,
         tags: list[tuple[str, int]],
-    ) -> list["TagMergeGroup"]:
-        """Analyse all tags in the library and propose merge groups.
+    ) -> list["TagOperation"]:
+        """Analyse remaining tags and propose semantic merge/drop operations.
 
-        tags is [(tag_name, book_count), ...] — the full library tag vocabulary.
-        Returns a list of TagMergeGroup proposals.
+        `tags` is the tag list AFTER the deterministic scanner has handled
+        obvious patterns. The AI focuses on fuzzy matches the scanner cannot
+        catch (variant spellings, near-synonyms, semantic noise).
         """
+        if not tags:
+            return []
         system_prompt = _build_tag_cleanup_system_prompt()
         user_msg = _build_tag_cleanup_user_message(tags)
         if self.provider == "openai":
@@ -724,7 +759,7 @@ def _build_tag_cleanup_user_message(tags: list[tuple[str, int]]) -> str:
 def _parse_tag_cleanup_response(
     raw: str,
     counts: dict[str, int],
-) -> list[TagMergeGroup]:
+) -> list[TagOperation]:
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.strip("`")
@@ -736,21 +771,25 @@ def _parse_tag_cleanup_response(
     except json.JSONDecodeError as e:
         raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
 
-    groups: list[TagMergeGroup] = []
+    ops: list[TagOperation] = []
     for item in items:
-        canonical = (item.get("canonical") or "").strip()
-        merge_from = [t.strip() for t in (item.get("merge_from") or []) if t.strip()]
+        sources = [t.strip() for t in (item.get("source_tags") or []) if t.strip()]
+        targets = [t.strip() for t in (item.get("target_tags") or []) if t.strip()]
         reason = (item.get("reason") or "").strip()
-        if not canonical or not merge_from:
+        if not sources:
             continue
-        total = counts.get(canonical, 0) + sum(counts.get(t, 0) for t in merge_from)
-        groups.append(TagMergeGroup(
-            canonical=canonical,
-            merge_from=merge_from,
+        # No-op guard: single source == single target
+        if len(sources) == 1 and len(targets) == 1 and sources[0] == targets[0]:
+            continue
+        total = sum(counts.get(t, 0) for t in sources)
+        ops.append(TagOperation(
+            source_tags=sources,
+            target_tags=targets,
             reason=reason,
             book_count=total,
+            pattern_group="ai-semantic",
         ))
-    return groups
+    return ops
 
 
 def _parse_tags_response(
