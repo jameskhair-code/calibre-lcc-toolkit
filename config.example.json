@@ -7,9 +7,6 @@
 
   "_comment_windows": "On Windows use full paths, e.g. C:\\Program Files\\Calibre2\\calibredb.exe",
 
-  "_comment_server": "Optional: point to the Calibre Content Server to allow concurrent writes (no more locking errors when Calibre is open). In Calibre: Preferences → Sharing over the net → Advanced → check 'Allow un-authenticated local connections to make changes', then Start server.",
-  "content_server_url": "http://localhost:8080",
-
   "ai": {
     "_comment": "Anthropic-only. The api_key here is the default; per-command blocks (title_author, lcc, comments, tags) can override model or api_key.",
     "model": "claude-sonnet-4-6",

@@ -49,7 +49,6 @@ def _make_db(cfg: dict):
     return CalibreDB(
         library_path=cfg["library_path"],
         calibredb_path=cfg.get("calibredb_path", "calibredb"),
-        content_server_url=cfg.get("content_server_url"),
     )
 
 

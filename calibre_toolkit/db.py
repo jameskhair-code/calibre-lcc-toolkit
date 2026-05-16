@@ -40,11 +40,9 @@ class CalibreDB:
         self,
         library_path: str,
         calibredb_path: str = "calibredb",
-        content_server_url: str | None = None,
     ):
         self.library_path = Path(library_path)
         self.calibredb_path = calibredb_path
-        self.content_server_url = content_server_url
         self._db_path = self.library_path / "metadata.db"
         if not self._db_path.exists():
             raise FileNotFoundError(
@@ -54,10 +52,6 @@ class CalibreDB:
 
     @property
     def _lib_args(self) -> list[str]:
-        """calibredb flag that points to the library — either the content
-        server URL (allows concurrent writes) or the local file path."""
-        if self.content_server_url:
-            return ["--with-library", self.content_server_url]
         return ["--library-path", str(self.library_path)]
 
     def _connect(self) -> sqlite3.Connection:
@@ -191,17 +185,14 @@ class CalibreDB:
         max_workers: int | None = None,
         progress_callback=None,
     ) -> tuple[list[int], list[tuple[int, str]]]:
-        """Apply title/authors updates via calibredb subprocesses.
-
-        Uses parallel workers when a Content Server is configured (it serialises
-        writes), otherwise runs sequentially to avoid SQLite lock conflicts.
+        """Apply title/authors updates sequentially via calibredb subprocesses.
 
         updates: list of (book_id, title_or_None, authors_or_None) tuples.
         Returns (applied_ids, failures) where failures is list of (book_id, error).
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        workers = max_workers if max_workers is not None else (6 if self.content_server_url else 1)
+        workers = max_workers if max_workers is not None else 1
 
         def _one(item):
             book_id, title, authors = item
