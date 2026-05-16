@@ -51,6 +51,9 @@ class CalibreDB:
         uri = f"file:{self._db_path}?mode=ro"
         return sqlite3.connect(uri, uri=True, check_same_thread=False)
 
+    def _connect_rw(self) -> sqlite3.Connection:
+        return sqlite3.connect(str(self._db_path), check_same_thread=False)
+
     def count_books(self) -> int:
         """Return the total number of books in the library via direct SQLite."""
         with self._connect() as conn:
@@ -169,33 +172,47 @@ class CalibreDB:
             )
 
     def mark_mqg_complete(self, book_ids: list[int], column: str) -> None:
-        """Mark a list of books as complete for a given MQG column."""
-        for book_id in book_ids:
-            cmd = [
-                self.calibredb_path,
-                "set_metadata",
-                "--library-path", str(self.library_path),
-                str(book_id),
-                "--field", f"{column}:true",
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
-            if result.returncode != 0:
-                print(f"Warning: could not mark book {book_id} as MQG complete: {result.stderr.strip()}")
+        """Mark a list of books as complete for a given MQG column.
+
+        Writes directly to SQLite in a single transaction — avoids spawning
+        one calibredb process per book, which is prohibitively slow for
+        large batches.
+        """
+        label = column.lstrip("#")
+        with self._connect() as ro:
+            row = ro.execute(
+                "SELECT id FROM custom_columns WHERE label = ?", [label]
+            ).fetchone()
+        if row is None:
+            print(f"Warning: custom column '{column}' not found in database.")
+            return
+        col_id = row[0]
+        table = f"custom_column_{col_id}"
+
+        with self._connect_rw() as conn:
+            conn.executemany(
+                f"INSERT OR REPLACE INTO {table} (book, value) VALUES (?, 1)",
+                [(bid,) for bid in book_ids],
+            )
+            conn.commit()
 
     def clear_mqg_flag(self, book_id: int, column: str) -> None:
         """Clear (set to false) a custom boolean MQG column for a single book."""
-        cmd = [
-            self.calibredb_path,
-            "set_metadata",
-            "--library-path", str(self.library_path),
-            str(book_id),
-            "--field", f"{column}:false",
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
+        label = column.lstrip("#")
+        with self._connect() as ro:
+            row = ro.execute(
+                "SELECT id FROM custom_columns WHERE label = ?", [label]
+            ).fetchone()
+        if row is None:
+            raise RuntimeError(f"Custom column '{column}' not found in database.")
+        col_id = row[0]
+        table = f"custom_column_{col_id}"
+        with self._connect_rw() as conn:
+            conn.execute(
+                f"INSERT OR REPLACE INTO {table} (book, value) VALUES (?, 0)",
+                (book_id,),
             )
+            conn.commit()
 
     def get_identifiers(self, book_id: int) -> dict[str, str]:
         """Return {type: value} for all identifiers currently on a book."""
