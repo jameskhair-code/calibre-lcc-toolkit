@@ -16,7 +16,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -41,14 +41,23 @@ class StepAction:
 @dataclass
 class StepDef:
     key: str
-    number: str           # "01", "05a" …
+    number: str           # "01", "02" …
     name: str
     description: str
     mqg_column: Optional[str]   # None → library-wide (no per-book progress)
     actions: list[StepAction]
 
 
-def _build_steps(cfg: dict) -> list[StepDef]:
+@dataclass
+class SectionHeader:
+    key: str
+    name: str
+
+
+MenuItem = Union[StepDef, SectionHeader]
+
+
+def _build_steps(cfg: dict) -> list[MenuItem]:
     mqg      = cfg.get("mqg", {})
     tags_cfg = cfg.get("tags", {})
     lcc_cfg  = cfg.get("lcc", {})
@@ -114,7 +123,33 @@ def _build_steps(cfg: dict) -> list[StepDef]:
             ],
         ),
         StepDef(
-            key="lcc", number="03", name="LCC Classification",
+            key="comments", number="03", name="Comments",
+            description=(
+                "Generate structured book descriptions — The Book, "
+                "Something You Might Not Know, Why Read It — "
+                "written in the library's established voice."
+            ),
+            mqg_column=com_col,
+            actions=[
+                StepAction(
+                    "Enrich unprocessed books",
+                    ["comments-enrich", f"{id_col}:true and not {com_col}:true"],
+                    "Books with identifiers not yet described",
+                ),
+                StepAction(
+                    "Dry run (preview, no writes)",
+                    ["comments-enrich", f"{id_col}:true and not {com_col}:true", "--dry-run"],
+                    "Preview generated comments without writing",
+                ),
+                StepAction(
+                    "Tone test (3 voice variants, 1 book)",
+                    ["comments-enrich", f"{id_col}:true", "--tone-test", "--limit", "1"],
+                    "Generate 3 voice variants to calibrate tone",
+                ),
+            ],
+        ),
+        StepDef(
+            key="lcc", number="04", name="LCC Classification",
             description=(
                 "Assign Library of Congress Classification to each book using AI. "
                 "Proposes a call number, primary & secondary class, and a one-sentence "
@@ -140,59 +175,7 @@ def _build_steps(cfg: dict) -> list[StepDef]:
             ],
         ),
         StepDef(
-            key="comments", number="04", name="Comments",
-            description=(
-                "Generate structured book descriptions — The Book, "
-                "Something You Might Not Know, Why Read It — "
-                "written in the library's established voice."
-            ),
-            mqg_column=com_col,
-            actions=[
-                StepAction(
-                    "Enrich unprocessed books",
-                    ["comments-enrich", f"{lcc_col}:true and not {com_col}:true"],
-                    "Books with LCC not yet described",
-                ),
-                StepAction(
-                    "Dry run (preview, no writes)",
-                    ["comments-enrich", f"{lcc_col}:true and not {com_col}:true", "--dry-run"],
-                    "Preview generated comments without writing",
-                ),
-                StepAction(
-                    "Tone test (3 voice variants, 1 book)",
-                    ["comments-enrich", f"{lcc_col}:true", "--tone-test", "--limit", "1"],
-                    "Generate 3 voice variants to calibrate tone",
-                ),
-            ],
-        ),
-        StepDef(
-            key="tags_cleanup", number="05a", name="Tags Cleanup",
-            description=(
-                "Normalise tag vocabulary across the entire library — "
-                "LCSH chains, BISAC codes, encoding noise, taxonomy variants. "
-                "Deterministic scanner first, optional AI semantic pass second."
-            ),
-            mqg_column=None,  # library-wide — no per-book progress column
-            actions=[
-                StepAction(
-                    "Scanner only — fast, no AI",
-                    ["tags-cleanup", "--skip-ai"],
-                    "Runs deterministic rules only — instant, free",
-                ),
-                StepAction(
-                    "Full cleanup — scanner + AI",
-                    ["tags-cleanup"],
-                    "Scanner then AI semantic pass — takes a few minutes",
-                ),
-                StepAction(
-                    "Dry run (scanner only, preview)",
-                    ["tags-cleanup", "--skip-ai", "--dry-run"],
-                    "Preview scanner changes without writing anything",
-                ),
-            ],
-        ),
-        StepDef(
-            key="tags_review", number="05b", name="Tags Review",
+            key="tags_review", number="05", name="Tags",
             description=(
                 "Interactive per-book tag review with AI assessment. "
                 "For each book the full metadata context is shown — description, "
@@ -218,13 +201,43 @@ def _build_steps(cfg: dict) -> list[StepDef]:
                 ),
             ],
         ),
+
+        # ── Maintenance ───────────────────────────────────────────────────────
+        SectionHeader(key="maintenance", name="Maintenance"),
+
+        StepDef(
+            key="tags_cleanup", number="", name="Tags Cleanup",
+            description=(
+                "Normalise tag vocabulary across the entire library — "
+                "LCSH chains, BISAC codes, encoding noise, taxonomy variants. "
+                "Deterministic scanner first, optional AI semantic pass second."
+            ),
+            mqg_column=None,  # library-wide — no per-book progress column
+            actions=[
+                StepAction(
+                    "Scanner only — fast, no AI",
+                    ["tags-cleanup", "--skip-ai"],
+                    "Runs deterministic rules only — instant, free",
+                ),
+                StepAction(
+                    "Full cleanup — scanner + AI",
+                    ["tags-cleanup"],
+                    "Scanner then AI semantic pass — takes a few minutes",
+                ),
+                StepAction(
+                    "Dry run (scanner only, preview)",
+                    ["tags-cleanup", "--skip-ai", "--dry-run"],
+                    "Preview scanner changes without writing anything",
+                ),
+            ],
+        ),
     ]
 
 
-# ── Progress widget ───────────────────────────────────────────────────────────
+# ── List widgets ──────────────────────────────────────────────────────────────
 
 class StepItem(Static):
-    """A single row in the left-panel step list."""
+    """A single step row in the left-panel list."""
 
     DEFAULT_CSS = """
     StepItem {
@@ -245,12 +258,10 @@ class StepItem(Static):
         done  = self._done
         total = self._total
 
-        # Number badge + name
-        num   = f"[bold #7c3aed]{step.number}[/]"
+        num   = f"[bold #7c3aed]{step.number}[/]" if step.number else " "
         name  = f"[bold]{step.name}[/]"
-        line1 = f" {num}  {name}"
+        line1 = f" {num}  {name}" if step.number else f"   {name}"
 
-        # Progress bar / label
         if step.mqg_column is None or total == 0:
             line2 = "  [dim]Library-wide[/dim]"
         else:
@@ -262,6 +273,27 @@ class StepItem(Static):
             line2    = f"  {bar}  [dim]{done:,}/{total:,}  {pct_str}[/dim]"
 
         return line1 + "\n" + line2
+
+
+class SectionItem(Static):
+    """A section-divider row in the left-panel list."""
+
+    DEFAULT_CSS = """
+    SectionItem {
+        height: 2;
+        padding: 0 1;
+        color: #484f58;
+        border-bottom: solid $surface-lighten-2;
+        border-top: solid #30363d;
+    }
+    """
+
+    def __init__(self, header: SectionHeader, **kw):
+        super().__init__(**kw)
+        self._header = header
+
+    def render(self) -> str:
+        return f" [dim]── {self._header.name} ──[/dim]"
 
 
 # ── Main App ──────────────────────────────────────────────────────────────────
@@ -376,8 +408,8 @@ class CalibreToolkitApp(App):
     _stats: reactive[dict[str, tuple[int, int]]] = reactive({})
     _total_books: reactive[int] = reactive(0)
     _selected_idx: reactive[int] = reactive(0)
-    _btn_counter: int = 0                     # increments each render; avoids duplicate IDs
-    _action_map: dict[str, StepAction]        # btn_id → action
+    _btn_counter: int = 0
+    _action_map: dict[str, StepAction]
 
     def __init__(
         self,
@@ -390,20 +422,27 @@ class CalibreToolkitApp(App):
         self._cfg         = cfg
         self._db          = db
         self._config_path = config_path
-        self._steps       = _build_steps(cfg)
+        self._menu        = _build_steps(cfg)
         self._lib_name    = Path(cfg.get("library_path", "Library")).name
         self._action_map  = {}
+
+    def _steps_only(self) -> list[StepDef]:
+        return [m for m in self._menu if isinstance(m, StepDef)]
 
     # ── Compose ───────────────────────────────────────────────────────────────
 
     def compose(self) -> ComposeResult:
+        items: list[ListItem] = []
+        for item in self._menu:
+            if isinstance(item, SectionHeader):
+                items.append(ListItem(SectionItem(item, id=f"item-{item.key}")))
+            else:
+                items.append(ListItem(StepItem(item, 0, 0, id=f"item-{item.key}")))
+
         yield Static(f"[bold]MQG Pipeline[/bold]", id="left-header")
         with Horizontal():
             with Vertical(id="left"):
-                yield ListView(
-                    *[ListItem(StepItem(s, 0, 0, id=f"item-{s.key}")) for s in self._steps],
-                    id="step-list",
-                )
+                yield ListView(*items, id="step-list")
             with Vertical(id="right"):
                 yield Static("", id="r-number")
                 yield Static("", id="r-name")
@@ -418,7 +457,6 @@ class CalibreToolkitApp(App):
         self.title     = self._lib_name
         self.sub_title = "Calibre Toolkit"
         self._load_stats()
-        # ListView fires Highlighted automatically on mount, which calls _update_right
 
     # ── Stats loading ─────────────────────────────────────────────────────────
 
@@ -426,7 +464,7 @@ class CalibreToolkitApp(App):
     def _load_stats(self) -> None:
         total = self._db.count_books()
         stats: dict[str, tuple[int, int]] = {}
-        for step in self._steps:
+        for step in self._steps_only():
             if step.mqg_column:
                 done = self._db.count_column_true(step.mqg_column)
                 stats[step.key] = (done, total)
@@ -435,14 +473,12 @@ class CalibreToolkitApp(App):
     def _apply_stats(self, stats: dict, total: int) -> None:
         self._total_books = total
         self._stats = stats
-        # Update each StepItem widget
-        for step in self._steps:
+        for step in self._steps_only():
             done, tot = stats.get(step.key, (0, total))
             widget = self.query_one(f"#item-{step.key}", StepItem)
             widget._done  = done
             widget._total = tot
             widget.refresh()
-        # Refresh right panel with updated counts
         self._update_right(self._selected_idx)
         self.sub_title = f"Calibre Toolkit  ·  {total:,} books"
 
@@ -467,12 +503,25 @@ class CalibreToolkitApp(App):
     # ── Right panel ───────────────────────────────────────────────────────────
 
     def _update_right(self, idx: int) -> None:
-        if idx < 0 or idx >= len(self._steps):
+        if idx < 0 or idx >= len(self._menu):
             return
-        step = self._steps[idx]
+        item = self._menu[idx]
+
+        container = self.query_one("#r-actions", ScrollableContainer)
+        container.remove_children()
+        self._action_map.clear()
+
+        if isinstance(item, SectionHeader):
+            self.query_one("#r-number", Static).update("")
+            self.query_one("#r-name",   Static).update(f"[bold]{item.name}[/bold]")
+            self.query_one("#r-desc",   Static).update("")
+            self.query_one("#r-progress", Static).update("")
+            return
+
+        step = item
         done, total = self._stats.get(step.key, (0, self._total_books))
 
-        self.query_one("#r-number", Static).update(f"Step {step.number}")
+        self.query_one("#r-number", Static).update(f"Step {step.number}" if step.number else "")
         self.query_one("#r-name",   Static).update(f"[bold]{step.name}[/bold]")
         self.query_one("#r-desc",   Static).update(step.description)
 
@@ -489,10 +538,6 @@ class CalibreToolkitApp(App):
 
         self.query_one("#r-progress", Static).update(progress_text)
 
-        # Rebuild action buttons — use a monotonic counter so IDs are always unique
-        container = self.query_one("#r-actions", ScrollableContainer)
-        container.remove_children()
-        self._action_map.clear()
         for action in step.actions:
             self._btn_counter += 1
             btn_id = f"btn-{self._btn_counter}"
@@ -526,7 +571,6 @@ class CalibreToolkitApp(App):
                         break
                     print("  Please enter a positive number.")
 
-            # Insert --config after the subcommand so Typer routes it correctly.
             cmd = [
                 sys.executable, "-m", "calibre_toolkit.cli",
                 subcommand, "--config", str(self._config_path),
@@ -545,7 +589,6 @@ class CalibreToolkitApp(App):
                 print(f"  \033[32m✓ Done.\033[0m")
             input("  Press Enter to return to the menu…")
 
-        # Refresh stats after returning
         self._load_stats()
 
 
