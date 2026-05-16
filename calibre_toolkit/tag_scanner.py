@@ -125,9 +125,9 @@ CALIBRE_TAXONOMY: dict[str, str] = {
 
 _DATE_RANGE_RE = re.compile(r"^\s*(\d{4})\s*-\s*(\d{4})\b")
 _DATE_RANGE_ONLY_RE = re.compile(r"^\s*\d{4}\s*-\s*\d{4}\s*$")
-# Covers: double-dash subdivisions, semicolons (with or without spaces),
-# and space-dash-space (older LCSH form, e.g. "Boston (Mass.) - Fiction").
-_LCSH_SEPARATOR_RE = re.compile(r"\s+--\s+|\s*;\s*|\s+-\s+")
+# Covers: double-dash (--), semicolons, em/en dashes (—/–) with or without
+# spaces, and space-hyphen-space (older LCSH form "Boston (Mass.) - Fiction").
+_LCSH_SEPARATOR_RE = re.compile(r"\s+--\s+|\s*[;—–]\s*|\s+-\s+")
 _HAS_ALPHA_RE = re.compile(r"[A-Za-z]")
 
 _TRAILING_NOISE_RE = re.compile(r"[*;.,]+$")
@@ -138,6 +138,7 @@ _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 _URL_RE = re.compile(r"://|\.com|\.net|\.org")
 _PUBLISHER_YEAR_RE = re.compile(r"\b(?:University\s+Press|University\s+of|Press)\b.{0,60}\b\d{4}\b", re.IGNORECASE)
 _LCSH_INITIALS_NAME_RE = re.compile(r"^[A-Z]\.\s+[A-Z]\.\s*\(")
+_LCSH_FICTITIOUS_RE = re.compile(r"\((?:Fictitious|Legendary|Mythological|Biblical)\b", re.IGNORECASE)
 
 
 # ── Rules ────────────────────────────────────────────────────────────────────
@@ -248,17 +249,19 @@ def _rule_lcsh_chain(tag: str, count: int) -> TagOperation | None:
 def _rule_case_normalize(tag: str, count: int) -> TagOperation | None:
     """Normalize all-lowercase tags to Title Case.
 
-    Conservative: requires 2+ words, alphabetic content only (letters,
-    spaces, hyphens, apostrophes). Skips anything with digits, parens,
-    or punctuation that suggests a code, fragment, or broken tag.
-    Single-word lowercase tags are left alone — too risky (could be
-    names, foreign words, BISAC codes, abbreviations).
+    Conservative: alphabetic content only (letters, spaces, hyphens,
+    apostrophes). Skips anything with digits, parens, or punctuation
+    that suggests a code, fragment, or broken tag.
+    Single-word tags must be ≥4 chars (avoids short abbreviations).
+    Multi-word tags: 2–4 words.
     """
     stripped = tag.strip()
     if not stripped:
         return None
     words = stripped.split()
-    if len(words) < 2 or len(words) > 4:
+    if len(words) == 0 or len(words) > 4:
+        return None
+    if len(words) == 1 and len(stripped) < 4:
         return None
     # All chars must be letters / space / hyphen / apostrophe
     if not all(c.isalpha() or c in " -'" for c in stripped):
@@ -377,6 +380,30 @@ def _rule_lcsh_initials_name(tag: str, count: int) -> TagOperation | None:
     return None
 
 
+def _rule_fictitious_character(tag: str, count: int) -> TagOperation | None:
+    """Drop LCSH character headings: 'Harry (Fictitious character)', etc."""
+    if _LCSH_FICTITIOUS_RE.search(tag):
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="LCSH fictitious/legendary character heading",
+            pattern_group="lcsh-date-subject",
+        )
+    return None
+
+
+def _rule_long_phrase(tag: str, count: int) -> TagOperation | None:
+    """Drop sentence-length tags (10+ words) — descriptive phrases, not subjects."""
+    if len(tag.strip().split()) >= 10:
+        return TagOperation(
+            source_tags=[tag],
+            target_tags=[],
+            reason="Sentence-length phrase, not a subject tag",
+            pattern_group="garbage",
+        )
+    return None
+
+
 def _rule_fiction_bisac(tag: str, count: int) -> TagOperation | None:
     """Drop Fiction/... BISAC taxonomy tags not handled by the taxonomy lookup.
 
@@ -420,18 +447,20 @@ def _title_case(s: str) -> str:
 # Fiction/X mappings are applied before the catch-all drop fires.
 _RULES: list[Callable[[str, int], TagOperation | None]] = [
     _rule_whitespace,
-    _rule_trailing_punct,      # strip trailing * ; . before other rules see the tag
-    _rule_garbage_encoding,    # control chars, URLs, non-ASCII garbage
-    _rule_bisac_code,          # BISAC classification code prefixes
-    _rule_publisher_tag,       # publisher name + year noise
-    _rule_lcsh_initials_name,  # LCSH "A. A. (Full Name)" person entries
-    _rule_lcsh_person_date,    # date-range-prefixed LCSH headings
-    _rule_lcsh_chain,          # any single LCSH subdivision separator
-    _rule_date_range_period,   # bare date range → period (before drop)
-    _rule_bare_date_range,     # bare date range → drop
-    _rule_calibre_taxonomy,    # known taxonomy noise
-    _rule_fiction_bisac,       # unmapped Fiction/... BISAC codes (after taxonomy)
-    _rule_case_normalize,      # last resort: case-only fixes
+    _rule_trailing_punct,       # strip trailing * ; . before other rules see the tag
+    _rule_garbage_encoding,     # control chars, URLs, non-ASCII garbage
+    _rule_long_phrase,          # sentence-length descriptive phrases
+    _rule_bisac_code,           # BISAC classification code prefixes
+    _rule_publisher_tag,        # publisher name + year noise
+    _rule_lcsh_initials_name,   # LCSH "A. A. (Full Name)" person entries
+    _rule_fictitious_character, # LCSH "Harry (Fictitious character)" headings
+    _rule_lcsh_person_date,     # date-range-prefixed LCSH headings
+    _rule_lcsh_chain,           # any single LCSH subdivision separator
+    _rule_date_range_period,    # bare date range → period (before drop)
+    _rule_bare_date_range,      # bare date range → drop
+    _rule_calibre_taxonomy,     # known taxonomy noise
+    _rule_fiction_bisac,        # unmapped Fiction/... BISAC codes (after taxonomy)
+    _rule_case_normalize,       # last resort: case-only fixes
 ]
 
 
