@@ -28,11 +28,10 @@ _CONF_DISPLAY = {
 def _build_review_table(suggestions: list[TagsSuggestion]) -> Table:
     table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan",
                   expand=True, show_lines=True)
-    table.add_column("#",        style="dim", width=4, no_wrap=True)
-    table.add_column("Conf",     width=5, no_wrap=True)
-    table.add_column("Book",     ratio=2)
-    table.add_column("Current",  ratio=3)
-    table.add_column("Proposed", ratio=3)
+    table.add_column("#",       style="dim", width=4, no_wrap=True)
+    table.add_column("Conf",    width=5, no_wrap=True)
+    table.add_column("Book",    ratio=2)
+    table.add_column("Tags",    ratio=5)
 
     for i, s in enumerate(suggestions, 1):
         icon, style = _CONF_DISPLAY.get(s.confidence, ("—", "dim"))
@@ -41,19 +40,45 @@ def _build_review_table(suggestions: list[TagsSuggestion]) -> Table:
         book_text.append(s.title)
         book_text.append(f"\n{s.authors_display}", style="dim")
 
-        current_text = Text(
-            ", ".join(s.current_tags) if s.current_tags else "(none)",
-            style="dim"
-        )
+        tags_text = _format_tags_diff(s)
 
-        proposed_text = Text()
-        proposed_text.append(", ".join(s.proposed_tags) or "(none)")
-        if s.notes:
-            proposed_text.append(f"\n↳ {s.notes}", style="dim italic")
-
-        table.add_row(str(i), Text(icon, style=style), book_text, current_text, proposed_text)
+        table.add_row(str(i), Text(icon, style=style), book_text, tags_text)
 
     return table
+
+
+def _format_tags_diff(s: TagsSuggestion) -> Text:
+    """Render kept/added/removed tags with colour coding in a single cell."""
+    t = Text()
+    kept_lower = {x.lower() for x in s.kept}
+    removed_lower = {x.lower() for x in s.removed}
+
+    parts: list[tuple[str, str]] = []
+
+    # Kept tags — dim (already had them, no change)
+    for tag in s.kept:
+        parts.append((tag, "dim"))
+
+    # Added tags — bold green (new)
+    for tag in s.added:
+        parts.append((f"+ {tag}", "bold green"))
+
+    # Removed tags — red (being dropped)
+    for tag in s.removed:
+        parts.append((f"- {tag}", "red"))
+
+    for idx, (label, color) in enumerate(parts):
+        t.append(label, style=color)
+        if idx < len(parts) - 1:
+            t.append("  ", style="dim")
+
+    if s.notes:
+        t.append(f"\n↳ {s.notes}", style="dim italic")
+
+    if not parts:
+        t.append("(no change)", style="dim")
+
+    return t
 
 
 def run_tags_enrichment(
@@ -151,9 +176,9 @@ def run_tags_enrichment(
 
     console.print(_build_review_table(suggestions))
     console.print(
-        "\n[dim]Legend: [green]●[/green] high  "
-        "[yellow]◐[/yellow] medium  [red]○[/red] low\n"
-        "Current tags shown for reference — proposed tags replace them.[/dim]\n"
+        "\n[dim]Legend: [green]●[/green] high  [yellow]◐[/yellow] medium  [red]○[/red] low  "
+        "│  [dim]dim[/dim] = kept  [bold green]+ green[/bold green] = added  "
+        "[red]- red[/red] = removed[/dim]\n"
     )
 
     # ── 5. Apply ───────────────────────────────────────────────────────────────
@@ -249,9 +274,12 @@ def _prompt_and_apply(
         console.print(f"  [bold]{s.title}[/bold]  [dim]{s.authors_display}[/dim]")
         icon, style = _CONF_DISPLAY.get(s.confidence, ("—", "dim"))
         console.print(f"  Confidence: [{style}]{icon} {s.confidence}[/{style}]")
-        if s.current_tags:
-            console.print(f"  Current:  [dim]{', '.join(s.current_tags)}[/dim]")
-        console.print(f"  Proposed: [bold]{', '.join(s.proposed_tags)}[/bold]")
+        if s.kept:
+            console.print(f"  Kept:     [dim]{', '.join(s.kept)}[/dim]")
+        if s.added:
+            console.print(f"  Added:    [bold green]{', '.join(s.added)}[/bold green]")
+        if s.removed:
+            console.print(f"  Removed:  [red]{', '.join(s.removed)}[/red]")
         if s.notes:
             console.print(f"  [dim]{s.notes}[/dim]")
 
