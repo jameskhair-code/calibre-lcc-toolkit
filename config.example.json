@@ -29,7 +29,15 @@
     "lcc_column": "#lcc",
     "primary_class_column": "#lcc_primary_class",
     "secondary_class_column": "#lcc_secondary_class",
+    "lcc_summary_column": "#lcc_summary",
     "class_path_column": "#lcc_class_path"
+  },
+
+  "tags": {
+    "_comment": "MQG-05 tag enrichment and review settings.",
+    "reviewed_column": "#tags_reviewed",
+    "mqg_column": "#mqg_tags",
+    "mqg_manual_column": "#mqg_tags_manual"
   },
 
   "mqg": {
@@ -37,6 +45,8 @@
     "identifiers_column": "#mqg_identifiers",
     "identifiers_manual_column": "#mqg_identifiers_manual",
     "lcc_column": "#mqg_lcc",
-    "lcc_manual_column": "#mqg_lcc_manual"
+    "lcc_manual_column": "#mqg_lcc_manual",
+    "tags_column": "#mqg_tags",
+    "tags_manual_column": "#mqg_tags_manual"
   }
 }
