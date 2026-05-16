@@ -123,37 +123,11 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
             ],
         ),
         StepDef(
-            key="comments", number="03", name="Comments",
-            description=(
-                "Generate structured book descriptions — The Book, "
-                "Something You Might Not Know, Why Read It — "
-                "written in the library's established voice."
-            ),
-            mqg_column=com_col,
-            actions=[
-                StepAction(
-                    "Enrich unprocessed books",
-                    ["comments-enrich", f"{id_col}:true and not {com_col}:true"],
-                    "Books with identifiers not yet described",
-                ),
-                StepAction(
-                    "Dry run (preview, no writes)",
-                    ["comments-enrich", f"{id_col}:true and not {com_col}:true", "--dry-run"],
-                    "Preview generated comments without writing",
-                ),
-                StepAction(
-                    "Tone test (3 voice variants, 1 book)",
-                    ["comments-enrich", f"{id_col}:true", "--tone-test", "--limit", "1"],
-                    "Generate 3 voice variants to calibrate tone",
-                ),
-            ],
-        ),
-        StepDef(
-            key="lcc", number="04", name="LCC Classification",
+            key="lcc", number="03", name="LCC Classification",
             description=(
                 "Assign Library of Congress Classification to each book using AI. "
                 "Proposes a call number, primary & secondary class, and a one-sentence "
-                "subject summary."
+                "subject summary — drawn from the identifiers gathered in step 02."
             ),
             mqg_column=lcc_col,
             actions=[
@@ -171,6 +145,33 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
                     "Re-enrich all (force)",
                     ["lcc-enrich", f"{id_col}:true", "--force"],
                     "Re-processes all books that have identifiers",
+                ),
+            ],
+        ),
+        StepDef(
+            key="comments", number="04", name="Comments",
+            description=(
+                "Generate structured book descriptions — The Book, "
+                "Something You Might Not Know, Why Read It — "
+                "written in the library's established voice, informed by "
+                "the LCC classification and identifiers from earlier steps."
+            ),
+            mqg_column=com_col,
+            actions=[
+                StepAction(
+                    "Enrich unprocessed books",
+                    ["comments-enrich", f"{lcc_col}:true and not {com_col}:true"],
+                    "Books with LCC classification not yet described",
+                ),
+                StepAction(
+                    "Dry run (preview, no writes)",
+                    ["comments-enrich", f"{lcc_col}:true and not {com_col}:true", "--dry-run"],
+                    "Preview generated comments without writing",
+                ),
+                StepAction(
+                    "Tone test (3 voice variants, 1 book)",
+                    ["comments-enrich", f"{lcc_col}:true", "--tone-test", "--limit", "1"],
+                    "Generate 3 voice variants to calibrate tone",
                 ),
             ],
         ),
