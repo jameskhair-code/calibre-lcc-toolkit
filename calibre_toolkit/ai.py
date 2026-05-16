@@ -46,7 +46,7 @@ class LccSuggestion:
     def any_change(self) -> bool:
         return any(
             self.proposed.get(k, "") != self.current.get(k, "")
-            for k in ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_class_path")
+            for k in ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_summary")
         )
 
 
@@ -306,7 +306,7 @@ Each object must have exactly these keys:
   "lcc": "<LCC call number, or empty string>",
   "lcc_primary_class": "<exact canonical drop-down string from PRI-02>",
   "lcc_secondary_class": "<exact canonical drop-down string from SEC-05>",
-  "lcc_class_path": "<one-sentence subject summary per PATH section — plain prose, 20–40 words>",
+  "lcc_summary": "<one-sentence subject summary per PATH section — plain prose, 20–40 words>",
   "confidence": "high" | "medium" | "low",
   "source": "<short phrase describing the strongest evidence used>",
   "notes": "<one short sentence; reasoning or caveat>"
@@ -330,9 +330,9 @@ def _build_lcc_user_message(books: list[Book], current_map: dict[int, dict[str, 
             "title": b.title,
             "authors": b.authors,
         }
-        if any(current.get(k) for k in ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_class_path")):
+        if any(current.get(k) for k in ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_summary")):
             item["current"] = {k: current.get(k, "") for k in
-                               ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_class_path")}
+                               ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_summary")}
         payload.append(item)
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
@@ -365,7 +365,7 @@ def _parse_lcc_response(
             "lcc": (item.get("lcc") or "").strip(),
             "lcc_primary_class": (item.get("lcc_primary_class") or "").strip(),
             "lcc_secondary_class": (item.get("lcc_secondary_class") or "").strip(),
-            "lcc_class_path": (item.get("lcc_class_path") or "").strip(),
+            "lcc_summary": (item.get("lcc_summary") or "").strip(),
         }
         suggestions.append(LccSuggestion(
             book_id=book_id,

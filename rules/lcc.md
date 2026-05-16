@@ -14,7 +14,7 @@ SCOPE-01: For each book, you propose four LCC metadata values:
             - lcc                    the LCC call number
             - lcc_primary_class      controlled drop-down (21 values)
             - lcc_secondary_class    controlled drop-down (~232 values)
-            - lcc_class_path         narrative breadcrumb (free text)
+            - lcc_summary            one-sentence subject summary (free text)
            Plus: confidence, source, and notes.
 
 SCOPE-02: This is NOT original professional cataloging. You are building local
@@ -474,7 +474,7 @@ SEC-07: When only a single letter (e.g. "B") is supportable, use the
 ## SECTION PATH — LCC Subject Summary
 ---
 
-PATH-01: lcc_class_path is a one-sentence subject summary — a concise,
+PATH-01: lcc_summary is a one-sentence subject summary — a concise,
            readable description of what this book is specifically about,
            written at the level of detail where the primary and secondary
            class leave off. It should read like a one-line catalog description
@@ -582,7 +582,7 @@ GEN-02: Required keys per book object:
             "lcc": "DK189 .W67 2003",
             "lcc_primary_class": "D - World History & Area Studies",
             "lcc_secondary_class": "DK - Russia & Soviet Union & Former Republics",
-            "lcc_class_path": "D. World History > DK. Russia & Soviet Union & Former Republics > Russia - History > Imperial Russia / Romanov Monarchy > Court Ceremony / Political Myth / Monarchical Representation",
+            "lcc_summary": "Examines how the Romanov dynasty used court ceremony and political myth to construct and project imperial monarchical authority.",
             "confidence": "high",
             "source": "Library of Congress catalog, exact ISBN match",
             "notes": "LC record confirms class for this edition."

@@ -169,7 +169,7 @@ class ValidatedSuggestion:
             "lcc": s.proposed["lcc"],
             "lcc_primary_class": self.derived_primary or s.proposed["lcc_primary_class"],
             "lcc_secondary_class": self.derived_secondary or s.proposed["lcc_secondary_class"],
-            "lcc_class_path": s.proposed["lcc_class_path"],
+            "lcc_summary": s.proposed["lcc_summary"],
         }
 
 
@@ -237,7 +237,7 @@ def _build_review_table(validated: list[ValidatedSuggestion]) -> Table:
         if v.secondary_invalid:
             prop_text.append(f"\n      ↳ AI value not in canonical list", style="red")
         prop_text.append("\nPath: ", style="dim")
-        prop_text.append(s.proposed["lcc_class_path"] or "(empty)")
+        prop_text.append(s.proposed["lcc_summary"] or "(empty)")
 
         src_text = Text()
         src_text.append(s.source or "(no source)", style="dim italic")
@@ -250,7 +250,7 @@ def _build_review_table(validated: list[ValidatedSuggestion]) -> Table:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
-_LCC_FIELDS = ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_class_path")
+_LCC_FIELDS = ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_summary")
 
 
 def _read_current(db: CalibreDB, book_ids: list[int], columns: dict[str, str]) -> dict[int, dict[str, str]]:
@@ -299,7 +299,7 @@ def _build_audit_table(
     _LABELS = [("LCC",  "lcc"),
                ("Pri",  "lcc_primary_class"),
                ("Sec",  "lcc_secondary_class"),
-               ("Path", "lcc_class_path")]
+               ("Summary", "lcc_summary")]
 
     for i, v in enumerate(validated, 1):
         s = v.suggestion
@@ -367,7 +367,7 @@ def _print_audit_summary(
     if differ:
         console.print("\n  [dim]Differences by field:[/dim]")
         labels = {"lcc": "LCC call number", "lcc_primary_class": "Primary class",
-                  "lcc_secondary_class": "Secondary class", "lcc_class_path": "Class path"}
+                  "lcc_secondary_class": "Secondary class", "lcc_summary": "LCC summary"}
         for key, count in diff_counts.items():
             if count:
                 console.print(f"    {labels[key]}: [yellow]{count}[/yellow] book(s)")

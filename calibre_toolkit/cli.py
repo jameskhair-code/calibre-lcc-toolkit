@@ -312,7 +312,7 @@ def lcc_enrich(
       • lcc (call number)
       • lcc_primary_class (drop-down)
       • lcc_secondary_class (drop-down)
-      • lcc_class_path (one-sentence subject summary)
+      • lcc_summary (one-sentence subject summary)
 
     Primary and secondary class are code-derived from the AI-proposed call
     number and validated against config/lcc-{primary,secondary}-canonical.csv.
@@ -334,7 +334,7 @@ def lcc_enrich(
         "lcc": lcc_cfg.get("lcc_column", "#lcc"),
         "lcc_primary_class": lcc_cfg.get("primary_class_column", "#lcc_primary_class"),
         "lcc_secondary_class": lcc_cfg.get("secondary_class_column", "#lcc_secondary_class"),
-        "lcc_class_path": lcc_cfg.get("class_path_column", "#lcc_class_path"),
+        "lcc_summary": lcc_cfg.get("lcc_summary_column", "#lcc_summary"),
     }
     mqg_column = cfg.get("mqg", {}).get("lcc_column")
     mqg_manual_column = cfg.get("mqg", {}).get("lcc_manual_column")
