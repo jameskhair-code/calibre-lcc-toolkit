@@ -236,24 +236,28 @@ def _rule_lcsh_chain(tag: str, count: int) -> TagOperation | None:
 
 
 def _rule_case_normalize(tag: str, count: int) -> TagOperation | None:
-    """Normalize all-lowercase or shouting tags to Title Case.
+    """Normalize all-lowercase tags to Title Case.
 
-    Conservative: only fires for pure case violations on otherwise-clean tags
-    (no separators, ≤4 words). Leaves short acronyms alone.
+    Conservative: requires 2+ words, alphabetic content only (letters,
+    spaces, hyphens, apostrophes). Skips anything with digits, parens,
+    or punctuation that suggests a code, fragment, or broken tag.
+    Single-word lowercase tags are left alone — too risky (could be
+    names, foreign words, BISAC codes, abbreviations).
     """
     stripped = tag.strip()
-    if not stripped or not _HAS_ALPHA_RE.search(stripped):
-        return None
-    # Skip tags with separators — those should be caught by other rules
-    if any(sep in stripped for sep in [" -- ", " / ", ": ", "_", ";"]):
+    if not stripped:
         return None
     words = stripped.split()
-    if len(words) > 4:
+    if len(words) < 2 or len(words) > 4:
         return None
-    is_all_lower = stripped == stripped.lower()
-    is_shouting = stripped == stripped.upper() and len(stripped) > 4
-    if not (is_all_lower or is_shouting):
+    # All chars must be letters / space / hyphen / apostrophe
+    if not all(c.isalpha() or c in " -'" for c in stripped):
         return None
+    # Skip if any token contains digits (BISAC codes like FIC019000 etc.)
+    if any(any(ch.isdigit() for ch in w) for w in words):
+        return None
+    if stripped != stripped.lower():
+        return None  # only fire on pure all-lowercase
     normalized = _title_case(stripped)
     if normalized == stripped:
         return None

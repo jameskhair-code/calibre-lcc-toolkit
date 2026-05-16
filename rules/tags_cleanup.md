@@ -133,8 +133,19 @@ GEN-01: Return a JSON array. Each element is one operation:
          {
            "source_tags": ["<tag>", ...],
            "target_tags": ["<tag>", ...],
-           "reason": "<one short sentence>"
+           "reason": "<≤10 words>"
          }
+
+GEN-01b: KEEP REASONS SHORT. Maximum 10 words. No quoting rule numbers.
+          Long reasons risk truncating the response and losing operations.
+          Good:  "Plural variant"
+          Good:  "Calibre slash-taxonomy noise"
+          Bad:   "Per MERGE-02, compound '&' form tag collapses to the most
+                  common single form as the book is most likely a biography…"
+
+GEN-01c: TRIAGE. The tag list may be very long. Only propose operations
+          for CLEAR cases. Skip uncertain or borderline tags entirely —
+          a missed operation is far better than a wrong one.
 
 GEN-02: Operation semantics:
          - MERGE:  source_tags = [A, B, C], target_tags = [X]   → rename A,B,C to X

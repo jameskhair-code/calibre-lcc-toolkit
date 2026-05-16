@@ -393,7 +393,9 @@ class AIClient:
         if self.provider == "openai":
             raw = self._call_openai(user_msg, system_prompt)
         else:
-            raw = self._call_anthropic(user_msg, system_prompt)
+            # Cleanup output can be long (one entry per merge/drop). Bump
+            # the cap well past the default so we don't truncate the array.
+            raw = self._call_anthropic(user_msg, system_prompt, max_tokens=16384)
         return _parse_tag_cleanup_response(raw, {t: c for t, c in tags})
 
     def suggest_tags(
