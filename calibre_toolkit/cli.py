@@ -860,6 +860,7 @@ def tags_review(
         ai=ai,
         search_query=effective_search,
         reviewed_column=reviewed_column,
+        mqg_column=tags_cfg.get("mqg_column"),
         lcc_summary_column=lcc_cfg.get("lcc_summary_column", "#lcc_summary"),
         lcc_primary_column=lcc_cfg.get("primary_class_column", "#lcc_primary_class"),
         lcc_secondary_column=lcc_cfg.get("secondary_class_column", "#lcc_secondary_class"),

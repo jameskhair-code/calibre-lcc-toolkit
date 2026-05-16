@@ -140,6 +140,13 @@ def _prompt_action(has_ai: bool) -> str:
         console.print(f"  [red]Please enter one of: {', '.join(valid)}[/red]")
 
 
+def _lock(db: CalibreDB, book_id: int, reviewed_column: str, mqg_column: str | None) -> None:
+    """Mark a book as reviewed and (if configured) as MQG-05 complete."""
+    db.mark_mqg_complete([book_id], reviewed_column)
+    if mqg_column:
+        db.mark_mqg_complete([book_id], mqg_column)
+
+
 def _inline_edit(current: list[str], suggested: list[str] | None) -> list[str]:
     prefill = ", ".join(suggested if suggested is not None else current)
     console.print("\n  [dim]Edit tags (comma-separated):[/dim]")
@@ -152,6 +159,7 @@ def run_tags_review(
     ai: Optional[AIClient],
     search_query: str,
     reviewed_column: str,
+    mqg_column: str | None = None,
     lcc_summary_column: str | None = None,
     lcc_primary_column: str | None = None,
     lcc_secondary_column: str | None = None,
@@ -242,7 +250,7 @@ def run_tags_review(
             if approve_all:
                 final_tags = suggestion.proposed_tags
                 db.apply_tags(book.id, final_tags)
-                db.mark_mqg_complete([book.id], reviewed_column)
+                _lock(db, book.id, reviewed_column, mqg_column)
                 console.print(f"[green]✓[/green] [dim]Auto-approved.[/dim]  [dim]{', '.join(final_tags)}[/dim]\n")
                 locked += 1
                 continue
@@ -252,7 +260,7 @@ def run_tags_review(
                     and not suggestion.added
                     and not suggestion.removed):
                 console.print("[dim]  Auto-approving (complete · high confidence).[/dim]")
-                db.mark_mqg_complete([book.id], reviewed_column)
+                _lock(db, book.id, reviewed_column, mqg_column)
                 console.print(f"[green]✓[/green] Locked.\n")
                 locked += 1
                 continue
@@ -272,7 +280,7 @@ def run_tags_review(
             approve_all = True
             final_tags = suggestion.proposed_tags
             db.apply_tags(book.id, final_tags)
-            db.mark_mqg_complete([book.id], reviewed_column)
+            _lock(db, book.id, reviewed_column, mqg_column)
             remaining = total - idx
             console.print(
                 f"[green]✓[/green] Applied AI tags + locked.  [dim]{', '.join(final_tags)}[/dim]\n"
@@ -282,17 +290,17 @@ def run_tags_review(
         elif choice == "a" and suggestion:
             final_tags = suggestion.proposed_tags
             db.apply_tags(book.id, final_tags)
-            db.mark_mqg_complete([book.id], reviewed_column)
+            _lock(db, book.id, reviewed_column, mqg_column)
             console.print(f"[green]✓[/green] Applied AI tags + locked.  [dim]{', '.join(final_tags)}[/dim]\n")
             locked += 1
         elif choice == "k":
-            db.mark_mqg_complete([book.id], reviewed_column)
+            _lock(db, book.id, reviewed_column, mqg_column)
             console.print(f"[green]✓[/green] Kept current tags + locked.\n")
             locked += 1
         elif choice == "e":
             final_tags = _inline_edit(tags, suggestion.proposed_tags if suggestion else None)
             db.apply_tags(book.id, final_tags)
-            db.mark_mqg_complete([book.id], reviewed_column)
+            _lock(db, book.id, reviewed_column, mqg_column)
             console.print(f"[green]✓[/green] Applied edited tags + locked.  [dim]{', '.join(final_tags)}[/dim]\n")
             locked += 1
 
