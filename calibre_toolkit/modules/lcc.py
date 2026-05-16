@@ -151,7 +151,6 @@ class ValidatedSuggestion:
     secondary_mismatch: bool
     primary_invalid: bool     # AI returned a string not in canonical list
     secondary_invalid: bool
-    path_has_comma: bool      # PATH-10 violation
 
     @property
     def book_id(self) -> int:
@@ -160,8 +159,7 @@ class ValidatedSuggestion:
     @property
     def has_warnings(self) -> bool:
         return any([self.primary_mismatch, self.secondary_mismatch,
-                    self.primary_invalid, self.secondary_invalid,
-                    self.path_has_comma])
+                    self.primary_invalid, self.secondary_invalid])
 
     @property
     def final_fields(self) -> dict[str, str]:
@@ -185,8 +183,6 @@ def _validate(suggestion: LccSuggestion) -> ValidatedSuggestion:
     primary_mismatch = bool(derived_pri) and bool(p["lcc_primary_class"]) and derived_pri != p["lcc_primary_class"]
     secondary_mismatch = bool(derived_sec) and bool(p["lcc_secondary_class"]) and derived_sec != p["lcc_secondary_class"]
 
-    path_has_comma = "," in p["lcc_class_path"]
-
     return ValidatedSuggestion(
         suggestion=suggestion,
         derived_primary=derived_pri,
@@ -195,7 +191,6 @@ def _validate(suggestion: LccSuggestion) -> ValidatedSuggestion:
         secondary_mismatch=secondary_mismatch,
         primary_invalid=primary_invalid,
         secondary_invalid=secondary_invalid,
-        path_has_comma=path_has_comma,
     )
 
 
@@ -243,8 +238,6 @@ def _build_review_table(validated: list[ValidatedSuggestion]) -> Table:
             prop_text.append(f"\n      ↳ AI value not in canonical list", style="red")
         prop_text.append("\nPath: ", style="dim")
         prop_text.append(s.proposed["lcc_class_path"] or "(empty)")
-        if v.path_has_comma:
-            prop_text.append("\n      ↳ Path contains a comma (PATH-10)", style="red")
 
         src_text = Text()
         src_text.append(s.source or "(no source)", style="dim italic")
@@ -616,8 +609,7 @@ def _prompt_and_apply(
             if v.secondary_mismatch: warns.append("secondary mismatch")
             if v.primary_invalid:    warns.append("primary not in canonical list")
             if v.secondary_invalid:  warns.append("secondary not in canonical list")
-            if v.path_has_comma:     warns.append("path contains comma")
-            console.print(f"  [yellow]Warnings: {'; '.join(warns)}[/yellow]")
+console.print(f"  [yellow]Warnings: {'; '.join(warns)}[/yellow]")
         if s.notes:
             console.print(f"  [dim]Note: {s.notes}[/dim]")
 
