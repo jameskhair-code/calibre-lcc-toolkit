@@ -231,7 +231,9 @@ def _apply_suggestions(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> l
         def _on_progress(done, total, failed):
             progress.update(task, completed=done, failed=failed)
 
-        applied, failures = db.apply_metadata_batch(updates, progress_callback=_on_progress)
+        # max_workers=1: calibredb locks the library per-process, so concurrent
+        # writes cause "another calibre program running" errors. Sequential is correct.
+        applied, failures = db.apply_metadata_batch(updates, max_workers=1, progress_callback=_on_progress)
 
     for book_id, err in failures:
         console.print(f"[red]Error on book {book_id}: {err}[/red]")
