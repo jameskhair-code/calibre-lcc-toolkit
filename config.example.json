@@ -4,11 +4,10 @@
   "library_path": "/path/to/your/Calibre Library/Collection - Literary Awards and Nominees",
 
   "calibredb_path": "calibredb",
-
   "_comment_windows": "On Windows use full paths, e.g. C:\\Program Files\\Calibre2\\calibredb.exe",
 
   "ai": {
-    "_comment": "Anthropic-only. The api_key here is the default; per-command blocks (title_author, lcc, comments, tags) can override model or api_key.",
+    "_comment": "Anthropic-only. Set api_key here (or via ANTHROPIC_API_KEY env var). Per-command blocks below can override model or api_key.",
     "model": "claude-sonnet-4-6",
     "api_key": "",
     "title_author": { "model": "claude-sonnet-4-6", "api_key": "" },
@@ -33,8 +32,14 @@
     "lcc_column": "#lcc",
     "primary_class_column": "#lcc_primary_class",
     "secondary_class_column": "#lcc_secondary_class",
-    "lcc_summary_column": "#lcc_summary",
-    "class_path_column": "#lcc_class_path"
+    "lcc_summary_column": "#lcc_summary"
+  },
+
+  "comments": {
+    "_comment": "MQG-04 comments enrichment — custom column labels.",
+    "mqg_column": "#mqg_comments",
+    "mqg_manual_column": "#mqg_comments_manual",
+    "lcc_summary_column": "#lcc_summary"
   },
 
   "tags": {
@@ -49,8 +54,6 @@
     "identifiers_column": "#mqg_identifiers",
     "identifiers_manual_column": "#mqg_identifiers_manual",
     "lcc_column": "#mqg_lcc",
-    "lcc_manual_column": "#mqg_lcc_manual",
-    "tags_column": "#mqg_tags",
-    "tags_manual_column": "#mqg_tags_manual"
+    "lcc_manual_column": "#mqg_lcc_manual"
   }
 }

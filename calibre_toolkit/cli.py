@@ -328,21 +328,18 @@ def lcc_enrich(
     mqg_column = cfg.get("mqg", {}).get("lcc_column")
     mqg_manual_column = cfg.get("mqg", {}).get("lcc_manual_column")
 
-    # Resolve effective AI config for display (CLI overrides take precedence)
     _base = cfg.get("ai", {})
-    _lcc_ai = {**_base, **_base.get("lcc", {})}
-    _effective_provider = ai_provider or _lcc_ai.get("provider", "openai")
-    _effective_model = ai_model or _lcc_ai.get("model", "(default)")
+    _effective_model = ai_model or {**_base, **_base.get("lcc", {})}.get("model", "(default)")
 
     console.print(
         Panel(
             Text.assemble(
                 ("Calibre Toolkit", "bold cyan"),
                 " — MQG-03 LCC Enrichment\n\n",
-                ("Search:    ", "dim"),
+                ("Search:  ", "dim"),
                 (search, "bold"),
-                ("\nProvider:  ", "dim"),
-                (f"{_effective_provider} / {_effective_model}", "bold"),
+                ("\nModel:   ", "dim"),
+                (_effective_model, "bold"),
             ),
             border_style="cyan",
         )
@@ -425,19 +422,17 @@ def tags_enrich(
     mqg_manual_column = tags_cfg.get("mqg_manual_column")
 
     _base = cfg.get("ai", {})
-    _tags_ai = {**_base, **_base.get("tags", {})}
-    _effective_provider = ai_provider or _tags_ai.get("provider", "openai")
-    _effective_model    = ai_model    or _tags_ai.get("model", "(default)")
+    _effective_model = ai_model or {**_base, **_base.get("tags", {})}.get("model", "(default)")
 
     console.print(
         Panel(
             Text.assemble(
                 ("Calibre Toolkit", "bold cyan"),
                 " — MQG-05 Tags Enrichment\n\n",
-                ("Search:    ", "dim"),
+                ("Search:  ", "dim"),
                 (search, "bold"),
-                ("\nProvider:  ", "dim"),
-                (f"{_effective_provider} / {_effective_model}", "bold"),
+                ("\nModel:   ", "dim"),
+                (_effective_model, "bold"),
             ),
             border_style="cyan",
         )
@@ -612,9 +607,7 @@ def comments_enrich(
     lcc_summary_column = comments_cfg.get("lcc_summary_column", "#lcc_summary")
 
     _base = cfg.get("ai", {})
-    _comments_ai = {**_base, **_base.get("comments", {})}
-    _effective_provider = ai_provider or _comments_ai.get("provider", "openai")
-    _effective_model = ai_model or _comments_ai.get("model", "(default)")
+    _effective_model = ai_model or {**_base, **_base.get("comments", {})}.get("model", "(default)")
 
     mode_label = "Tone Test" if tone_test else ("Dry Run" if dry_run else "Enrich")
     console.print(
@@ -622,10 +615,10 @@ def comments_enrich(
             Text.assemble(
                 ("Calibre Toolkit", "bold cyan"),
                 f" — MQG-04 Comments ({mode_label})\n\n",
-                ("Search:    ", "dim"),
+                ("Search:  ", "dim"),
                 (search, "bold"),
-                ("\nProvider:  ", "dim"),
-                (f"{_effective_provider} / {_effective_model}", "bold"),
+                ("\nModel:   ", "dim"),
+                (_effective_model, "bold"),
             ),
             border_style="cyan",
         )
@@ -823,11 +816,9 @@ def tags_review(
     effective_search = search or f"not {reviewed_column}:true"
 
     _base = cfg.get("ai", {})
-    _tags_ai = {**_base, **_base.get("tags", {})}
-    _effective_provider = ai_provider or _tags_ai.get("provider", "openai")
-    _effective_model    = ai_model    or _tags_ai.get("model", "(default)")
+    _effective_model = ai_model or {**_base, **_base.get("tags", {})}.get("model", "(default)")
 
-    mode_label = "Manual only" if no_ai else f"{_effective_provider} / {_effective_model}"
+    mode_label = "Manual only" if no_ai else _effective_model
     console.print(
         Panel(
             Text.assemble(
