@@ -306,7 +306,7 @@ Each object must have exactly these keys:
   "lcc": "<LCC call number, or empty string>",
   "lcc_primary_class": "<exact canonical drop-down string from PRI-02>",
   "lcc_secondary_class": "<exact canonical drop-down string from SEC-05>",
-  "lcc_class_path": "<subject descriptor per PATH section — 3–5 noun phrases separated by ·>",
+  "lcc_class_path": "<one-sentence subject summary per PATH section — plain prose, 20–40 words>",
   "confidence": "high" | "medium" | "low",
   "source": "<short phrase describing the strongest evidence used>",
   "notes": "<one short sentence; reasoning or caveat>"

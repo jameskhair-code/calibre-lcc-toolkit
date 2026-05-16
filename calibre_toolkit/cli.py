@@ -65,12 +65,17 @@ def _infer_fetch_path(cfg: dict) -> str:
     return "fetch-ebook-metadata"
 
 
-def _make_ai(cfg: dict, command_key: str | None = None):
+def _make_ai(
+    cfg: dict,
+    command_key: str | None = None,
+    provider_override: str | None = None,
+    model_override: str | None = None,
+):
     """Build an AIClient from config.
 
     command_key — if provided, look for an override block at ai.<command_key>
-    (e.g. "lcc") before falling back to the top-level ai block. This lets
-    different commands use different providers without changing the default.
+    (e.g. "lcc") before falling back to the top-level ai block.
+    provider_override / model_override — CLI flags that take precedence over config.
     """
     from .ai import AIClient
     base_cfg = cfg.get("ai", {})
@@ -78,6 +83,11 @@ def _make_ai(cfg: dict, command_key: str | None = None):
     # Merge: command-specific block overrides the top-level block
     override = base_cfg.get(command_key, {}) if command_key else {}
     ai_cfg = {**base_cfg, **override}
+
+    if provider_override:
+        ai_cfg["provider"] = provider_override
+    if model_override:
+        ai_cfg["model"] = model_override
 
     provider = ai_cfg.get("provider", "openai")
 
@@ -273,6 +283,14 @@ def lcc_enrich(
         bool,
         typer.Option("--dry-run", help="Show what the AI would write vs. current values — no changes saved"),
     ] = False,
+    ai_provider: Annotated[
+        Optional[str],
+        typer.Option("--ai-provider", help="Override AI provider for this run (e.g. openai, anthropic)"),
+    ] = None,
+    ai_model: Annotated[
+        Optional[str],
+        typer.Option("--ai-model", help="Override AI model for this run (e.g. gpt-4o, claude-sonnet-4-6)"),
+    ] = None,
 ):
     """
     MQG-03: AI-assisted Library of Congress Classification (LCC) enrichment.
@@ -281,7 +299,7 @@ def lcc_enrich(
       • lcc (call number)
       • lcc_primary_class (drop-down)
       • lcc_secondary_class (drop-down)
-      • lcc_class_path (narrative breadcrumb)
+      • lcc_class_path (one-sentence subject summary)
 
     Primary and secondary class are code-derived from the AI-proposed call
     number and validated against config/lcc-{primary,secondary}-canonical.csv.
@@ -296,7 +314,7 @@ def lcc_enrich(
 
     cfg = _load_config(config)
     db = _make_db(cfg)
-    ai = _make_ai(cfg, command_key="lcc")
+    ai = _make_ai(cfg, command_key="lcc", provider_override=ai_provider, model_override=ai_model)
 
     lcc_cfg = cfg.get("lcc", {})
     columns = {
@@ -308,9 +326,11 @@ def lcc_enrich(
     mqg_column = cfg.get("mqg", {}).get("lcc_column")
     mqg_manual_column = cfg.get("mqg", {}).get("lcc_manual_column")
 
-    # Resolve which AI config is actually active for display
+    # Resolve effective AI config for display (CLI overrides take precedence)
     _base = cfg.get("ai", {})
     _lcc_ai = {**_base, **_base.get("lcc", {})}
+    _effective_provider = ai_provider or _lcc_ai.get("provider", "openai")
+    _effective_model = ai_model or _lcc_ai.get("model", "(default)")
 
     console.print(
         Panel(
@@ -320,7 +340,7 @@ def lcc_enrich(
                 ("Search:    ", "dim"),
                 (search, "bold"),
                 ("\nProvider:  ", "dim"),
-                (f"{_lcc_ai.get('provider', 'openai')} / {_lcc_ai.get('model', '(default)')}", "bold"),
+                (f"{_effective_provider} / {_effective_model}", "bold"),
             ),
             border_style="cyan",
         )
