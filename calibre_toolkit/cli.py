@@ -161,7 +161,7 @@ def clean_titles(
 
     cfg = _load_config(config)
     db = _make_db(cfg)
-    ai = _make_ai(cfg)
+    ai = _make_ai(cfg, command_key="title_author")
 
     console.print(
         Panel(
