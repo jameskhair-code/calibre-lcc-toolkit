@@ -131,7 +131,6 @@ def run_comments_enrichment(
     search_query: str,
     batch_size: int = 5,
     limit: int | None = None,
-    force: bool = False,
     dry_run: bool = False,
     tone_test: bool = False,
     mqg_column: str | None = None,
@@ -175,20 +174,6 @@ def run_comments_enrichment(
     if tone_test:
         _run_tone_test(db, ai, books[:1], details_map, lcc_summary_column)
         return
-
-    # Skip books that already have comments unless --force
-    if not force:
-        before = len(books)
-        books = [b for b in books if not details_map[b.id].existing_comments.strip()]
-        skipped = before - len(books)
-        if skipped:
-            console.print(
-                f"[dim]Skipping {skipped} book(s) — already have comments. "
-                "Use --force to re-process.[/dim]"
-            )
-    if not books:
-        console.print("[green]Nothing to do — every matched book already has comments.[/green]")
-        raise typer.Exit()
 
     # ── 3. Read LCC summaries as optional context ─────────────────────────────
     lcc_summary_map: dict[int, str] = {}

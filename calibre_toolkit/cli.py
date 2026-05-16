@@ -388,10 +388,6 @@ def comments_enrich(
         int,
         typer.Option("--batch-size", "-b", help="Books per AI request (default 5)"),
     ] = 5,
-    force: Annotated[
-        bool,
-        typer.Option("--force", help="Re-process books that already have comments"),
-    ] = False,
     limit: Annotated[
         Optional[int],
         typer.Option("--limit", "-n", help="Cap total books processed in this run (for testing)"),
@@ -472,7 +468,6 @@ def comments_enrich(
         search_query=search,
         batch_size=batch_size,
         limit=limit,
-        force=force,
         dry_run=dry_run,
         tone_test=tone_test,
         mqg_column=mqg_column,
