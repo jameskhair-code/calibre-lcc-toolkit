@@ -127,7 +127,8 @@ def _prompt_action(has_ai: bool) -> str:
     if has_ai:
         parts.append("[a]pprove AI")
     parts += ["[k]eep as-is", "[e]dit", "[s]kip", "[q]uit"]
-    console.print("\n  " + "   ".join(parts))
+    # Use Text so Rich doesn't interpret [a], [k], etc. as markup tags
+    console.print(Text("\n  " + "   ".join(parts)))
     valid = (["a"] if has_ai else []) + ["k", "e", "s", "q"]
     default = "a" if has_ai else "k"
     while True:
