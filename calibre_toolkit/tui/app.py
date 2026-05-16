@@ -506,10 +506,13 @@ class CalibreToolkitApp(App):
             self._run_action(action)
 
     def _run_action(self, action: StepAction) -> None:
+        # Insert --config after the subcommand name (first element of cli_args)
+        # so Typer routes it to the right command before parsing its options.
+        subcommand, *rest = action.cli_args
         cmd = [
             sys.executable, "-m", "calibre_toolkit.cli",
-            "--config", str(self._config_path),
-        ] + action.cli_args
+            subcommand, "--config", str(self._config_path),
+        ] + rest
 
         with self.suspend():
             # Print a clear divider so the command output is clearly framed
