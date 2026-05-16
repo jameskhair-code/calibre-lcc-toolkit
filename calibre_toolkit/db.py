@@ -334,6 +334,40 @@ class CalibreDB:
 
         return details
 
+    def get_tags_batch(self, book_ids: list[int]) -> dict[int, list[str]]:
+        """Return {book_id: [tag, ...]} for many books, sorted alphabetically."""
+        if not book_ids:
+            return {}
+        ph = ",".join("?" * len(book_ids))
+        result: dict[int, list[str]] = {bid: [] for bid in book_ids}
+        with self._connect() as conn:
+            for row in conn.execute(
+                f"SELECT btl.book, t.name FROM books_tags_link btl "
+                f"JOIN tags t ON t.id = btl.tag "
+                f"WHERE btl.book IN ({ph}) ORDER BY btl.book, t.name",
+                book_ids,
+            ).fetchall():
+                bid, tag = row
+                if bid in result:
+                    result[bid].append(tag)
+        return result
+
+    def apply_tags(self, book_id: int, tags: list[str]) -> None:
+        """Replace all tags on a book via calibredb (comma-separated list)."""
+        tags_str = ",".join(tags)
+        cmd = [
+            self.calibredb_path,
+            "set_metadata",
+            "--library-path", str(self.library_path),
+            str(book_id),
+            "--field", f"tags:{tags_str}",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"calibredb set_metadata failed for book {book_id}: {result.stderr.strip()}"
+            )
+
     def apply_comments(self, book_id: int, comments_html: str) -> None:
         """Write the native Calibre comments/description field via calibredb."""
         cmd = [

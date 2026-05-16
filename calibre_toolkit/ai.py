@@ -51,6 +51,26 @@ class LccSuggestion:
 
 
 @dataclass
+class TagsSuggestion:
+    book_id: int
+    title: str
+    authors: list[str]
+    current_tags: list[str]
+    proposed_tags: list[str]
+    confidence: Literal["high", "medium", "low"]
+    notes: str = ""
+    parse_error: str = ""
+
+    @property
+    def authors_display(self) -> str:
+        return " & ".join(self.authors)
+
+    @property
+    def tags_changed(self) -> bool:
+        return sorted(self.proposed_tags) != sorted(self.current_tags)
+
+
+@dataclass
 class CommentsSuggestion:
     book_id: int
     title: str
@@ -297,6 +317,38 @@ class AIClient:
             messages=[{"role": "user", "content": user_msg}],
         )
         return response.content[0].text.strip()
+
+    def suggest_tags(
+        self,
+        books: list[Book],
+        tags_map: dict[int, list[str]],
+        context_map: dict[int, dict[str, str]] | None = None,
+        batch_size: int = 20,
+    ) -> list["TagsSuggestion"]:
+        """Process books in batches and return Tags suggestions.
+
+        context_map[book_id] may contain "lcc_summary", "lcc_secondary_class",
+        "lcc_primary_class" for richer AI context.
+        """
+        results: list[TagsSuggestion] = []
+        batches = [books[i:i + batch_size] for i in range(0, len(books), batch_size)]
+        for batch in batches:
+            results.extend(self._process_tags_batch(batch, tags_map, context_map or {}))
+        return results
+
+    def _process_tags_batch(
+        self,
+        books: list[Book],
+        tags_map: dict[int, list[str]],
+        context_map: dict[int, dict[str, str]],
+    ) -> list["TagsSuggestion"]:
+        system_prompt = _build_tags_system_prompt()
+        user_msg = _build_tags_user_message(books, tags_map, context_map)
+        if self.provider == "openai":
+            raw = self._call_openai(user_msg, system_prompt)
+        else:
+            raw = self._call_anthropic(user_msg, system_prompt)
+        return _parse_tags_response(raw, books, tags_map)
 
     def suggest_comments(
         self,
@@ -549,6 +601,99 @@ def _parse_comments_response(raw: str, books: list[Book]) -> list[CommentsSugges
             authors=book.authors,
             sections=sections,
             html=_format_comments_html(sections),
+            confidence=item.get("confidence", "low"),
+            notes=item.get("notes", "").strip(),
+        ))
+    return suggestions
+
+
+# ── Tags prompt + parsing ─────────────────────────────────────────────────────
+
+_TAGS_PROMPT_PREAMBLE = """\
+You are a metadata librarian generating subject tags for a personal Calibre
+library called "Collection – Literary Awards and Nominees". Tags are the
+primary search surface — accuracy and consistency matter more than
+comprehensiveness. Apply the rules below exactly.
+"""
+
+_TAGS_OUTPUT_FORMAT = """\
+
+---
+## OUTPUT FORMAT
+
+Respond with a JSON array, one object per book, in the SAME ORDER as the input.
+Each object must have exactly these keys:
+{
+  "id": <integer>,
+  "tags": ["Tag One", "Tag Two", ...],
+  "confidence": "high" | "medium" | "low",
+  "notes": "<one short sentence>"
+}
+
+"tags" is a flat array of 4–8 plain strings. No category prefixes, no nesting.
+No commas within any tag string.
+Return ONLY the JSON array. No markdown fences, no commentary outside the array.
+"""
+
+
+def _build_tags_system_prompt() -> str:
+    rules = _load_rules("tags.md")
+    return _TAGS_PROMPT_PREAMBLE + "\n" + rules + _TAGS_OUTPUT_FORMAT
+
+
+def _build_tags_user_message(
+    books: list[Book],
+    tags_map: dict[int, list[str]],
+    context_map: dict[int, dict[str, str]],
+) -> str:
+    payload = []
+    for b in books:
+        item: dict = {"id": b.id, "title": b.title, "authors": b.authors}
+        ctx = context_map.get(b.id, {})
+        if ctx.get("lcc_primary_class"):
+            item["lcc_primary_class"] = ctx["lcc_primary_class"]
+        if ctx.get("lcc_secondary_class"):
+            item["lcc_secondary_class"] = ctx["lcc_secondary_class"]
+        if ctx.get("lcc_summary"):
+            item["lcc_summary"] = ctx["lcc_summary"]
+        current = tags_map.get(b.id, [])
+        if current:
+            item["current_tags"] = current
+        payload.append(item)
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _parse_tags_response(
+    raw: str,
+    books: list[Book],
+    tags_map: dict[int, list[str]],
+) -> list[TagsSuggestion]:
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:]
+        cleaned = cleaned.strip()
+    try:
+        items = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"AI returned invalid JSON: {e}\n\nRaw response:\n{raw[:500]}")
+
+    book_map = {b.id: b for b in books}
+    suggestions: list[TagsSuggestion] = []
+    for item in items:
+        book_id = item.get("id")
+        book = book_map.get(book_id)
+        if book is None:
+            continue
+        raw_tags = item.get("tags") or []
+        proposed = [t.strip() for t in raw_tags if isinstance(t, str) and t.strip()]
+        suggestions.append(TagsSuggestion(
+            book_id=book_id,
+            title=book.title,
+            authors=book.authors,
+            current_tags=tags_map.get(book_id, []),
+            proposed_tags=proposed,
             confidence=item.get("confidence", "low"),
             notes=item.get("notes", "").strip(),
         ))

@@ -375,6 +375,101 @@ def lcc_enrich(
 
 
 @app.command()
+def tags_enrich(
+    search: Annotated[
+        str,
+        typer.Argument(help='Calibre search string, e.g. "#mqg_lcc:true and not #mqg_tags:true"'),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    batch_size: Annotated[
+        int,
+        typer.Option("--batch-size", "-b", help="Books per AI request (default 20)"),
+    ] = 20,
+    limit: Annotated[
+        Optional[int],
+        typer.Option("--limit", "-n", help="Cap total books processed in this run"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show proposed tags without writing"),
+    ] = False,
+    ai_provider: Annotated[
+        Optional[str],
+        typer.Option("--ai-provider", help="Override AI provider for this run"),
+    ] = None,
+    ai_model: Annotated[
+        Optional[str],
+        typer.Option("--ai-model", help="Override AI model for this run"),
+    ] = None,
+):
+    """
+    MQG-05: AI-assisted subject tag enrichment.
+
+    Generates 4–8 flat tags per book across four categories:
+      • Form     — Novel, Biography, History, Nonfiction, etc. (controlled list)
+      • Subject  — Military History, Cold War, Public Health, etc.
+      • Period   — World War II, Cold War, Victorian Era, etc.
+      • Geography — United States, Russia, Sub-Saharan Africa, etc.
+
+    Proposed tags replace existing tags. Confidence tiers and review
+    flow match the other MQG commands. LCC data (if present) is used
+    as context for more accurate subject tagging.
+
+    Examples:
+
+        calibre-toolkit tags-enrich "#mqg_lcc:true" --limit 10 --dry-run
+
+        calibre-toolkit tags-enrich "#mqg_lcc:true and not #mqg_tags:true"
+    """
+    from .modules.tags import run_tags_enrichment
+
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+    ai = _make_ai(cfg, command_key="tags", provider_override=ai_provider, model_override=ai_model)
+
+    tags_cfg  = cfg.get("tags",  {})
+    lcc_cfg   = cfg.get("lcc",   {})
+    mqg_column        = tags_cfg.get("mqg_column")
+    mqg_manual_column = tags_cfg.get("mqg_manual_column")
+
+    _base = cfg.get("ai", {})
+    _tags_ai = {**_base, **_base.get("tags", {})}
+    _effective_provider = ai_provider or _tags_ai.get("provider", "openai")
+    _effective_model    = ai_model    or _tags_ai.get("model", "(default)")
+
+    console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — MQG-05 Tags Enrichment\n\n",
+                ("Search:    ", "dim"),
+                (search, "bold"),
+                ("\nProvider:  ", "dim"),
+                (f"{_effective_provider} / {_effective_model}", "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_tags_enrichment(
+        db=db,
+        ai=ai,
+        search_query=search,
+        batch_size=batch_size,
+        limit=limit,
+        dry_run=dry_run,
+        mqg_column=mqg_column,
+        mqg_manual_column=mqg_manual_column,
+        lcc_summary_column=lcc_cfg.get("lcc_summary_column", "#lcc_summary"),
+        lcc_secondary_column=lcc_cfg.get("secondary_class_column", "#lcc_secondary_class"),
+        lcc_primary_column=lcc_cfg.get("primary_class_column", "#lcc_primary_class"),
+    )
+
+
+@app.command()
 def comments_enrich(
     search: Annotated[
         str,
