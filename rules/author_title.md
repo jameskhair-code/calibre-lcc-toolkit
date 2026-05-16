@@ -154,21 +154,20 @@ T-SUB-02: Remove generic subtitles that add no meaningful information.
            Matching is case-insensitive — remove regardless of capitalisation.
            Patterns to remove (the colon and everything after):
              ": A Novel"  /  ": a Novel"  /  ": a novel"
-             ": A Memoir"
              ": A Story"
              ": Stories"
              ": Essays"
              ": Poems"
              ": A Collection"
-             ": A Life"
-             ": A Biography"
-             ": A History"
              ": Nonfiction"
              ": Fiction"
+           DO NOT remove — these add meaningful genre/form information:
+             ": A Memoir"   (distinguishes memoir from fiction about the same subject)
+             ": A Life"     (equivalent to biography — keep)
+             ": A Biography" (clarifies this is a biography, not a novel)
+             ": A History"  (clarifies this is a history, not a novel)
            WRONG: "Halcyon: A novel"  →  "Halcyon: A Novel"  (capitalising ≠ removing)
            RIGHT: "Halcyon: A novel"  →  "Halcyon"
-           WRONG: "The Garden: a memoir"  →  "The Garden: A Memoir"
-           RIGHT: "The Garden: a memoir"  →  "The Garden"
            Do NOT capitalise the subtitle word and leave it — always remove the
            entire ": A <generic-word>" phrase entirely.
 
