@@ -108,7 +108,12 @@ class CalibreDB:
                     "then try again.\n\n"
                     "calibredb cannot write to the library while Calibre is running."
                 )
-            if stderr and "No books found" not in stderr:
+            # calibredb phrases the empty-result error in different ways
+            # depending on the calibre version; treat any "no books" variant
+            # as an empty result rather than a failure.
+            stderr_lower = stderr.lower()
+            empty_phrases = ("no books found", "no books matching")
+            if stderr and not any(p in stderr_lower for p in empty_phrases):
                 raise RuntimeError(f"calibredb search failed: {stderr}")
             return []
         raw = result.stdout.strip()
