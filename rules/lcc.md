@@ -32,6 +32,12 @@ SCOPE-04: Do not force precision. If you cannot support a full Cutter/year
            support (e.g. just the class+number, or just the class letters)
            and use "low" confidence with a note explaining the limit.
 
+SCOPE-05: Inputs available per book — you will receive: title, author(s),
+           and any external identifiers already attached to the book
+           (typically ISBN, Goodreads ID, Amazon ASIN, OCLC number, or
+           LCCN where available). Use the strongest identifier first
+           (ISBN > LCCN > OCLC > others) when constructing catalog lookups.
+
 
 ---
 ## SECTION SRC — Evidence & Source Quality
@@ -41,8 +47,11 @@ SRC-01: Preferred evidence order, strongest first:
           1. Library of Congress catalog record, same edition / ISBN.
           2. WorldCat / OCLC consensus across multiple library records.
           3. University or national library catalog record matching the work.
-          4. Publisher CIP-style metadata.
-          5. Schedule-derived classification from the LCC outline + subject.
+          4. Open Library / Internet Archive record (often carries full
+             LCC drawn from member-library cataloging).
+          5. Google Books metadata (frequently surfaces the LC CIP record).
+          6. Publisher CIP-style metadata from the book itself.
+          7. Schedule-derived classification from the LCC outline + subject.
 
 SRC-02: When multiple catalog records disagree:
           - Prefer the Library of Congress value.
@@ -104,6 +113,16 @@ LCC-04: When the call number you find uses period-Cutter without a leading
 LCC-05: If no LCC value can be reasonably derived or confirmed, return an
           empty string for lcc and flag confidence "low" with a note
           explaining what was searched and what was missing.
+
+LCC-06: Strip library-specific copy and volume designations from the call
+          number. These mark a specific physical copy in a particular
+          library's stacks and are not part of the canonical classification:
+            "DK189 .W67 2003 c.2"        → "DK189 .W67 2003"
+            "PS3563.O8749 B45 1987 v.1"  → "PS3563.O8749 B45 1987"
+            "QA76.5 .S65 2001 copy 1"    → "QA76.5 .S65 2001"
+          The Cutter and year ARE part of the canonical call number and
+          must be preserved; only trailing "c.N", "copy N", or "v.N"
+          circulation tags are removed.
 
 
 ---
@@ -486,6 +505,12 @@ PATH-02: Write a single complete sentence, typically 20–40 words.
            - Do NOT repeat the primary or secondary class in broad terms
              (e.g. don't say "military science" if that's the primary class).
              Go straight to the specific subject.
+           - For biographies, name the subject and the biographer's angle.
+             Useful openers: "A literary biography of…", "A political
+             biography tracing…", "The definitive life of…", "Examines
+             the life of … through…". Name the temporal scope when the
+             biography is structured by period (especially common for
+             multi-volume biographies).
            - Name time period and geography when they are genuinely
              distinctive and not already implied by the secondary class.
              Include: period when it IS the subject (Cold War, 1945–1990).
@@ -528,6 +553,14 @@ PATH-03: Examples spanning different classes:
            Path:  "Examines how the Romanov dynasty used court ceremony and political
                    myth to construct and project imperial monarchical authority."
            (no geography phrase — DK already implies Russia)
+
+           Book:  "Henry James: The Conquest of London, 1870-1881, Volume 2"
+           LCC:   "PS2123 .E25 1962"  Sec: "PS - American Literature"
+           Path:  "A multi-volume literary biography of Henry James tracing his
+                   expatriate London years and the development of his major
+                   early-period fiction from 1870 to 1881."
+           (biography — opens by naming the genre and subject, then the
+           biographer's structuring angle)
 
 PATH-04: When lcc is empty, derive the summary from the best available subject
            evidence — title, author, known subject. Flag "low" confidence.
@@ -604,8 +637,14 @@ GEN-06: Never invent a call number. If catalog evidence is missing, return
           empty lcc and a subject-derived primary/secondary/path with
           "low" confidence.
 
-GEN-07: The notes field should be one short sentence describing the
-          evidence basis or any concern. Keep it concise.
+GEN-07: The notes field should briefly describe the evidence basis or
+          any concern. Keep it concise — one short sentence when only one
+          observation applies; a brief semicolon-separated note when two
+          genuinely distinct concerns need to be flagged.
+          EXAMPLE (single):  "LC record confirms class for this edition."
+          EXAMPLE (two):     "Derived from subject — no catalog match;
+                              also possible PR alternative if author is
+                              British-born."
 
 GEN-08: If the book identity itself is ambiguous (multiple works with the
           same title and author, dissertation vs. published book, etc.),
@@ -631,9 +670,49 @@ RISK-04: Public-domain reprints and "anniversary editions" often produce
           modern ISBNs that point at very old works. Use the LCC of the
           original work and note this in source.
 
-RISK-05: Translated works — the LCC typically follows the original work's
-          subject placement, not the translation. The PJ-PT literature
-          subclasses are exceptions where the language of the work matters.
+RISK-05: Translated works — the LCC follows the ORIGINAL work, not the
+          translation. For non-literature (history, biography, science),
+          this means the subject placement of the original work.
+          For LITERATURE specifically (the P subclasses), classification
+          follows the language the work was ORIGINALLY WRITTEN IN — not
+          the language of the translation in your hand. This is a common
+          error trap because the AI is reading an English text but the
+          work belongs to a different national-literature tradition.
+          EXAMPLES — award-winning translated literature in your library:
+            Dostoevsky, "The Brothers Karamazov" in English
+              → PG (Slavic Languages: Russian Literature)
+              NOT PR (English Literature)
+            García Márquez, "One Hundred Years of Solitude" in English
+              → PQ (Romance-Language Literatures: Spanish)
+              NOT PS (American Literature)
+            Kafka, "The Trial" in English
+              → PT (Germanic Literatures: German)
+              NOT PR or PS
+            Murakami, "The Wind-Up Bird Chronicle" in English
+              → PL (Languages: East Asia, Africa, Oceania: Japanese)
+              NOT PS
+          The English-language edition in your library does not change
+          the classification — the literature is classified by the
+          author's original-language literary tradition.
+
+RISK-06: PZ classification trap — the PZ subclass ("PZ - Fiction &
+          Juvenile Literature") in LCC is almost exclusively used for
+          juvenile and young adult fiction. Award-winning ADULT literary
+          fiction should NOT be classified under PZ even though the
+          subclass name includes "Fiction." Instead, classify adult
+          literary fiction by the author's national literary tradition:
+            PR  — English-language literature (UK, Ireland, Australia,
+                  Canada, postcolonial English-language writers)
+            PS  — American literature
+            PQ  — Romance-language literatures (Spanish, Portuguese,
+                  French, Italian, Catalan, etc., in the original)
+            PT  — Germanic and Scandinavian literatures
+            PL  — East Asian, African, and Oceanic-language literatures
+            PG  — Slavic and Baltic literatures (Russian, Polish, etc.)
+          Use PZ ONLY when the work is genuinely juvenile or YA fiction
+          and the cataloging supports it — not as a default for any
+          fiction title. For a Literary Awards & Nominees collection,
+          PZ should be rare.
 
 
 ---
