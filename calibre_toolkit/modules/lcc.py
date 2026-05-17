@@ -470,9 +470,11 @@ def run_lcc_enrichment(
     force=True processes books that already have all four fields populated.
     """
     # ── 1. Search ─────────────────────────────────────────────────────────────
+    # --force overrides the manual-skip exclusion: when re-running on purpose,
+    # the user wants to see books they previously declined as well.
     effective_query = (
         f"({search_query}) and not {mqg_manual_column}:true"
-        if mqg_manual_column else search_query
+        if mqg_manual_column and not force else search_query
     )
     try:
         with console.status(f"[cyan]Searching library:[/] {search_query}"):
