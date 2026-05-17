@@ -138,14 +138,25 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
             mqg_column=lcc_col,
             actions=[
                 StepAction(
-                    "Enrich unprocessed books",
+                    "Enrich next N unprocessed",
                     ["lcc-enrich", f"{id_col}:true and not {lcc_col}:true"],
-                    "Books with identifiers not yet classified",
+                    "Processes the next N books with identifiers not yet classified",
+                    prompt_limit=True,
+                ),
+                StepAction(
+                    "Enrich all unprocessed",
+                    ["lcc-enrich", f"{id_col}:true and not {lcc_col}:true"],
+                    "All books with identifiers not yet classified",
+                ),
+                StepAction(
+                    "Enrich metadata queue",
+                    ["lcc-enrich", "#metadata_queue:true", "--force"],
+                    "Runs on your metadata queue; re-attempts even already-classified books",
                 ),
                 StepAction(
                     "Re-enrich all (force)",
                     ["lcc-enrich", f"{id_col}:true", "--force"],
-                    "Re-processes all books that have identifiers",
+                    "Re-processes every book that has identifiers, overwriting existing LCC",
                 ),
             ],
         ),
