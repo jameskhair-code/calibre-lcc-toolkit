@@ -7,13 +7,13 @@
   "_comment_windows": "On Windows use full paths, e.g. C:\\Program Files\\Calibre2\\calibredb.exe",
 
   "ai": {
-    "_comment": "Anthropic-only. Set api_key here (or via ANTHROPIC_API_KEY env var). Per-command blocks below can override model or api_key.",
-    "model": "claude-sonnet-4-6",
+    "_comment": "Anthropic-only. Set api_key once here (or via ANTHROPIC_API_KEY env var). Per-command blocks only need a model — they inherit the top-level api_key. Add api_key to a per-command block only if you want a different key for that command.",
     "api_key": "",
-    "title_author": { "model": "claude-sonnet-4-6", "api_key": "" },
-    "lcc":          { "model": "claude-sonnet-4-6", "api_key": "" },
-    "comments":     { "model": "claude-sonnet-4-6", "api_key": "" },
-    "tags":         { "model": "claude-sonnet-4-6", "api_key": "" }
+    "model": "claude-sonnet-4-6",
+    "title_author": { "model": "claude-sonnet-4-6" },
+    "lcc":          { "model": "claude-sonnet-4-6" },
+    "comments":     { "model": "claude-sonnet-4-6" },
+    "tags":         { "model": "claude-sonnet-4-6" }
   },
 
   "identifiers": {
