@@ -174,11 +174,6 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
                     ["comments-enrich", "#metadata_queue:true"],
                     "Runs on books currently in your metadata queue",
                 ),
-                StepAction(
-                    "Tone test (3 voice variants, 1 book)",
-                    ["comments-enrich", f"{lcc_col}:true", "--tone-test", "--limit", "1"],
-                    "Generate 3 voice variants to calibrate tone",
-                ),
             ],
         ),
         StepDef(
