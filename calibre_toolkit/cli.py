@@ -560,14 +560,6 @@ def comments_enrich(
         bool,
         typer.Option("--dry-run", help="Show what the AI would write — no changes saved"),
     ] = False,
-    tone_test: Annotated[
-        bool,
-        typer.Option("--tone-test", help="Generate 3 voice variants for one book; no writes"),
-    ] = False,
-    ai_provider: Annotated[
-        Optional[str],
-        typer.Option("--ai-provider", help="Override AI provider for this run (e.g. openai, anthropic)"),
-    ] = None,
     ai_model: Annotated[
         Optional[str],
         typer.Option("--ai-model", help="Override AI model for this run"),
@@ -576,22 +568,14 @@ def comments_enrich(
     """
     MQG-04: AI-assisted book comments / description enrichment.
 
-    For each book, generates a structured HTML comment with six sections:
-      • The Book          — what it is and its core argument
-      • Why It Matters    — its significance
-      • Award Context     — the award(s) and year
-      • Something You Might Not Know  — (conditional) surprising fact
-      • Why Read It       — the honest sell
-      • Source Notes      — transparency about AI generation
-
-    Tone follows rules/reader_profile.md. Use --tone-test to see three voice
-    variants for one book before committing to a style.
+    For each book the AI generates a structured comment following the rules in
+    rules/comments.md (fiction vs. non-fiction handled differently) and a
+    0–10 must-read score with a short rationale. Voice and angle follow
+    rules/reader_profile.md.
 
     Examples:
 
         calibre-toolkit comments-enrich "#mqg_lcc:true" --limit 5 --dry-run
-
-        calibre-toolkit comments-enrich "#mqg_lcc:true" --tone-test
 
         calibre-toolkit comments-enrich "#mqg_lcc:true and not #mqg_comments:true"
     """
@@ -599,7 +583,7 @@ def comments_enrich(
 
     cfg = _load_config(config)
     db = _make_db(cfg)
-    ai = _make_ai(cfg, command_key="comments", provider_override=ai_provider, model_override=ai_model)
+    ai = _make_ai(cfg, command_key="comments", model_override=ai_model)
 
     comments_cfg = cfg.get("comments", {})
     mqg_column         = comments_cfg.get("mqg_column")
@@ -609,7 +593,7 @@ def comments_enrich(
     _base = cfg.get("ai", {})
     _effective_model = ai_model or {**_base, **_base.get("comments", {})}.get("model", "(default)")
 
-    mode_label = "Tone Test" if tone_test else ("Dry Run" if dry_run else "Enrich")
+    mode_label = "Dry Run" if dry_run else "Enrich"
     console.print(
         Panel(
             Text.assemble(
@@ -631,7 +615,6 @@ def comments_enrich(
         batch_size=batch_size,
         limit=limit,
         dry_run=dry_run,
-        tone_test=tone_test,
         mqg_column=mqg_column,
         mqg_manual_column=mqg_manual_column,
         lcc_summary_column=lcc_summary_column,

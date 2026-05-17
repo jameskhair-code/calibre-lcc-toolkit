@@ -30,34 +30,16 @@ _CONF_DISPLAY = {
     "low":    ("○", "red"),
 }
 
+# Section keys + display labels, in render order. The fiction/non-fiction
+# split is implicit — the AI returns empty strings for the inapplicable keys
+# and the renderer skips them.
 _SECTION_LABELS = [
     ("the_book",                     "The Book"),
+    ("the_story",                    "The Story"),
+    ("the_argument",                 "The Argument"),
+    ("what_its_really_about",        "What It's Really About"),
     ("something_you_might_not_know", "Something You Might Not Know"),
     ("why_read_it",                  "Why Read It"),
-]
-
-# Three tone variants for --tone-test
-_TONE_VARIANTS = [
-    (
-        "witty-opinionated",
-        "Voice: Christopher Hitchens / P.J. O'Rourke. Opinionated, direct, specific. "
-        "Do not hedge. Name the argument. Push back on fashionable framings where the "
-        "book allows. 'Why Read It' should sound like a recommendation from a well-read "
-        "friend who has strong opinions and isn't afraid to use them.",
-    ),
-    (
-        "neutral-professional",
-        "Voice: Standard library catalog style. Factual, objective, no personality. "
-        "Avoid evaluative language. Describe the book's subject and argument without "
-        "endorsing or critiquing it. The reader should not be able to tell whether the "
-        "author is worth reading.",
-    ),
-    (
-        "warm-accessible",
-        "Voice: Warm and conversational, written for a curious reader who reads broadly "
-        "but is not a specialist. Approachable, enthusiastic without being breathless. "
-        "'Why Read It' should feel like a genuine, friendly recommendation.",
-    ),
 ]
 
 
@@ -71,24 +53,48 @@ def _truncate(text: str, max_chars: int = 130) -> str:
     return text[:max_chars].rstrip() + "…"
 
 
+def _score_style(score: int) -> str:
+    if score < 0:
+        return "dim"
+    if score >= 9:
+        return "bold magenta"
+    if score >= 7:
+        return "bold green"
+    if score >= 4:
+        return "yellow"
+    return "red"
+
+
 def _build_review_table(suggestions: list[CommentsSuggestion]) -> Table:
     table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan",
                   expand=True, show_lines=True)
-    table.add_column("#",      style="dim", width=4, no_wrap=True)
-    table.add_column("Conf",   width=5, no_wrap=True)
-    table.add_column("Book",   ratio=2)
+    table.add_column("#",       style="dim", width=4, no_wrap=True)
+    table.add_column("Conf",    width=5, no_wrap=True)
+    table.add_column("Score",   width=7, no_wrap=True)
+    table.add_column("Book",    ratio=2)
     table.add_column("Preview", ratio=6)
 
     for i, s in enumerate(suggestions, 1):
         icon, style = _CONF_DISPLAY.get(s.confidence, ("—", "dim"))
 
+        score_text = Text()
+        if s.must_read_score >= 0:
+            score_text.append(f"{s.must_read_score}/10", style=_score_style(s.must_read_score))
+        else:
+            score_text.append("—", style="dim")
+
         book_text = Text()
         book_text.append(s.title)
         book_text.append(f"\n{s.authors_display}", style="dim")
+        if s.book_type:
+            book_text.append(f"\n[{s.book_type}]", style="dim italic")
 
+        # Lead with whichever Section 1 key the AI populated (book_type-aware
+        # without needing to branch on it).
+        lead_key = "the_book" if (s.sections.get("the_book") or "").strip() else "the_story"
         preview = Text()
         for key, label in [
-            ("the_book",    "Book"),
+            (lead_key,      "Open"),
             ("why_read_it", "Sell"),
         ]:
             val = _truncate(s.sections.get(key, "") or "", 120)
@@ -98,7 +104,7 @@ def _build_review_table(suggestions: list[CommentsSuggestion]) -> Table:
         if s.notes:
             preview.append(f"↳ {s.notes}", style="dim italic")
 
-        table.add_row(str(i), Text(icon, style=style), book_text, preview)
+        table.add_row(str(i), Text(icon, style=style), score_text, book_text, preview)
 
     return table
 
@@ -111,7 +117,8 @@ def _print_full_suggestion(s: CommentsSuggestion, label: str | None = None) -> N
 
     console.print(f"  [dim]{s.authors_display}[/dim]")
     icon, style = _CONF_DISPLAY.get(s.confidence, ("—", "dim"))
-    console.print(f"  Confidence: [{style}]{icon} {s.confidence}[/{style}]")
+    type_str = f"  Type: [bold]{s.book_type or 'unknown'}[/bold]" if s.book_type else ""
+    console.print(f"  Confidence: [{style}]{icon} {s.confidence}[/{style}]{type_str}")
     if s.notes:
         console.print(f"  [dim]{s.notes}[/dim]")
     console.print()
@@ -124,6 +131,13 @@ def _print_full_suggestion(s: CommentsSuggestion, label: str | None = None) -> N
         console.print(f"  {text}")
         console.print()
 
+    if s.must_read_score >= 0:
+        score_style = _score_style(s.must_read_score)
+        console.print(f"  [bold cyan]Must-Read[/bold cyan]")
+        rationale = f" — {s.must_read_rationale}" if s.must_read_rationale else ""
+        console.print(f"  [{score_style}]{s.must_read_score} / 10[/{score_style}]{rationale}")
+        console.print()
+
 
 def run_comments_enrichment(
     db: CalibreDB,
@@ -132,7 +146,6 @@ def run_comments_enrichment(
     batch_size: int = 5,
     limit: int | None = None,
     dry_run: bool = False,
-    tone_test: bool = False,
     mqg_column: str | None = None,
     mqg_manual_column: str | None = None,
     lcc_summary_column: str | None = None,
@@ -169,11 +182,6 @@ def run_comments_enrichment(
     book_ids = [b.id for b in books]
     with console.status("[cyan]Reading book details and existing comments…"):
         details_map = db.get_book_details_batch(book_ids)
-
-    # Tone test: generate 3 voice variants for the first book, then exit
-    if tone_test:
-        _run_tone_test(db, ai, books[:1], details_map, lcc_summary_column)
-        return
 
     # ── 3. Read LCC summaries as optional context ─────────────────────────────
     lcc_summary_map: dict[int, str] = {}
@@ -292,49 +300,6 @@ def run_comments_enrichment(
         f"[green]{len(high_applied)}[/green] marked MQG-04 complete"
         + (f", [yellow]{len(manual_ids)}[/yellow] flagged for manual" if manual_ids else "")
         + "."
-    )
-
-
-def _run_tone_test(
-    db: CalibreDB,
-    ai: AIClient,
-    books: list,
-    details_map: dict,
-    lcc_summary_column: str | None,
-) -> None:
-    """Generate 3 tone variants for one book and display them for comparison."""
-    book_ids = [b.id for b in books]
-
-    lcc_summary_map: dict[int, str] = {}
-    if lcc_summary_column:
-        lcc_summary_map = db.get_custom_column_batch(book_ids, lcc_summary_column)
-
-    b = books[0]
-    console.print(
-        f"\n[bold cyan]── Tone Test: [white]{b.title}[/white] ──[/bold cyan]\n"
-        f"[dim]Generating 3 voice variants for comparison. No writes.[/dim]"
-    )
-
-    for tone_key, tone_instruction in _TONE_VARIANTS:
-        console.print(f"\n[bold magenta]═══ Tone variant: {tone_key} ═══[/bold magenta]")
-        with console.status(f"[cyan]Generating '{tone_key}' variant…"):
-            try:
-                suggestions = ai.suggest_comments(
-                    books, details_map, lcc_summary_map,
-                    batch_size=1, tone_override=tone_instruction
-                )
-            except RuntimeError as e:
-                console.print(f"[red]Failed: {e}[/red]")
-                continue
-        if suggestions:
-            _print_full_suggestion(suggestions[0])
-        else:
-            console.print("[red]No suggestion returned.[/red]")
-
-    console.print(
-        "\n[dim]Tone test complete — 3 variants shown. "
-        "No changes written. Edit rules/reader_profile.md to lock in your preference, "
-        "then run without --tone-test.[/dim]"
     )
 
 

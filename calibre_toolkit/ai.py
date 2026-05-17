@@ -190,7 +190,10 @@ class CommentsSuggestion:
     book_id: int
     title: str
     authors: list[str]
+    book_type: Literal["fiction", "nonfiction", ""]
     sections: dict[str, str]
+    must_read_score: int
+    must_read_rationale: str
     html: str
     confidence: Literal["high", "medium", "low"]
     notes: str = ""
@@ -554,7 +557,6 @@ class AIClient:
         details_map: dict[int, BookDetails],
         lcc_summary_map: dict[int, str] | None = None,
         batch_size: int = 5,
-        tone_override: str | None = None,
         progress_callback: Callable[[int, int, int], None] | None = None,
     ) -> list[CommentsSuggestion]:
         if not books:
@@ -562,7 +564,7 @@ class AIClient:
         batches = [books[i : i + batch_size] for i in range(0, len(books), batch_size)]
 
         def _run(batch):
-            return self._process_comments_batch(batch, details_map, lcc_summary_map, tone_override)
+            return self._process_comments_batch(batch, details_map, lcc_summary_map)
 
         return self._run_batches_concurrent(_run, batches, progress_callback)
 
@@ -571,9 +573,8 @@ class AIClient:
         books: list[Book],
         details_map: dict[int, BookDetails],
         lcc_summary_map: dict[int, str] | None = None,
-        tone_override: str | None = None,
     ) -> list[CommentsSuggestion]:
-        system_prompt = _build_comments_system_prompt(tone_override)
+        system_prompt = _build_comments_system_prompt()
         user_msg = _build_comments_user_message(books, details_map, lcc_summary_map)
         raw = self._call(user_msg, system_prompt, max_tokens=8192)
         return _parse_comments_response(raw, books)
@@ -667,8 +668,14 @@ def _parse_lcc_response(
 
 # ── Comments prompt + parsing ─────────────────────────────────────────────────
 
+# Prose sections rendered in HTML, in display order. Empty values are skipped,
+# so the fiction/non-fiction split is handled implicitly — the AI returns empty
+# strings for the keys that do not apply to the book's type.
 _COMMENTS_SECTION_KEYS = [
-    ("the_book",                     "The Book"),
+    ("the_book",                     "The Book"),                  # non-fiction
+    ("the_story",                    "The Story"),                 # fiction
+    ("the_argument",                 "The Argument"),              # non-fiction
+    ("what_its_really_about",        "What It's Really About"),    # fiction
     ("something_you_might_not_know", "Something You Might Not Know"),
     ("why_read_it",                  "Why Read It"),
 ]
@@ -688,27 +695,29 @@ Respond with a JSON array, one object per book, in the SAME ORDER as the input.
 Each object must have exactly these keys:
 {
   "id": <integer>,
-  "the_book": "<plain prose — no HTML tags>",
+  "book_type": "fiction" | "nonfiction",
+  "the_book":              "<plain prose — non-fiction only; empty string for fiction>",
+  "the_argument":          "<plain prose — non-fiction only; empty string for fiction>",
+  "the_story":             "<plain prose — fiction only; empty string for non-fiction>",
+  "what_its_really_about": "<plain prose — fiction only; empty string for non-fiction>",
   "something_you_might_not_know": "<plain prose, or empty string if nothing noteworthy>",
-  "why_read_it": "<plain prose — no HTML tags>",
-  "confidence": "high" | "medium" | "low",
-  "notes": "<one short sentence — main caveat or key evidence>"
+  "why_read_it":           "<plain prose — no HTML tags>",
+  "must_read_score":       <integer 0–10>,
+  "must_read_rationale":   "<1–2 sentences>",
+  "confidence":            "high" | "medium" | "low",
+  "notes":                 "<one short sentence — main caveat or key evidence>"
 }
 
 Return ONLY the JSON array. No markdown fences, no commentary outside the array.
 """
 
 
-def _build_comments_system_prompt(tone_override: str | None = None) -> str:
+def _build_comments_system_prompt() -> str:
     reader_profile = _load_rules("reader_profile.md")
     comments_rules = _load_rules("comments.md")
 
-    preamble = _COMMENTS_PROMPT_PREAMBLE
-    if tone_override:
-        preamble += f"\n\n### TONE OVERRIDE FOR THIS CALL\n{tone_override}\n"
-
     return (
-        preamble
+        _COMMENTS_PROMPT_PREAMBLE
         + "\n\n## READER PROFILE\n\n"
         + reader_profile
         + "\n\n## STRUCTURAL RULES\n\n"
@@ -745,14 +754,34 @@ def _build_comments_user_message(
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def _format_comments_html(sections: dict[str, str]) -> str:
+def _format_comments_html(
+    sections: dict[str, str],
+    score: int | None = None,
+    rationale: str = "",
+) -> str:
     parts = []
     for key, label in _COMMENTS_SECTION_KEYS:
         text = (sections.get(key) or "").strip()
         if not text:
             continue
         parts.append(f"<h3>{label}</h3>\n<p>{text}</p>")
+    if score is not None:
+        rationale_html = f" — {rationale}" if rationale else ""
+        parts.append(
+            f"<h3>Must-Read</h3>\n<p><strong>{score} / 10</strong>{rationale_html}</p>"
+        )
     return "\n".join(parts)
+
+
+def _coerce_score(value) -> int | None:
+    """Best-effort coercion of the AI's score to an int in [0, 10]."""
+    if value is None or value == "":
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0, min(10, n))
 
 
 def _parse_comments_response(raw: str, books: list[Book]) -> list[CommentsSuggestion]:
@@ -768,12 +797,20 @@ def _parse_comments_response(raw: str, books: list[Book]) -> list[CommentsSugges
             key: (item.get(key) or "").strip()
             for key, _ in _COMMENTS_SECTION_KEYS
         }
+        book_type = (item.get("book_type") or "").strip().lower()
+        if book_type not in ("fiction", "nonfiction"):
+            book_type = ""
+        score = _coerce_score(item.get("must_read_score"))
+        rationale = (item.get("must_read_rationale") or "").strip()
         suggestions.append(CommentsSuggestion(
             book_id=book_id,
             title=book.title,
             authors=book.authors,
+            book_type=book_type,
             sections=sections,
-            html=_format_comments_html(sections),
+            must_read_score=score if score is not None else -1,
+            must_read_rationale=rationale,
+            html=_format_comments_html(sections, score, rationale),
             confidence=item.get("confidence", "low"),
             notes=item.get("notes", "").strip(),
         ))

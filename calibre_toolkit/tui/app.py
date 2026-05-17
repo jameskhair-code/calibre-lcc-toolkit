@@ -137,11 +137,6 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
                     "Books with identifiers not yet classified",
                 ),
                 StepAction(
-                    "Dry run (preview, no writes)",
-                    ["lcc-enrich", f"{id_col}:true and not {lcc_col}:true", "--dry-run"],
-                    "Preview AI proposals without writing anything",
-                ),
-                StepAction(
                     "Re-enrich all (force)",
                     ["lcc-enrich", f"{id_col}:true", "--force"],
                     "Re-processes all books that have identifiers",
