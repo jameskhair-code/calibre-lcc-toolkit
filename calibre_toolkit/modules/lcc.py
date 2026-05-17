@@ -257,21 +257,42 @@ _CATALOG_LOOKUP_WORKERS = 8
 _CATALOG_LOOKUP_TIMEOUT = 10.0
 
 
+@dataclass
+class _CatalogStats:
+    total: int = 0
+    no_identifiers: int = 0
+    tried_lccn: int = 0
+    tried_isbn: int = 0
+    hits: int = 0
+
+
 def _catalog_lookup_batch(
     db: CalibreDB,
     books: list,
-) -> dict[int, CatalogHit]:
+) -> tuple[dict[int, CatalogHit], _CatalogStats]:
     """Try LC catalog lookups for each book in parallel.
 
-    Returns {book_id: CatalogHit} for hits only. Misses and errors are simply
-    absent from the dict — the caller falls back to AI for those.
+    Returns ({book_id: CatalogHit} for hits, stats). Misses and errors are
+    simply absent from the hits dict — the caller falls back to AI.
     """
+    stats = _CatalogStats(total=len(books))
     if not books:
-        return {}
+        return {}, stats
 
     # Fetch identifiers in serial (SQLite reads are fast); the network calls
     # happen in the thread pool.
     id_map = {b.id: db.get_identifiers(b.id) for b in books}
+
+    # Tally what we actually have to work with up-front.
+    for ids in id_map.values():
+        has_lccn = bool(ids.get("lccn") or ids.get("LCCN"))
+        has_isbn = bool(ids.get("isbn") or ids.get("isbn13") or ids.get("isbn10") or ids.get("ISBN"))
+        if not has_lccn and not has_isbn:
+            stats.no_identifiers += 1
+        if has_lccn:
+            stats.tried_lccn += 1
+        if has_isbn and not has_lccn:
+            stats.tried_isbn += 1
 
     hits: dict[int, CatalogHit] = {}
     with ThreadPoolExecutor(max_workers=_CATALOG_LOOKUP_WORKERS) as ex:
@@ -287,7 +308,8 @@ def _catalog_lookup_batch(
                 hit = None
             if hit:
                 hits[bid] = hit
-    return hits
+    stats.hits = len(hits)
+    return hits, stats
 
 
 def _build_catalog_suggestion(
@@ -523,7 +545,7 @@ def run_lcc_enrichment(
         f"[cyan]Looking up {len(books)} book(s) in the LC catalog "
         "(LCCN → ISBN)…[/cyan]"
     ):
-        catalog_hits = _catalog_lookup_batch(db, books)
+        catalog_hits, cat_stats = _catalog_lookup_batch(db, books)
 
     catalog_suggestions: list[LccSuggestion] = []
     ai_books = []
@@ -536,16 +558,25 @@ def run_lcc_enrichment(
         else:
             ai_books.append(b)
 
+    # One-line diagnostic so misses are explainable rather than mysterious.
+    cat_breakdown = (
+        f"[dim]Catalog lookup: {cat_stats.tried_lccn} tried by LCCN, "
+        f"{cat_stats.tried_isbn} by ISBN, "
+        f"{cat_stats.no_identifiers} had no usable identifier — "
+        f"{cat_stats.hits} hit(s).[/dim]"
+    )
     if catalog_suggestions:
         console.print(
             f"[green]✓[/green] Catalog hits: [bold green]{len(catalog_suggestions)}[/bold green] "
             f"of {len(books)} — AI will only run on the remaining "
             f"[bold]{len(ai_books)}[/bold]."
         )
+        console.print(cat_breakdown)
     else:
         console.print(
             f"[dim]No LC catalog hits — falling through to AI for all {len(books)} book(s).[/dim]"
         )
+        console.print(cat_breakdown)
 
     # ── 3b. AI lookup for the remainder ───────────────────────────────────────
     ai_suggestions: list[LccSuggestion] = []

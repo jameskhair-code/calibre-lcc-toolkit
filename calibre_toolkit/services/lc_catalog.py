@@ -123,19 +123,22 @@ def lookup_by_lccn(lccn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[Cat
 
 
 def lookup_by_isbn(isbn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[CatalogHit]:
-    """Resolve an ISBN to a confirmed LC call number, or None on miss / error."""
+    """Resolve an ISBN to a confirmed LC call number, or None on miss / error.
+
+    Searches the /books/ endpoint specifically (more reliable for
+    bibliographic records than the general /search/).
+    """
     if not isbn:
         return None
     cleaned = re.sub(r"[\s\-]", "", isbn.strip())
     if not cleaned:
         return None
     params = urllib.parse.urlencode({
-        "fa": "partof:catalog",
         "q": cleaned,
         "fo": "json",
         "c": "1",
     })
-    url = f"https://www.loc.gov/search/?{params}"
+    url = f"https://www.loc.gov/books/?{params}"
     data = _http_get_json(url, timeout=timeout)
     if not data:
         return None
