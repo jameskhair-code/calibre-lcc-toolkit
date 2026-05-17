@@ -1,13 +1,15 @@
 """
 MQG-03 LCC Enrichment module.
-Orchestrates: read current LCC fields → AI propose → validate against canonical
-CSVs → display review table → confirm → apply via calibredb.
+Orchestrates: read current LCC fields → LC catalog lookup (LCCN/ISBN) →
+AI propose for remaining → validate against canonical CSVs → display
+review table → confirm → apply via calibredb.
 """
 
 from __future__ import annotations
 
 import csv
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,6 +23,7 @@ from rich.prompt import Prompt
 
 from ..ai import AIClient, LccSuggestion
 from ..db import CalibreDB
+from ..services.lc_catalog import CatalogHit, lookup_book
 
 
 console = Console()
@@ -248,6 +251,77 @@ def _build_review_table(validated: list[ValidatedSuggestion]) -> Table:
     return table
 
 
+# ── LC catalog pre-step ───────────────────────────────────────────────────────
+
+_CATALOG_LOOKUP_WORKERS = 8
+_CATALOG_LOOKUP_TIMEOUT = 10.0
+
+
+def _catalog_lookup_batch(
+    db: CalibreDB,
+    books: list,
+) -> dict[int, CatalogHit]:
+    """Try LC catalog lookups for each book in parallel.
+
+    Returns {book_id: CatalogHit} for hits only. Misses and errors are simply
+    absent from the dict — the caller falls back to AI for those.
+    """
+    if not books:
+        return {}
+
+    # Fetch identifiers in serial (SQLite reads are fast); the network calls
+    # happen in the thread pool.
+    id_map = {b.id: db.get_identifiers(b.id) for b in books}
+
+    hits: dict[int, CatalogHit] = {}
+    with ThreadPoolExecutor(max_workers=_CATALOG_LOOKUP_WORKERS) as ex:
+        futures = {
+            ex.submit(lookup_book, id_map.get(b.id, {}), _CATALOG_LOOKUP_TIMEOUT): b.id
+            for b in books
+        }
+        for fut in as_completed(futures):
+            bid = futures[fut]
+            try:
+                hit = fut.result()
+            except Exception:
+                hit = None
+            if hit:
+                hits[bid] = hit
+    return hits
+
+
+def _build_catalog_suggestion(
+    book,
+    current: dict[str, str],
+    hit: CatalogHit,
+) -> LccSuggestion:
+    """Build a high-confidence LccSuggestion directly from a catalog hit.
+
+    Bypasses the AI entirely. Summary is generated mechanically from the
+    derived secondary class — concise, serviceable, flagged as catalog-derived.
+    """
+    primary, secondary = _derive_classes(hit.call_number)
+    summary_class = secondary or primary or "Library of Congress Classification"
+    summary = f"Classified by Library of Congress catalog under {summary_class}."
+
+    proposed = {
+        "lcc": hit.call_number,
+        "lcc_primary_class": primary,
+        "lcc_secondary_class": secondary,
+        "lcc_summary": summary,
+    }
+    return LccSuggestion(
+        book_id=book.id,
+        title=book.title,
+        authors=book.authors,
+        current=current,
+        proposed=proposed,
+        confidence="high",
+        source=hit.source,
+        notes="Catalog-derived; AI bypassed.",
+    )
+
+
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
 _LCC_FIELDS = ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_summary")
@@ -442,19 +516,52 @@ def run_lcc_enrichment(
             _mark_complete(db, mqg_column, book_ids, label="already-populated")
         raise typer.Exit()
 
-    # ── 3. AI lookup ──────────────────────────────────────────────────────────
+    # ── 3a. LC catalog pre-lookup ─────────────────────────────────────────────
     with console.status(
-        f"[cyan]Querying AI for {len(books)} book(s) "
-        f"in batches of {batch_size}…[/cyan]"
+        f"[cyan]Looking up {len(books)} book(s) in the LC catalog "
+        "(LCCN → ISBN)…[/cyan]"
     ):
-        try:
-            suggestions = ai.suggest_lcc(books, current_map, batch_size=batch_size)
-        except RuntimeError as e:
-            console.print(Panel(str(e), title="[red]AI lookup failed[/red]", border_style="red"))
-            raise typer.Exit(1)
+        catalog_hits = _catalog_lookup_batch(db, books)
+
+    catalog_suggestions: list[LccSuggestion] = []
+    ai_books = []
+    for b in books:
+        hit = catalog_hits.get(b.id)
+        if hit:
+            catalog_suggestions.append(
+                _build_catalog_suggestion(b, current_map[b.id], hit)
+            )
+        else:
+            ai_books.append(b)
+
+    if catalog_suggestions:
+        console.print(
+            f"[green]✓[/green] Catalog hits: [bold green]{len(catalog_suggestions)}[/bold green] "
+            f"of {len(books)} — AI will only run on the remaining "
+            f"[bold]{len(ai_books)}[/bold]."
+        )
+    else:
+        console.print(
+            f"[dim]No LC catalog hits — falling through to AI for all {len(books)} book(s).[/dim]"
+        )
+
+    # ── 3b. AI lookup for the remainder ───────────────────────────────────────
+    ai_suggestions: list[LccSuggestion] = []
+    if ai_books:
+        with console.status(
+            f"[cyan]Querying AI for {len(ai_books)} book(s) "
+            f"in batches of {batch_size}…[/cyan]"
+        ):
+            try:
+                ai_suggestions = ai.suggest_lcc(ai_books, current_map, batch_size=batch_size)
+            except RuntimeError as e:
+                console.print(Panel(str(e), title="[red]AI lookup failed[/red]", border_style="red"))
+                raise typer.Exit(1)
+
+    suggestions = catalog_suggestions + ai_suggestions
 
     if not suggestions:
-        console.print("[yellow]AI returned no suggestions.[/yellow]")
+        console.print("[yellow]No suggestions produced (neither catalog nor AI).[/yellow]")
         raise typer.Exit(1)
 
     # ── 4. Validate ───────────────────────────────────────────────────────────
