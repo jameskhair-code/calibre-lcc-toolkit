@@ -111,14 +111,20 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
             mqg_column=id_col,
             actions=[
                 StepAction(
-                    "Enrich unprocessed books",
-                    ["enrich-identifiers", f"not {id_col}:true"],
-                    "Runs live lookup on books not yet processed",
+                    "Enrich next N unprocessed",
+                    ["enrich-identifiers", f"not {id_col}:true", "--force-lookup"],
+                    "Processes the next N books still needing work; re-attempts even partially-filled ones",
+                    prompt_limit=True,
                 ),
                 StepAction(
-                    "Force re-lookup (already-sufficient books)",
-                    ["enrich-identifiers", f"not {id_col}:true", "--force-lookup"],
-                    "Re-fetches even books already marked sufficient",
+                    "Enrich all unprocessed",
+                    ["enrich-identifiers", f"not {id_col}:true"],
+                    "Fast bulk run — skips books that already look sufficient",
+                ),
+                StepAction(
+                    "Enrich metadata queue",
+                    ["enrich-identifiers", "#metadata_queue:true", "--force-lookup"],
+                    "Runs on your metadata queue; re-attempts even already-touched books",
                 ),
             ],
         ),
