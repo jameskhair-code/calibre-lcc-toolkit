@@ -183,8 +183,8 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
                 ),
                 StepAction(
                     "Enrich metadata queue",
-                    ["comments-enrich", "#metadata_queue:true"],
-                    "Runs on books currently in your metadata queue",
+                    ["comments-enrich", "#metadata_queue:true", "--force"],
+                    "Runs on your metadata queue; includes books previously flagged manual",
                 ),
             ],
         ),

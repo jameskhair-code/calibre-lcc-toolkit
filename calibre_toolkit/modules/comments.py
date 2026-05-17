@@ -146,16 +146,21 @@ def run_comments_enrichment(
     batch_size: int = 5,
     limit: int | None = None,
     dry_run: bool = False,
+    force: bool = False,
     mqg_column: str | None = None,
     mqg_manual_column: str | None = None,
     lcc_summary_column: str | None = None,
 ) -> None:
-    """Full MQG-04 Comments enrichment flow for a Calibre search string."""
+    """Full MQG-04 Comments enrichment flow for a Calibre search string.
+
+    force=True bypasses the manual-skip exclusion so books previously
+    flagged for manual review are still picked up.
+    """
 
     # ── 1. Search ─────────────────────────────────────────────────────────────
     effective_query = (
         f"({search_query}) and not {mqg_manual_column}:true"
-        if mqg_manual_column else search_query
+        if mqg_manual_column and not force else search_query
     )
     try:
         with console.status(f"[cyan]Searching library:[/] {search_query}"):

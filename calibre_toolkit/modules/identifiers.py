@@ -236,10 +236,11 @@ def run_enrichment(
         raise typer.Exit(1)
 
     # ── 1. Fetch books ────────────────────────────────────────────────────────
-    # Automatically exclude books already flagged for manual curation.
+    # Automatically exclude books already flagged for manual curation, unless
+    # --force-lookup is set (caller is deliberately re-running).
     effective_query = (
         f"({search_query}) and not {mqg_manual_column}:true"
-        if mqg_manual_column else search_query
+        if mqg_manual_column and not force_lookup else search_query
     )
     try:
         with console.status(f"[cyan]Searching library:[/] {search_query}"):

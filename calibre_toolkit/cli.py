@@ -560,6 +560,10 @@ def comments_enrich(
         bool,
         typer.Option("--dry-run", help="Show what the AI would write — no changes saved"),
     ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Include books previously flagged for manual review"),
+    ] = False,
     ai_model: Annotated[
         Optional[str],
         typer.Option("--ai-model", help="Override AI model for this run"),
@@ -615,6 +619,7 @@ def comments_enrich(
         batch_size=batch_size,
         limit=limit,
         dry_run=dry_run,
+        force=force,
         mqg_column=mqg_column,
         mqg_manual_column=mqg_manual_column,
         lcc_summary_column=lcc_summary_column,
