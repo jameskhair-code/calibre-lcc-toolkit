@@ -159,14 +159,20 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
             mqg_column=com_col,
             actions=[
                 StepAction(
-                    "Enrich unprocessed books",
+                    "Enrich next N unprocessed",
+                    ["comments-enrich", f"{lcc_col}:true and not {com_col}:true"],
+                    "Processes the next N books with LCC classification not yet described",
+                    prompt_limit=True,
+                ),
+                StepAction(
+                    "Enrich all unprocessed",
                     ["comments-enrich", f"{lcc_col}:true and not {com_col}:true"],
                     "Books with LCC classification not yet described",
                 ),
                 StepAction(
-                    "Dry run (preview, no writes)",
-                    ["comments-enrich", f"{lcc_col}:true and not {com_col}:true", "--dry-run"],
-                    "Preview generated comments without writing",
+                    "Enrich metadata queue",
+                    ["comments-enrich", "#metadata_queue:true"],
+                    "Runs on books currently in your metadata queue",
                 ),
                 StepAction(
                     "Tone test (3 voice variants, 1 book)",
