@@ -95,6 +95,46 @@ and improving `lcc` field accuracy.
 
 ---
 
+## Honest source attribution in AI-generated suggestions
+
+**Problem.** When step 03 falls through to AI classification (no catalog hit),
+the AI frequently writes Source notes like *"Library of Congress catalog, exact
+ISBN match — LC record confirms this call number for the 1997 edition"* even
+though no LC record was consulted. The diagnostic header correctly reports
+`0 catalog hits`, but per-row source text overstates confidence. Risk: a
+future reader of the metadata (or a future maintainer auditing the library)
+cannot distinguish AI-only classifications from catalog-confirmed ones by
+reading the source field.
+
+**Approach — two layers:**
+
+1. **Structural separation in the prompt.** Restructure `rules/lcc.md` so the
+   AI is given an explicit `source_authority` field with a fixed enum:
+   `lc_catalog` | `worldcat_consensus` | `ai_inference`. The free-text
+   `source` field then describes *reasoning*, not provenance. Enforce in
+   `_parse_lcc_response()`: if no `CatalogHit` was passed in, reject any
+   `lc_catalog` or `worldcat_consensus` value and downgrade to `ai_inference`.
+
+2. **Display-layer override.** In `_build_suggestion_table()` (lcc.py), prepend
+   a deterministic provenance prefix to the source column based on whether a
+   catalog hit existed: `[AI]`, `[LC]`, `[OL]`. The AI's free-text reasoning
+   follows. This makes the distinction impossible to fake at render time.
+
+**Touch points.** `rules/lcc.md` (PROMPT/SOURCE section), `calibre_toolkit/ai.py`
+(`_parse_lcc_response`, validation), `calibre_toolkit/modules/lcc.py`
+(`_build_suggestion_table` row rendering).
+
+**Risk.** Low. Backward-compatible — existing `#lcc_*` columns unaffected; the
+change is purely in how suggestions are *displayed and validated* before
+write. No library migration needed.
+
+**Expected impact.** A future audit of the library can trust the source field.
+Reviewers in step 03 can immediately see which rows are AI-only and apply
+appropriate skepticism, rather than being misled by fabricated catalog
+citations.
+
+---
+
 ## Process notes
 
 - Each item above is a single focused PR off `main`, not bundled work.
