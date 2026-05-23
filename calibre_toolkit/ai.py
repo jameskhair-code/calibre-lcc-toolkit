@@ -1007,6 +1007,9 @@ def _parse_tags_review_response(
     ]
     if not proposed:
         proposed = list(current_tags)
+    notes = (item.get("notes") or "").strip()
+    confidence = item.get("confidence", "medium")
+    proposed, notes, confidence = _validate_proposed_tags(proposed, notes, confidence)
     return TagsReviewSuggestion(
         book_id=book.id,
         title=book.title,
@@ -1014,8 +1017,8 @@ def _parse_tags_review_response(
         current_tags=list(current_tags),
         proposed_tags=proposed,
         assessment=item.get("assessment", "complete"),
-        confidence=item.get("confidence", "medium"),
-        notes=(item.get("notes") or "").strip(),
+        confidence=confidence,
+        notes=notes,
     )
 
 
