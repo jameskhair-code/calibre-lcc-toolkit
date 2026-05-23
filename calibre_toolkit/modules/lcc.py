@@ -533,6 +533,7 @@ def run_lcc_enrichment(
     # Skip books already fully populated unless --force
     if not force:
         before = len(books)
+        already_populated = [b.id for b in books if all(current_map[b.id][k] for k in _LCC_FIELDS)]
         books = [b for b in books if not all(current_map[b.id][k] for k in _LCC_FIELDS)]
         skipped = before - len(books)
         if skipped:
@@ -540,10 +541,10 @@ def run_lcc_enrichment(
                 f"[dim]Skipping {skipped} book(s) — all four LCC fields already populated. "
                 "Use --force to re-process them.[/dim]"
             )
+            if mqg_column and already_populated:
+                _mark_complete(db, mqg_column, already_populated, label="already-populated")
     if not books:
         console.print("[green]Nothing to do — every matched book is already fully populated.[/green]")
-        if mqg_column:
-            _mark_complete(db, mqg_column, book_ids, label="already-populated")
         raise typer.Exit()
 
     # ── 3a. LC catalog pre-lookup ─────────────────────────────────────────────
@@ -692,10 +693,10 @@ def run_lcc_enrichment(
             declined += low
 
     # ── 6. Mark MQG / flag manual ─────────────────────────────────────────────
-    # Only high-confidence applied books are marked MQG-03 complete.
-    high_applied = [v.book_id for v in high if v.book_id in applied_ids]
-    if mqg_column and high_applied:
-        _mark_complete(db, mqg_column, high_applied, label="MQG-03")
+    # All applied books are marked MQG-03 complete — applied_ids already
+    # reflects only what the user explicitly accepted at the review prompt.
+    if mqg_column and applied_ids:
+        _mark_complete(db, mqg_column, applied_ids, label="MQG-03")
 
     manual_ids = [v.book_id for v in declined]
     if mqg_manual_column and manual_ids:
@@ -709,7 +710,7 @@ def run_lcc_enrichment(
     console.print(
         f"\n[bold green]Done![/bold green] "
         f"[green]{len(applied_ids)}[/green] applied, "
-        f"[green]{len(high_applied)}[/green] marked MQG-03 complete"
+        f"[green]{len(applied_ids)}[/green] marked MQG-03 complete"
         + (f", [yellow]{len(manual_ids)}[/yellow] flagged for manual" if manual_ids else "")
         + "."
     )
