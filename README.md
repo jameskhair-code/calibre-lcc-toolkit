@@ -6,7 +6,7 @@ An AI-assisted Python CLI for enriching Calibre library metadata. Built for a pe
 
 ## Overview
 
-The toolkit runs a structured enrichment pipeline ("MQG") across four metadata areas:
+The toolkit runs a structured enrichment pipeline ("MQG") across five metadata areas:
 
 | Step | Command | What it does |
 |------|---------|--------------|
@@ -14,8 +14,9 @@ The toolkit runs a structured enrichment pipeline ("MQG") across four metadata a
 | MQG-02 | `enrich-identifiers` | Finds and adds ISBNs, Goodreads IDs, Amazon IDs |
 | MQG-03 | `lcc-enrich` | Library of Congress Classification — call number, primary class, secondary class, subject summary |
 | MQG-04 | `comments-enrich` | AI-generated book description with 6 structured sections |
+| MQG-05 | `tags-enrich` | AI-assisted subject tag enrichment — Form, Subject, Period, Geography |
 
-Each step is human-in-the-loop: the AI proposes, the tool displays a review table, and you decide before anything is written to Calibre.
+Each step is human-in-the-loop: the AI proposes, the tool displays a review table, and you decide before anything is written to Calibre. A `menu` command launches a TUI covering every step and maintenance command.
 
 ---
 
@@ -182,6 +183,68 @@ AI override (optional, add inside the `ai` block):
 }
 ```
 
+### `tags-enrich`
+
+AI-assisted subject tag enrichment. Generates 4–8 flat tags per book across Form, Subject, Period, and Geography categories.
+
+```bash
+# Dry run — preview proposed tags without writing
+py -m calibre_toolkit.cli tags-enrich "#mqg_lcc:true" --limit 10 --dry-run
+
+# Normal run
+py -m calibre_toolkit.cli tags-enrich "#mqg_lcc:true and not #mqg_tags:true"
+```
+
+Validation runs after every AI response: 4-word cap (silently truncated), no commas (split on first), exactly one Form tag per book (confidence drops to medium with a diagnostic note if violated). LCC fields, when present, are passed in as context.
+
+Config block (add to config.json):
+
+```json
+"tags": {
+  "reviewed_column": "#tags_reviewed",
+  "mqg_column": "#mqg_tags",
+  "mqg_manual_column": "#mqg_tags_manual"
+}
+```
+
+### `tags-cleanup`
+
+Library-wide tag vocabulary normalisation. Two passes:
+
+1. **Deterministic scanner.** LCSH date+name drops, bare date ranges, Calibre taxonomy noise, date-range → period-name lookups, formatting cleanup. No AI call.
+2. **AI semantic pass.** Fuzzy variant matches and near-synonyms the scanner cannot resolve. Skip with `--skip-ai` for scanner-only runs.
+
+Operations are grouped by pattern with bulk approval per group; safe groups default to "apply all", everything else defaults to "review".
+
+```bash
+# Audit only
+py -m calibre_toolkit.cli tags-cleanup --dry-run
+
+# Scanner-only run (no AI cost)
+py -m calibre_toolkit.cli tags-cleanup --skip-ai
+
+# Ignore long-tail tags during the AI pass
+py -m calibre_toolkit.cli tags-cleanup --min-books 2
+```
+
+### `tags-review`
+
+Per-book interactive tag review. Shows current vs. AI-proposed tags with **[a]** approve / **[k]** keep / **[e]** edit / **[s]** skip controls. Sets `#tags_reviewed` per locked book.
+
+```bash
+py -m calibre_toolkit.cli tags-review
+py -m calibre_toolkit.cli tags-review "tag:Booker" --limit 20
+py -m calibre_toolkit.cli tags-review --auto-approve --limit 100
+```
+
+### `menu`
+
+Launches a Rich-based TUI covering every pipeline step and maintenance command. Recommended entry point for interactive sessions.
+
+```bash
+py -m calibre_toolkit.cli menu
+```
+
 ### `clean-identifiers`
 
 Scans and fixes malformed identifiers (UUIDs in identifier fields, `urnisbn/` format, empty values).
@@ -225,6 +288,9 @@ The toolkit expects these custom columns to exist in your Calibre library:
 | `#mqg_identifiers` | Yes/No | MQG-02 completion flag |
 | `#mqg_identifiers_manual` | Yes/No | Manual review flag for identifiers |
 | `#mqg_title_author` | Yes/No | MQG-01 completion flag |
+| `#mqg_tags` | Yes/No | MQG-05 completion flag |
+| `#mqg_tags_manual` | Yes/No | Manual review flag for tags |
+| `#tags_reviewed` | Yes/No | Per-book lock set by `tags-review` |
 
 Enumeration values for `#lcc_primary_class` and `#lcc_secondary_class` are defined in `config/lcc-primary-canonical.csv` and `config/lcc-secondary-canonical.csv`.
 
@@ -243,7 +309,12 @@ calibre_toolkit/
     comments.py           MQG-04 comments enrichment
     identifiers.py        MQG-02 identifier enrichment
     authors.py            MQG-01 author/title cleanup
+    tags.py               MQG-05 tag enrichment + cleanup
+    tags_review.py        MQG-05 per-book interactive review
+    tag_scanner.py        Deterministic rule set for tags-cleanup
     clean_identifiers.py  Identifier cleanup utility
+  services/
+    lc_catalog.py         LCCN/ISBN lookups against the LC catalog
 
 config/
   lcc-primary-canonical.csv     21 LCC primary class values
@@ -254,4 +325,6 @@ rules/
   comments.md             AI prompt rules for comments enrichment
   reader_profile.md       Reader profile — tone and framing for comments
   author_title.md         AI prompt rules for author/title cleanup
+  tags.md                 AI prompt rules for tag enrichment
+  tags_cleanup.md         AI prompt rules for the tags-cleanup semantic pass
 ```
