@@ -2,12 +2,9 @@
 # Literary Awards & Nominees Collection — MQG-05
 #
 # A deterministic scanner has ALREADY handled obvious patterns before this prompt
-# runs: bare date ranges, LCSH date+name subject headings, Calibre taxonomy noise
-# ("Fiction / Historical" → "Historical Fiction"), simple case normalization,
-# and known period-name lookups (1939-1945 → World War II).
-#
-# Your job: handle the SEMANTIC cases the scanner cannot — variant spellings,
+# runs. Your job: handle the SEMANTIC cases the scanner cannot — variant spellings,
 # near-synonyms, plural/singular collapses, and any remaining noise tags.
+# See SECTION SCANNER below for the full list of what the scanner already does.
 
 
 ---
@@ -126,6 +123,72 @@ FORM-02: Do NOT merge "Anthologies" or "Collections" into "Essay Collection" —
 
 
 ---
+## SECTION REFUSAL — When Not to Act
+---
+
+REFUSAL-01: When you are not confident a merge is semantically correct,
+             do NOT propose it. Tags are easier to add later than to
+             reconstruct across thousands of books after a bulk drop.
+
+REFUSAL-02: If a tag is niche, unusual, or unfamiliar to you, leave it
+             alone. Niche tags (e.g. "Solarpunk", "Hopepunk", "Noblebright",
+             "Cli-fi") are legitimate subject tags that carry real search
+             value. Your uncertainty is not evidence the tag is wrong.
+
+REFUSAL-03: If you cannot state a reason in ≤10 words that would be
+             obviously correct to a librarian, do not propose the operation.
+
+REFUSAL-04: The TRIAGE rule (GEN-01c) applies always: when uncertain,
+             skip. A missed normalization is a minor search annoyance.
+             A wrong merge is irreversible data loss without a full
+             re-enrichment pass.
+
+
+---
+## SECTION SCANNER — What the Scanner Already Handles
+---
+
+Do NOT propose operations for anything in this list. The scanner has
+already handled these before your prompt runs. Proposing them again would
+be a no-op at best and confusing at worst.
+
+The scanner handles:
+  • Whitespace and case normalization (leading/trailing spaces, encoding artifacts)
+  • BISAC classification codes (e.g. "HIS036140 HISTORY / Military / General")
+  • Calibre slash-taxonomy noise: "Fiction / Historical" → "Historical Fiction",
+    "Fiction / Science Fiction / General" → "Science Fiction", etc.
+  • Known plural/abbreviation variants in the Calibre taxonomy:
+    "Sci-Fi", "SF", "scifi" → "Science Fiction"
+    "Non-Fiction", "non fiction" → "Nonfiction"
+    "Novels" → "Novel", "Memoirs" → "Memoir", "Plays" → "Drama"
+    "WWII" → "World War II", "WWI" → "World War I"
+    "Post Apocalyptic" → "Post-Apocalyptic"
+    "Coming of Age" → "Coming-of-Age Fiction"
+    "Magic Realism" → "Magical Realism"
+    "Alternative History" → "Alternate History"
+  • Bare date-range → period name conversions (already done):
+    1939-1945 → World War II      1914-1918 → World War I
+    1861-1865 → American Civil War  1775-1783 → American Revolution
+    1865-1877 → Reconstruction    1837-1901 → Victorian Era
+    1918-1939 → Interwar Period   1945-1991 → Cold War
+    1789-1799 → French Revolution  1936-1939 → Spanish Civil War
+    1955-1975 → Vietnam War       1950-1953 → Korean War
+    1929-1939 → Great Depression  1607-1776 → Colonial America
+  • LCSH heading chains (e.g. "United States -- History -- 20th century")
+  • LCSH person-date headings (e.g. "Hemingway, Ernest, 1899-1961")
+  • Goodreads reading-state tags ("to-read", "currently-reading", "dnf")
+  • Unbalanced parentheses, control characters, URL-like strings
+  • Tags over ~60 characters (likely LCSH full headings)
+
+What the scanner does NOT handle (your job):
+  • True spelling variants not in the taxonomy ("Fant'sy" is unlikely but
+    "British Literature" vs. "English Literature" is a semantic question)
+  • Near-synonym merges ("Espionage" vs. "Spy Thriller" — semantic, not mechanical)
+  • Genuinely ambiguous form collapses ("Short Story" → "Short Stories")
+  • Any merge that requires understanding what the book is about
+
+
+---
 ## SECTION GEN — Output Format
 ---
 
@@ -136,8 +199,8 @@ GEN-01: Return a JSON array. Each element is one operation:
            "reason": "<≤10 words>"
          }
 
-GEN-01b: KEEP REASONS SHORT. Maximum 10 words. No quoting rule numbers.
-          Long reasons risk truncating the response and losing operations.
+GEN-01b: KEEP REASONS SHORT. Maximum 10 words — enforced programmatically;
+          excess words are truncated automatically. No rule numbers.
           Good:  "Plural variant"
           Good:  "Calibre slash-taxonomy noise"
           Bad:   "Per MERGE-02, compound '&' form tag collapses to the most
@@ -161,3 +224,46 @@ GEN-04: target_tags must contain only tags that already exist in the library
 GEN-05: If no operations are warranted, return [].
 
 GEN-06: No markdown fences. No commentary outside the JSON array.
+
+
+---
+## SECTION EXAMPLES — Reference Input/Output Pairs
+---
+
+EXAMPLE-01: Variant spelling merge (propose this)
+
+  Library contains: "Sci-Fi" (42 books), "Sci Fi" (7 books), "SF" (3 books),
+                    "Science Fiction" (210 books)
+
+  Correct operation:
+    {
+      "source_tags": ["Sci-Fi", "Sci Fi", "SF"],
+      "target_tags": ["Science Fiction"],
+      "reason": "Spelling variants of existing canonical tag"
+    }
+
+  Why: All three source tags mean exactly "Science Fiction". Any book correctly
+  tagged with "Sci-Fi" is correctly tagged "Science Fiction". The merge is safe.
+
+EXAMPLE-02: Niche tag — do NOT touch
+
+  Library contains: "Solarpunk" (12 books), "Hopepunk" (4 books),
+                    "Cli-fi" (8 books)
+
+  Correct operation: (none — omit these entirely)
+
+  Why: These are legitimate science fiction sub-genres with active communities.
+  "Solarpunk" is NOT a variant of "Science Fiction" — it is a specific aesthetic
+  and political tradition. Merging would destroy real search value. When in doubt
+  about a sub-genre, see REFUSAL-02.
+
+EXAMPLE-03: Drop a reading-state tag
+
+  Library contains: "to-read" (15 books), "currently-reading" (3 books)
+
+  Correct operation:
+    { "source_tags": ["to-read"], "target_tags": [], "reason": "Goodreads reading-state tag" },
+    { "source_tags": ["currently-reading"], "target_tags": [], "reason": "Goodreads reading-state tag" }
+
+  Why: These are personal shelf annotations, not subject tags. They carry no
+  search value and pollute the tag vocabulary. DROP is correct.

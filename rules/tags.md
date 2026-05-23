@@ -20,12 +20,17 @@ SCOPE-02: Tags are the primary search surface for this library. A reader
            relevant books. Accuracy and specificity matter more than
            broad coverage.
 
-SCOPE-03: Source material in priority order:
-             1. lcc_secondary_class — the most reliable subject signal
-             2. lcc_summary — the specific argument and subject
-             3. lcc_primary_class — broad class fallback
-             4. existing current_tags — review and reuse accurate ones
-             5. Title and authors — use when LCC data is absent
+SCOPE-03: Evidence in strict priority order — stop when you have enough signal:
+             1. lcc_secondary_class — most reliable subject signal;
+                maps directly to subject and sub-genre tags
+             2. lcc_summary — the specific argument/content of this book;
+                use to confirm or refine secondary class interpretation
+             3. lcc_primary_class — broad class only; use as fallback
+                when secondary is absent or too generic (e.g. "PS - Individual authors")
+             4. current_tags — review and reuse accurate ones;
+                normalize form but preserve meaning
+             5. Title and authors — last resort when LCC data is absent;
+                document in notes that tags are title-derived
 
 SCOPE-04: Do not repeat the LCC hierarchy verbatim as tags. Translate it
            into readable, searchable strings.
@@ -218,9 +223,11 @@ FORMAT-01: All tags are Title Case. Every significant word capitalised.
             Minor words (a, an, the, of, in, and, for, to) lowercase
             unless they begin the tag.
 
-FORMAT-02: No tags longer than 4 words.
+FORMAT-02: No tags longer than 4 words. (Enforced programmatically —
+            tags exceeding this limit will be truncated automatically.)
 
-FORMAT-03: No commas within a tag.
+FORMAT-03: No commas within a tag. (Enforced programmatically — any
+            comma causes the text before it to be taken as the full tag.)
 
 FORMAT-04: Use ampersand (&) only when it is the conventional form
             (e.g., "Arts & Crafts"). Do not use & as a space-saver.
@@ -260,3 +267,129 @@ GEN-06: "confidence":
 GEN-07: "notes" — one short sentence describing the primary source used
          or any notable caveat. If existing tags were largely kept, note
          that. If significant noise was dropped, note that.
+
+
+---
+## SECTION CONF — Confidence Calibration
+---
+
+CONF-01: Return "high" when ALL of the following hold:
+           - lcc_secondary_class is present and unambiguous
+           - Form tag selection is obvious (not a judgment call)
+           - 5+ strong subject signals are available across LCC data,
+             lcc_summary, and existing tags
+
+CONF-02: Return "medium" when ANY of the following apply:
+           - LCC data is present but thin (primary class only, no secondary)
+           - Form tag required a judgment call (e.g. Nonfiction fallback,
+             Memoir vs. Autobiography, Journalism vs. History)
+           - Fewer than 3 clear subject signals available
+           - lcc_summary conflicts with existing tags and resolution is uncertain
+
+CONF-03: Return "low" when ANY of the following apply:
+           - No LCC data at all
+           - Title is generic (e.g. "The Stories", "Collected Works")
+           - Subject is derived entirely from title/author with no LCC support
+           - Fewer than 2 signals total for any non-Form tag proposed
+
+CONF-04: When the Python validator corrects a Form tag issue (zero or
+          multiple Form tags returned), confidence is automatically downgraded
+          to "medium" regardless of what you returned. The notes field will
+          record the issue.
+
+
+---
+## SECTION RISK — Edge Cases and Defensive Behaviour
+---
+
+RISK-01: Thin data → minimal tags.
+           No LCC + no existing tags + generic title: return low confidence
+           with only a Form tag (best guess) and at most 1–2 subject tags
+           derived from the title. Do not pad to reach the 4–8 minimum.
+           Document the limitation in notes.
+
+RISK-02: Sub-genre always requires its parent.
+           "Space Opera" requires "Science Fiction" alongside it.
+           "Epic Fantasy" requires "Fantasy". "Psychological Thriller"
+           requires "Thriller". When you are confident in a sub-genre,
+           include the parent — do not make the reader guess the umbrella.
+           Exception: if you are not confident even in the parent, do not
+           include either.
+
+RISK-03: Borderline Form choices → document them.
+           Biography vs. Memoir vs. Nonfiction, Journalism vs. History,
+           Literary Criticism vs. Philosophy — when these are judgment calls,
+           state in notes why you chose as you did. This allows manual
+           correction to be targeted.
+
+RISK-04: When uncertain about any tag, omit it.
+           It is better to return 4 accurate tags than 7 tags where 3 are
+           guesses. A missed tag is correctable in a later pass. A wrong
+           tag degrades search quality for every user of this library.
+
+
+---
+## SECTION EXAMPLES — Reference Input/Output Pairs
+---
+
+EXAMPLE-01: Fiction, strong LCC, clear genre
+
+  Input:
+    title: "The Left Hand of Darkness"
+    authors: "Ursula K. Le Guin"
+    lcc: "PS3562.E42 L4"
+    lcc_primary_class: "PS - American Literature in English"
+    lcc_secondary_class: "PS3562 - Individual authors: L"
+    lcc_summary: "A science fiction novel exploring gender and society on an
+                  alien world. Le Guin's most celebrated work."
+    current_tags: ["Fiction", "science fiction", "gender"]
+
+  Expected output:
+    tags: ["Novel", "Science Fiction", "Feminist Science Fiction",
+           "Speculative Fiction", "Anthropological Fiction"]
+    confidence: "high"
+    notes: "LCC PS confirmed fiction; sub-genre and themes from lcc_summary
+            and existing tags. Dropped 'Fiction' (noise) and normalised
+            'science fiction'."
+
+EXAMPLE-02: Nonfiction, clear LCC, named period
+
+  Input:
+    title: "The Guns of August"
+    authors: "Barbara W. Tuchman"
+    lcc: "D521 .T8"
+    lcc_primary_class: "D - World History and History of Europe, Asia, Africa, etc."
+    lcc_secondary_class: "D501-680 - World War I"
+    lcc_summary: "Narrative history of the opening weeks of World War I,
+                  focusing on the decisions that led to catastrophe."
+    current_tags: ["History", "World War I", "1914-1918"]
+
+  Expected output:
+    tags: ["History", "World War I", "Military History",
+           "European History", "20th Century"]
+    confidence: "high"
+    notes: "LCC D521 confirms WWI military history. Dropped bare date range
+            '1914-1918' (period name preferred). Added 'Military History' and
+            'European History' from LCC secondary."
+
+EXAMPLE-03: Ambiguous Form, thin LCC
+
+  Input:
+    title: "Consider the Lobster"
+    authors: "David Foster Wallace"
+    lcc: "PS3573.A425635 C66"
+    lcc_primary_class: "PS - American Literature in English"
+    lcc_secondary_class: "PS3573 - Individual authors: W"
+    lcc_summary: "Essays on culture, politics, and literature by David
+                  Foster Wallace."
+    current_tags: ["essays", "Nonfiction"]
+
+  Expected output:
+    tags: ["Essay Collection", "Literary Criticism",
+           "American Literature", "Contemporary"]
+    confidence: "medium"
+    notes: "PS class is author's literary home regardless of form; lcc_summary
+            confirms essays. Form chosen as Essay Collection over Nonfiction.
+            'Nonfiction' kept would duplicate Form meaning — dropped. LCC
+            secondary is author-specific (no subject class), so subject tags
+            are thin."

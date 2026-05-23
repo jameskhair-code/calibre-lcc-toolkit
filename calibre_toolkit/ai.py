@@ -898,6 +898,9 @@ def _parse_tag_cleanup_response(
         sources = [t.strip() for t in (item.get("source_tags") or []) if t.strip()]
         targets = [t.strip() for t in (item.get("target_tags") or []) if t.strip()]
         reason = (item.get("reason") or "").strip()
+        reason_words = reason.split()
+        if len(reason_words) > 10:
+            reason = " ".join(reason_words[:10])
         if not sources:
             continue
         if len(sources) == 1 and len(targets) == 1 and sources[0] == targets[0]:
@@ -1016,6 +1019,39 @@ def _parse_tags_review_response(
     )
 
 
+_FORM_TAGS = frozenset({
+    "Novel", "Short Stories", "Poetry", "Drama", "Memoir",
+    "Autobiography", "Biography", "History", "Nonfiction",
+    "Essay Collection", "Literary Criticism", "Philosophy",
+    "Science", "Political Science", "Journalism",
+})
+
+
+def _validate_proposed_tags(
+    proposed: list[str],
+    notes: str,
+    confidence: str,
+) -> tuple[list[str], str, str]:
+    """Enforce FORMAT-02 (4-word cap), FORMAT-03 (no commas), FORM-01 (one Form tag)."""
+    cleaned = []
+    for tag in proposed:
+        tag = tag.split(",")[0].strip()  # FORMAT-03: strip at first comma
+        words = tag.split()
+        if len(words) > 4:              # FORMAT-02: truncate to 4 words
+            tag = " ".join(words[:4])
+        if tag:
+            cleaned.append(tag)
+
+    form_tags = [t for t in cleaned if t in _FORM_TAGS]
+    if len(form_tags) != 1:
+        confidence = "medium"
+        label = ", ".join(form_tags) if form_tags else "none found"
+        suffix = f"Form tag issue: {label}."
+        notes = f"{notes} {suffix}".strip() if notes else suffix
+
+    return cleaned, notes, confidence
+
+
 def _parse_tags_response(
     raw: str,
     books: list[Book],
@@ -1031,13 +1067,16 @@ def _parse_tags_response(
             continue
         raw_tags = item.get("tags") or []
         proposed = [t.strip() for t in raw_tags if isinstance(t, str) and t.strip()]
+        confidence = item.get("confidence", "low")
+        notes = item.get("notes", "").strip()
+        proposed, notes, confidence = _validate_proposed_tags(proposed, notes, confidence)
         suggestions.append(TagsSuggestion(
             book_id=book_id,
             title=book.title,
             authors=book.authors,
             current_tags=tags_map.get(book_id, []),
             proposed_tags=proposed,
-            confidence=item.get("confidence", "low"),
-            notes=item.get("notes", "").strip(),
+            confidence=confidence,
+            notes=notes,
         ))
     return suggestions
