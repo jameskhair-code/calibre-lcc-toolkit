@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "calibre-toolkit"
+version = "1.0.0"
+description = "AI-assisted metadata cleanup for Calibre libraries"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13",
+    "anthropic>=0.25",
+    "python-dotenv>=1.0",
+    "textual>=0.50",
+]
+
+[project.scripts]
+calibre-toolkit = "calibre_toolkit.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["calibre_toolkit*"]

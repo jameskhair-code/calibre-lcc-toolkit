@@ -1,0 +1,727 @@
+# LCC Enrichment Rules
+# Literary Awards & Nominees Collection — MQG-03
+#
+# Rules are grouped by category and numbered for reference.
+# Add, remove, or edit rules here — no code changes required.
+# Confidence guide: apply "high" only when evidence is catalog-confirmed.
+
+
+---
+## SECTION SCOPE — What This Task Is
+---
+
+SCOPE-01: For each book, you propose four LCC metadata values:
+            - lcc                    the LCC call number
+            - lcc_primary_class      controlled drop-down (21 values)
+            - lcc_secondary_class    controlled drop-down (~232 values)
+            - lcc_summary            one-sentence subject summary (free text)
+           Plus: confidence, source, and notes.
+
+SCOPE-02: This is NOT original professional cataloging. You are building local
+           metadata for a personal library by leveraging existing catalog
+           evidence (Library of Congress, WorldCat, university libraries) and
+           the public LCC schedule structure.
+
+SCOPE-03: Evidence beats invention. A catalog-confirmed value for the wrong
+           edition is usually better than a guess. A schedule-derived value
+           based on subject knowledge is acceptable as a fallback, but must be
+           flagged with lower confidence.
+
+SCOPE-04: Do not force precision. If you cannot support a full Cutter/year
+           extension from evidence, return the most specific portion you can
+           support (e.g. just the class+number, or just the class letters)
+           and use "low" confidence with a note explaining the limit.
+
+SCOPE-05: Inputs available per book — you will receive: title, author(s),
+           and any external identifiers already attached to the book
+           (typically ISBN, Goodreads ID, Amazon ASIN, OCLC number, or
+           LCCN where available). Use the strongest identifier first
+           (ISBN > LCCN > OCLC > others) when constructing catalog lookups.
+
+
+---
+## SECTION SRC — Evidence & Source Quality
+---
+
+SRC-01: Preferred evidence order, strongest first:
+          1. Library of Congress catalog record, same edition / ISBN.
+          2. WorldCat / OCLC consensus across multiple library records.
+          3. University or national library catalog record matching the work.
+          4. Open Library / Internet Archive record (often carries full
+             LCC drawn from member-library cataloging).
+          5. Google Books metadata (frequently surfaces the LC CIP record).
+          6. Publisher CIP-style metadata from the book itself.
+          7. Schedule-derived classification from the LCC outline + subject.
+
+SRC-02: When multiple catalog records disagree:
+          - Prefer the Library of Congress value.
+          - If LC is silent, prefer the value that appears most consistently
+            across reputable libraries.
+          - If conflict is genuine and unresolvable, return the safer
+            (less specific) value and flag "low" confidence for review.
+
+SRC-03: Edition matching factors, in priority order:
+          ISBN > Author + Title + Year > Author + Title > Title alone.
+          Reprints and public-domain editions often share LCC with the
+          original cataloged edition — this is usually acceptable but should
+          be noted in the source field when the ISBN does not match.
+
+SRC-04: Dissertations vs. later published books are separate bibliographic
+          objects. Do not silently reuse a dissertation's LCC for the
+          commercial book or vice versa.
+
+SRC-05: The "source" field should be a short phrase describing the strongest
+          piece of evidence used. Examples:
+            "Library of Congress catalog, exact ISBN match"
+            "WorldCat consensus across 4+ library records"
+            "Harvard catalog, matching edition"
+            "LCC schedule, derived from subject (no catalog record found)"
+
+
+---
+## SECTION LCC — The Call Number Field
+---
+
+LCC-01: The lcc field holds a single LCC call number in canonical spaced form.
+          Examples:
+            "DK189 .W67 2003"
+            "BM197.5 .K64 2003"
+            "PS3563.O8749 B45 1987"
+
+LCC-02: Format conventions:
+          - Class letters immediately followed by class number — no space.
+            RIGHT: "DK189"     WRONG: "DK 189"
+          - One space before the Cutter dot.
+            RIGHT: "DK189 .W67"   WRONG: "DK189.W67"
+          - One space before any subsequent Cutter or year.
+            RIGHT: "DK189 .W67 2003"
+          - Decimal class numbers: keep the dot, no space.
+            RIGHT: "BM197.5 .K64"
+          - Letters are uppercase. Cutter letters are uppercase.
+
+LCC-03: If the evidence supports only a partial call number, return what is
+          supported. Do not fabricate Cutters or years.
+            "DK189"           — class+number only, no Cutter found
+            "DK189 .W67"      — class+number+Cutter, no year found
+            "DK"              — only the subclass letters can be supported
+          Use "low" confidence for partial values.
+
+LCC-04: When the call number you find uses period-Cutter without a leading
+          space (e.g. "DK189.W67"), normalise it to spaced form
+          ("DK189 .W67") to match LC convention.
+
+LCC-05: If no LCC value can be reasonably derived or confirmed, return an
+          empty string for lcc and flag confidence "low" with a note
+          explaining what was searched and what was missing.
+
+LCC-06: Strip library-specific copy and volume designations from the call
+          number. These mark a specific physical copy in a particular
+          library's stacks and are not part of the canonical classification:
+            "DK189 .W67 2003 c.2"        → "DK189 .W67 2003"
+            "PS3563.O8749 B45 1987 v.1"  → "PS3563.O8749 B45 1987"
+            "QA76.5 .S65 2001 copy 1"    → "QA76.5 .S65 2001"
+          The Cutter and year ARE part of the canonical call number and
+          must be preserved; only trailing "c.N", "copy N", or "v.N"
+          circulation tags are removed.
+
+
+---
+## SECTION PRI — LCC Primary Class (Drop-down)
+---
+
+PRI-01: lcc_primary_class is a controlled drop-down. You MUST return one
+          of the 21 canonical values listed in PRI-04 exactly as written.
+          Any deviation (extra spaces, different punctuation, abbreviation)
+          will be rejected by validation.
+
+PRI-02: Derive the primary class from the leading letter of the LCC call
+          number. The mapping is mechanical:
+
+            A → A - General Works
+            B → B - Philosophy & Psychology & Religion
+            C → C - Auxiliary Sciences of History
+            D → D - World History & Area Studies
+            E → E - History of the Americas
+            F → F - History of the Americas
+            G → G - Geography & Anthropology & Recreation
+            H → H - Social Sciences
+            J → J - Political Science
+            K → K - Law
+            L → L - Education
+            M → M - Music
+            N → N - Fine Arts
+            P → P - Language & Literature
+            Q → Q - Science
+            R → R - Medicine
+            S → S - Agriculture
+            T → T - Technology
+            U → U - Military Science
+            V → V - Naval Science
+            Z → Z - Bibliography & Library Science
+
+PRI-03: E and F both map to "E - History of the Americas" / "F - History of
+          the Americas". Use the letter that matches the actual call number.
+          (E covers American history generally; F covers local/regional.)
+
+PRI-04: There are 21 valid lcc_primary_class values. The complete list is in
+          PRI-02 above. No other strings are valid.
+
+PRI-05: If lcc is empty, lcc_primary_class should still be your best subject-
+          based proposal — pick the class whose scope best fits the book's
+          subject and flag "low" confidence.
+
+
+---
+## SECTION SEC — LCC Secondary Class (Drop-down)
+---
+
+SEC-01: lcc_secondary_class is a controlled drop-down. You MUST return one
+          of the canonical values listed in SEC-05 exactly as written.
+
+SEC-02: Derive the secondary class from the subclass letters of the LCC call
+          number (the letters immediately preceding the first digit).
+          Examples:
+            "DK189 .W67 2003"      → subclass "DK"  → "DK - Russia & Soviet Union & Former Republics"
+            "BM197.5 .K64 2003"    → subclass "BM"  → "BM - Judaism"
+            "PS3563.O8749 B45"     → subclass "PS"  → "PS - American Literature"
+            "HD8390.B73 K63 1990"  → subclass "HD"  → "HD - Industries & Land Use & Labor"
+
+SEC-03: Special cases — range-coded secondaries for E and F:
+            E11-143      → "E11-143 - Americas: Pre-Colonial & Colonial"
+            E151-909     → "E151-909 - United States: History"
+            F1-975       → "F1-975 - United States: Local & Regional History"
+            F1001-1145   → "F1001-1145 - Canada & British America"
+            F1170        → "F1170 - French America"
+            F1201-3799   → "F1201-3799 - Latin America & Caribbean"
+          When the lcc number falls in one of these ranges, prefer the range-
+          coded secondary over the bare "E" or "F" value.
+
+SEC-04: Special cases — combined-range secondaries:
+            KD or KDK    → "KD-KDK - Law: United Kingdom & Ireland"
+            KG through KH  → "KG-KH - Law: Latin America & South America"
+            KJ through KKZ → "KJ-KKZ - Law: Europe"
+            KL through KWX → "KL-KWX - Law: Asia & Eurasia & Africa & Pacific"
+          When the subclass letters fall in one of these combined ranges,
+          use the combined-range secondary.
+
+SEC-05: Canonical secondary-class list, organised by primary class.
+          Use the EXACT string on the right of the arrow.
+
+          A — General Works
+            A     → "A - General Works"
+            AC    → "AC - Collections & Series & Collected Works"
+            AE    → "AE - Encyclopedias"
+            AG    → "AG - Dictionaries and Other General Reference Works"
+            AI    → "AI - Indexes"
+            AM    → "AM - Museums & Collecting"
+            AN    → "AN - Newspapers"
+            AP    → "AP - Periodicals"
+            AS    → "AS - Academies and Learned Societies"
+            AY    → "AY - Yearbooks & Almanacs & Directories"
+            AZ    → "AZ - History of Scholarship & The Humanities"
+
+          B — Philosophy, Psychology & Religion
+            B     → "B - Philosophy General"
+            BC    → "BC - Logic"
+            BD    → "BD - Speculative Philosophy"
+            BF    → "BF - Psychology"
+            BH    → "BH - Aesthetics"
+            BJ    → "BJ - Ethics"
+            BL    → "BL - Religions & Mythology & Rationalism"
+            BM    → "BM - Judaism"
+            BP    → "BP - Islam & Bahai Faith & Theosophy"
+            BQ    → "BQ - Buddhism"
+            BR    → "BR - Christianity"
+            BS    → "BS - The Bible"
+            BT    → "BT - Doctrinal Theology"
+            BV    → "BV - Practical Theology"
+            BX    → "BX - Christian Denominations"
+
+          C — Auxiliary Sciences of History
+            C     → "C - Auxiliary Sciences of History General"
+            CB    → "CB - History of Civilization"
+            CC    → "CC - Archaeology"
+            CD    → "CD - Diplomatics & Archives & Seals"
+            CE    → "CE - Technical Chronology & Calendar"
+            CJ    → "CJ - Numismatics"
+            CN    → "CN - Inscriptions & Epigraphy"
+            CR    → "CR - Heraldry"
+            CS    → "CS - Genealogy"
+            CT    → "CT - Biography"
+
+          D — World History & Area Studies
+            D     → "D - History General"
+            DA    → "DA - Great Britain"
+            DAW   → "DAW - Central Europe"
+            DB    → "DB - Austria & Hungary & Central Europe"
+            DC    → "DC - France & Andorra & Monaco"
+            DD    → "DD - Germany"
+            DE    → "DE - Greco-Roman World"
+            DF    → "DF - Greece"
+            DG    → "DG - Italy & Malta"
+            DH    → "DH - Low Countries & Benelux"
+            DJ    → "DJ - Netherlands"
+            DJK   → "DJK - Eastern Europe General"
+            DK    → "DK - Russia & Soviet Union & Former Republics"
+            DL    → "DL - Northern Europe & Scandinavia"
+            DP    → "DP - Spain & Portugal"
+            DQ    → "DQ - Switzerland"
+            DR    → "DR - Balkan Peninsula"
+            DS    → "DS - Asia"
+            DT    → "DT - Africa"
+            DU    → "DU - Oceania & Pacific"
+            DX    → "DX - Romanies"
+
+          E — History of the Americas (general)
+            E         → "E - Americas: General History"
+            E11-143   → "E11-143 - Americas: Pre-Colonial & Colonial"
+            E151-909  → "E151-909 - United States: History"
+
+          F — History of the Americas (local)
+            F             → "F - Americas: Local History"
+            F1-975        → "F1-975 - United States: Local & Regional History"
+            F1001-1145    → "F1001-1145 - Canada & British America"
+            F1170         → "F1170 - French America"
+            F1201-3799    → "F1201-3799 - Latin America & Caribbean"
+
+          G — Geography, Anthropology & Recreation
+            G     → "G - Geography: General & Atlases & Maps"
+            GA    → "GA - Mathematical Geography & Cartography"
+            GB    → "GB - Physical Geography"
+            GC    → "GC - Oceanography"
+            GE    → "GE - Environmental Sciences"
+            GF    → "GF - Human Ecology & Anthropogeography"
+            GN    → "GN - Anthropology"
+            GR    → "GR - Folklore"
+            GT    → "GT - Manners & Customs"
+            GV    → "GV - Recreation & Leisure"
+
+          H — Social Sciences
+            H     → "H - Social Sciences General"
+            HA    → "HA - Statistics"
+            HB    → "HB - Economic Theory & Demography"
+            HC    → "HC - Economic History and Conditions"
+            HD    → "HD - Industries & Land Use & Labor"
+            HE    → "HE - Transportation & Communications"
+            HF    → "HF - Commerce"
+            HG    → "HG - Finance"
+            HJ    → "HJ - Public Finance"
+            HM    → "HM - Sociology: General"
+            HN    → "HN - Social History & Social Reform"
+            HQ    → "HQ - Family & Marriage & Women"
+            HS    → "HS - Societies & Organizations"
+            HT    → "HT - Communities & Classes & Races"
+            HV    → "HV - Criminology & Social Welfare"
+            HX    → "HX - Socialism & Communism & Anarchism"
+
+          J — Political Science
+            J     → "J - Legislative & Executive Papers"
+            JA    → "JA - Political Science General"
+            JC    → "JC - Political Theory"
+            JF    → "JF - Political Institutions & Administration"
+            JJ    → "JJ - Political Administration: North America"
+            JK    → "JK - Political Administration: United States"
+            JL    → "JL - Political Administration: Canada & Latin America"
+            JN    → "JN - Political Administration: Europe"
+            JQ    → "JQ - Political Administration: Asia & Africa & Pacific"
+            JS    → "JS - Local & Municipal Government"
+            JV    → "JV - Colonization & Immigration"
+            JZ    → "JZ - International Relations"
+
+          K — Law
+            K           → "K - Law: General & Jurisprudence"
+            KB          → "KB - Religious Law: General"
+            KBM         → "KBM - Jewish Law"
+            KBP         → "KBP - Islamic Law"
+            KBR         → "KBR - History of Canon Law"
+            KBU         → "KBU - Catholic Church Law & The Holy See"
+            KD / KDK    → "KD-KDK - Law: United Kingdom & Ireland"
+            KDZ         → "KDZ - Law: North America"
+            KE          → "KE - Law: Canada"
+            KF          → "KF - Law: United States"
+            KG-KH       → "KG-KH - Law: Latin America & South America"
+            KJ-KKZ      → "KJ-KKZ - Law: Europe"
+            KL-KWX      → "KL-KWX - Law: Asia & Eurasia & Africa & Pacific"
+            KZ          → "KZ - Law of Nations"
+
+          L — Education
+            L     → "L - Education General"
+            LA    → "LA - History of Education"
+            LB    → "LB - Theory & Practice of Education"
+            LC    → "LC - Special Aspects of Education"
+            LD    → "LD - Educational Institutions: United States"
+            LE    → "LE - Educational Institutions: Americas (excl. US)"
+            LF    → "LF - Educational Institutions: Europe"
+            LG    → "LG - Educational Institutions: Asia & Africa & Pacific"
+            LH    → "LH - College & School Publications"
+            LJ    → "LJ - Student Organizations: United States"
+            LT    → "LT - Textbooks"
+
+          M — Music
+            M     → "M - Music"
+            ML    → "ML - Literature on Music"
+            MT    → "MT - Music Instruction & Study"
+
+          N — Fine Arts
+            N     → "N - Visual Arts"
+            NA    → "NA - Architecture"
+            NB    → "NB - Sculpture"
+            NC    → "NC - Drawing & Design & Illustration"
+            ND    → "ND - Painting"
+            NE    → "NE - Print Media"
+            NK    → "NK - Decorative Arts"
+            NX    → "NX - Arts: General"
+
+          P — Language & Literature
+            P     → "P - Philology & Linguistics"
+            PA    → "PA - Classical Languages & Literature"
+            PB    → "PB - Modern & Celtic Languages"
+            PC    → "PC - Romanic Languages"
+            PD    → "PD - Germanic & Scandinavian Languages"
+            PE    → "PE - English Language"
+            PF    → "PF - West Germanic Languages"
+            PG    → "PG - Slavic & Baltic Languages"
+            PH    → "PH - Uralic & Basque Languages"
+            PJ    → "PJ - Oriental Languages & Literature"
+            PK    → "PK - Indo-Iranian Languages & Literature"
+            PL    → "PL - Languages: East Asia & Africa & Oceania"
+            PM    → "PM - Indigenous & Constructed Languages"
+            PN    → "PN - Literature General"
+            PQ    → "PQ - Romance-Language Literatures"
+            PR    → "PR - English Literature"
+            PS    → "PS - American Literature"
+            PT    → "PT - Germanic & Scandinavian Literatures"
+            PZ    → "PZ - Fiction & Juvenile Literature"
+
+          Q — Science
+            Q     → "Q - Science General"
+            QA    → "QA - Mathematics"
+            QB    → "QB - Astronomy"
+            QC    → "QC - Physics"
+            QD    → "QD - Chemistry"
+            QE    → "QE - Geology"
+            QH    → "QH - Natural History & Biology"
+            QK    → "QK - Botany"
+            QL    → "QL - Zoology"
+            QM    → "QM - Human Anatomy"
+            QP    → "QP - Physiology"
+            QR    → "QR - Microbiology"
+
+          R — Medicine
+            R     → "R - Medicine General"
+            RA    → "RA - Public Health & Medicine"
+            RB    → "RB - Pathology"
+            RC    → "RC - Internal Medicine"
+            RD    → "RD - Surgery"
+            RE    → "RE - Ophthalmology"
+            RF    → "RF - Otorhinolaryngology"
+            RG    → "RG - Gynecology & Obstetrics"
+            RJ    → "RJ - Pediatrics"
+            RK    → "RK - Dentistry"
+            RL    → "RL - Dermatology"
+            RM    → "RM - Therapeutics & Pharmacology"
+            RS    → "RS - Pharmacy & Materia Medica"
+            RT    → "RT - Nursing"
+            RV    → "RV - Botanical & Alternative Medicine"
+            RX    → "RX - Homeopathy"
+            RZ    → "RZ - Other Medical Systems"
+
+          S — Agriculture
+            S     → "S - Agriculture General"
+            SB    → "SB - Plant Culture"
+            SD    → "SD - Forestry"
+            SF    → "SF - Animal Husbandry & Culture"
+            SH    → "SH - Aquaculture & Fisheries & Angling"
+            SK    → "SK - Hunting & Field Sports"
+
+          T — Technology
+            T     → "T - Technology General"
+            TA    → "TA - Engineering: General & Civil"
+            TC    → "TC - Hydraulic & Ocean Engineering"
+            TD    → "TD - Environmental & Sanitary Engineering"
+            TE    → "TE - Highway Engineering & Roads"
+            TF    → "TF - Railroad Engineering and Operation"
+            TG    → "TG - Bridge Engineering"
+            TH    → "TH - Building Construction"
+            TJ    → "TJ - Mechanical Engineering and Machinery"
+            TK    → "TK - Electrical & Electronics & Nuclear Engineering"
+            TL    → "TL - Vehicles & Aviation & Space"
+            TN    → "TN - Mining & Metallurgy"
+            TP    → "TP - Chemical Technology"
+            TR    → "TR - Photography"
+            TS    → "TS - Manufactures"
+            TT    → "TT - Handicrafts & Arts and Crafts"
+            TX    → "TX - Home Economics"
+
+          U — Military Science
+            U     → "U - Military Science General"
+            UA    → "UA - Armies & Military Organization"
+            UB    → "UB - Military Administration"
+            UC    → "UC - Military Maintenance & Transport"
+            UD    → "UD - Infantry"
+            UE    → "UE - Cavalry & Armor"
+            UF    → "UF - Artillery"
+            UG    → "UG - Military Engineering & Air Forces"
+            UH    → "UH - Other Military Services"
+
+          V — Naval Science
+            V     → "V - Naval Science General"
+            VA    → "VA - Navies & Naval Organization"
+            VB    → "VB - Naval Administration"
+            VC    → "VC - Naval Maintenance"
+            VD    → "VD - Naval Seamen"
+            VE    → "VE - Marines"
+            VF    → "VF - Naval Ordnance"
+            VG    → "VG - Minor Naval Services"
+            VK    → "VK - Navigation & Merchant Marine"
+            VM    → "VM - Naval Architecture & Shipbuilding"
+
+          Z — Bibliography & Library Science
+            Z     → "Z - Books & Libraries & Bibliography"
+            ZA    → "ZA - Information Resources General"
+
+SEC-06: If lcc is empty, lcc_secondary_class should still be your best
+          subject-based proposal. Pick the subclass whose scope best fits
+          the book's actual subject and flag "low" confidence.
+
+SEC-07: When only a single letter (e.g. "B") is supportable, use the
+          general-form secondary value (e.g. "B - Philosophy General"),
+          not a deeper guess.
+
+
+---
+## SECTION PATH — LCC Subject Summary
+---
+
+PATH-01: lcc_summary is a one-sentence subject summary — a concise,
+           readable description of what this book is specifically about,
+           written at the level of detail where the primary and secondary
+           class leave off. It should read like a one-line catalog description
+           or book jacket copy.
+
+PATH-02: Write a single complete sentence, typically 20–40 words.
+           - Do NOT open with "This book..." — start with what the book
+             does, examines, traces, or argues.
+           - Do NOT repeat the primary or secondary class in broad terms
+             (e.g. don't say "military science" if that's the primary class).
+             Go straight to the specific subject.
+           - For biographies, name the subject and the biographer's angle.
+             Useful openers: "A literary biography of…", "A political
+             biography tracing…", "The definitive life of…", "Examines
+             the life of … through…". Name the temporal scope when the
+             biography is structured by period (especially common for
+             multi-volume biographies).
+           - Name time period and geography when they are genuinely
+             distinctive and not already implied by the secondary class.
+             Include: period when it IS the subject (Cold War, 1945–1990).
+             Include: geography when it IS the subject and not implied by
+               the secondary class.
+             Omit: geography already implied (DK already means Russia).
+             Omit: period obvious from the call number year alone.
+           - Use plain prose. No bullet separators, no fragment lists.
+
+PATH-03: Examples spanning different classes:
+
+           Book:  "Danger and Survival: Choices About the Bomb in the First Fifty Years"
+           LCC:   "UA23 .B7862 1990"  Sec: "UA - Armies & Military Organization"
+           Path:  "A comprehensive history of nuclear weapons policy and Cold War
+                   strategic deterrence decision-making from 1945 to 1990."
+
+           Book:  "Franchise: The Golden Arches in Black America"
+           LCC:   "TX945.5.M33 C43 2020"  Sec: "TX - Home Economics"
+           Path:  "How McDonald's franchise model became a vehicle for Black
+                   economic participation — and exploitation — in 20th-century America."
+
+           Book:  "Six Galleons for the King of Spain"
+           LCC:   "VA583 .P48 1986"  Sec: "VA - Navies & Naval Organization"
+           Path:  "The logistics and financing of Spain's Atlantic galleon fleet
+                   as an instrument of imperial defense in the early seventeenth century."
+
+           Book:  "The Nature of the Book: Print and Knowledge in the Making"
+           LCC:   "Z124 .J64 1998"  Sec: "Z - Books & Libraries & Bibliography"
+           Path:  "Investigates print culture and knowledge production in early modern
+                   England, examining how authorship, the press, and the book trade
+                   shaped what counted as truth."
+
+           Book:  "Sailing School: Navigating Science and Skill, 1550–1800"
+           LCC:   "VK455 .S36 2019"  Sec: "VK - Navigation & Merchant Marine"
+           Path:  "Traces the history of nautical instruction and navigation science
+                   as a formal discipline across early modern Europe from 1550 to 1800."
+
+           Book:  "Scenarios of Power: Myth and Ceremony in Russian Monarchy"
+           LCC:   "DK189 .W67 2003"  Sec: "DK - Russia & Soviet Union & Former Republics"
+           Path:  "Examines how the Romanov dynasty used court ceremony and political
+                   myth to construct and project imperial monarchical authority."
+           (no geography phrase — DK already implies Russia)
+
+           Book:  "Henry James: The Conquest of London, 1870-1881, Volume 2"
+           LCC:   "PS2123 .E25 1962"  Sec: "PS - American Literature"
+           Path:  "A multi-volume literary biography of Henry James tracing his
+                   expatriate London years and the development of his major
+                   early-period fiction from 1870 to 1881."
+           (biography — opens by naming the genre and subject, then the
+           biographer's structuring angle)
+
+PATH-04: When lcc is empty, derive the summary from the best available subject
+           evidence — title, author, known subject. Flag "low" confidence.
+
+PATH-05: Do not use bullet separators, semicolons, or " > " in the sentence.
+           It is plain prose. Commas are allowed within the sentence.
+
+
+---
+## SECTION CONF — Confidence Levels
+---
+
+CONF-01: "high" — catalog-confirmed for the same edition.
+           Strong typical signals:
+             - ISBN match in Library of Congress catalog.
+             - Same edition match in multiple reputable library catalogs.
+             - All four output fields are well-supported by the source.
+
+CONF-02: "medium" — catalog-consensus across editions or close-but-not-exact
+           edition match. Examples:
+             - Earlier or later edition of same work shows same LCC.
+             - WorldCat shows consistent class across several library records.
+             - Edition is a reprint, but original cataloging is clear.
+
+CONF-03: "low" — schedule-derived, partial, ambiguous, or no catalog evidence.
+           Examples:
+             - No catalog record found; classification derived from subject.
+             - Catalog records disagree.
+             - Only the primary class letter is confidently supported.
+             - Multidisciplinary work where multiple classes are plausible.
+             - Title/author search returns nothing matching.
+
+CONF-04: Use "low" liberally. A "low" record is auto-flagged for manual
+           review — that is the correct outcome when evidence is weak.
+           Do not inflate confidence to avoid the review flag.
+
+CONF-05: The confidence applies to the full set of four LCC fields. If
+           lcc is "low" but the primary/secondary are obvious from subject,
+           use "low" for the whole record — the manual-review flag protects
+           the call number, which is the field most likely to be wrong.
+
+
+---
+## SECTION GEN — Output Format & General Behaviour
+---
+
+GEN-01: Return one JSON object per book, in the same order as the input.
+          The wrapping output must be a valid JSON array.
+
+GEN-02: Required keys per book object:
+          {
+            "lcc": "DK189 .W67 2003",
+            "lcc_primary_class": "D - World History & Area Studies",
+            "lcc_secondary_class": "DK - Russia & Soviet Union & Former Republics",
+            "lcc_summary": "Examines how the Romanov dynasty used court ceremony and political myth to construct and project imperial monarchical authority.",
+            "confidence": "high",
+            "source": "Library of Congress catalog, exact ISBN match",
+            "notes": "LC record confirms class for this edition."
+          }
+
+GEN-03: Primary and secondary class strings MUST match the canonical values
+          in PRI and SEC exactly. Any extra space, missing word, or
+          punctuation variation will fail validation downstream.
+
+GEN-04: No markdown fences. No commentary outside the JSON array. No
+          trailing commas. No comments inside the JSON.
+
+GEN-05: Treat each book independently. Do not infer classification for one
+          book from patterns in other books in the same batch (different
+          subject matter, even by the same author, can land in different
+          classes).
+
+GEN-06: Never invent a call number. If catalog evidence is missing, return
+          empty lcc and a subject-derived primary/secondary/path with
+          "low" confidence.
+
+GEN-07: The notes field should briefly describe the evidence basis or
+          any concern. Keep it concise — one short sentence when only one
+          observation applies; a brief semicolon-separated note when two
+          genuinely distinct concerns need to be flagged.
+          EXAMPLE (single):  "LC record confirms class for this edition."
+          EXAMPLE (two):     "Derived from subject — no catalog match;
+                              also possible PR alternative if author is
+                              British-born."
+
+GEN-08: If the book identity itself is ambiguous (multiple works with the
+          same title and author, dissertation vs. published book, etc.),
+          flag "low" confidence and explain the ambiguity in notes.
+
+
+---
+## SECTION RISK — Known Risk Areas
+---
+
+RISK-01: Reprints with modern ISBNs may carry LCC of the original edition.
+          Note this in the source field; "low" or "medium" confidence is
+          appropriate depending on how stable the subject placement is.
+
+RISK-02: Multidisciplinary works (history-of-science, religion-and-politics,
+          biography-of-an-artist, etc.) often sit between two classes.
+          Prefer the class supported by catalog consensus over your own
+          intuition. Flag "low" if catalogs disagree.
+
+RISK-03: Dissertations vs. trade books — treat them as different objects.
+
+RISK-04: Public-domain reprints and "anniversary editions" often produce
+          modern ISBNs that point at very old works. Use the LCC of the
+          original work and note this in source.
+
+RISK-05: Translated works — the LCC follows the ORIGINAL work, not the
+          translation. For non-literature (history, biography, science),
+          this means the subject placement of the original work.
+          For LITERATURE specifically (the P subclasses), classification
+          follows the language the work was ORIGINALLY WRITTEN IN — not
+          the language of the translation in your hand. This is a common
+          error trap because the AI is reading an English text but the
+          work belongs to a different national-literature tradition.
+          EXAMPLES — award-winning translated literature in your library:
+            Dostoevsky, "The Brothers Karamazov" in English
+              → PG (Slavic Languages: Russian Literature)
+              NOT PR (English Literature)
+            García Márquez, "One Hundred Years of Solitude" in English
+              → PQ (Romance-Language Literatures: Spanish)
+              NOT PS (American Literature)
+            Kafka, "The Trial" in English
+              → PT (Germanic Literatures: German)
+              NOT PR or PS
+            Murakami, "The Wind-Up Bird Chronicle" in English
+              → PL (Languages: East Asia, Africa, Oceania: Japanese)
+              NOT PS
+          The English-language edition in your library does not change
+          the classification — the literature is classified by the
+          author's original-language literary tradition.
+
+RISK-06: PZ classification trap — the PZ subclass ("PZ - Fiction &
+          Juvenile Literature") in LCC is almost exclusively used for
+          juvenile and young adult fiction. Award-winning ADULT literary
+          fiction should NOT be classified under PZ even though the
+          subclass name includes "Fiction." Instead, classify adult
+          literary fiction by the author's national literary tradition:
+            PR  — English-language literature (UK, Ireland, Australia,
+                  Canada, postcolonial English-language writers)
+            PS  — American literature
+            PQ  — Romance-language literatures (Spanish, Portuguese,
+                  French, Italian, Catalan, etc., in the original)
+            PT  — Germanic and Scandinavian literatures
+            PL  — East Asian, African, and Oceanic-language literatures
+            PG  — Slavic and Baltic literatures (Russian, Polish, etc.)
+          Use PZ ONLY when the work is genuinely juvenile or YA fiction
+          and the cataloging supports it — not as a default for any
+          fiction title. For a Literary Awards & Nominees collection,
+          PZ should be rare.
+
+
+---
+## SECTION RULE — Practical Rule
+---
+
+RULE-01: When in doubt:
+            Do not force the metadata.
+            Return a shorter, less specific value.
+            Flag "low" confidence.
+            The manual-review queue will catch it.
+          Boring, conservative metadata is good metadata.

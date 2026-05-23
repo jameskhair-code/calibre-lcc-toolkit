@@ -27,3 +27,10 @@ reports/backup/
 reports/audit/
 
 input/review-chunks/
+__pycache__/
+*.pyc
+*.egg-info/
+config.json
+
+# One-off exports
+tags_export.txt

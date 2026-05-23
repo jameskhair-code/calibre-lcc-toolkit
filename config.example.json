@@ -1,0 +1,59 @@
+{
+  "_comment": "Copy this file to config.json and fill in your values.",
+
+  "library_path": "/path/to/your/Calibre Library/Collection - Literary Awards and Nominees",
+
+  "calibredb_path": "calibredb",
+  "_comment_windows": "On Windows use full paths, e.g. C:\\Program Files\\Calibre2\\calibredb.exe",
+
+  "ai": {
+    "_comment": "Anthropic-only. Set api_key once here (or via ANTHROPIC_API_KEY env var). Per-command blocks only need a model — they inherit the top-level api_key. Add api_key to a per-command block only if you want a different key for that command.",
+    "api_key": "",
+    "model": "claude-sonnet-4-6",
+    "title_author": { "model": "claude-sonnet-4-6" },
+    "lcc":          { "model": "claude-sonnet-4-6" },
+    "comments":     { "model": "claude-sonnet-4-6" },
+    "tags":         { "model": "claude-sonnet-4-6" }
+  },
+
+  "identifiers": {
+    "_comment": "MQG-02 identifier enrichment settings.",
+    "fetch_ebook_metadata_path": "",
+    "_comment_fetch": "Leave blank to auto-detect from calibredb_path. On Windows set to e.g. C:\\Program Files\\Calibre2\\fetch-ebook-metadata.exe",
+    "lookup_timeout_seconds": 45,
+    "sufficient_types": ["isbn"],
+    "_comment_sufficient": "A book is considered already sufficient if it has at least one of these identifier types. Sufficient books skip the live lookup.",
+    "mqg_complete_requires": ["grrating", "grvotes"],
+    "_comment_mqg_complete": "Extra identifier types that must be present before MQG-02 is marked complete. Books enriched but missing these are reported as 'pending ratings' and not marked done. Set to [] to disable the gate."
+  },
+
+  "lcc": {
+    "_comment": "MQG-03 LCC enrichment — custom column labels (with leading #).",
+    "lcc_column": "#lcc",
+    "primary_class_column": "#lcc_primary_class",
+    "secondary_class_column": "#lcc_secondary_class",
+    "lcc_summary_column": "#lcc_summary"
+  },
+
+  "comments": {
+    "_comment": "MQG-04 comments enrichment — custom column labels.",
+    "mqg_column": "#mqg_comments",
+    "mqg_manual_column": "#mqg_comments_manual",
+    "lcc_summary_column": "#lcc_summary"
+  },
+
+  "tags": {
+    "_comment": "MQG-05 tag enrichment and review settings.",
+    "reviewed_column": "#tags_reviewed",
+    "mqg_column": "#mqg_tags",
+    "mqg_manual_column": "#mqg_tags_manual"
+  },
+
+  "mqg": {
+    "title_author_column": "#mqg_title_author",
+    "identifiers_column": "#mqg_identifiers",
+    "identifiers_manual_column": "#mqg_identifiers_manual",
+    "lcc_column": "#mqg_lcc",
+    "lcc_manual_column": "#mqg_lcc_manual"
+  }
+}
