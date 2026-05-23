@@ -256,11 +256,6 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
                     ["tags-cleanup"],
                     "Scanner then AI semantic pass — takes a few minutes",
                 ),
-                StepAction(
-                    "Dry run (scanner only, preview)",
-                    ["tags-cleanup", "--skip-ai", "--dry-run"],
-                    "Preview scanner changes without writing anything",
-                ),
             ],
         ),
     ]

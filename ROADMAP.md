@@ -135,6 +135,42 @@ citations.
 
 ---
 
+## Scope tags-cleanup to metadata queue (Option A)
+
+**Problem.** `tags-cleanup` always operates library-wide. There is no way from
+the TUI to restrict cleanup to the books currently in the metadata queue. Users
+who are actively processing a batch of 50 books cannot scope the vocabulary
+normalisation to just that batch without running the full library pass.
+
+**Approach (Option A — filter candidates, retain global stats).** The scanner
+and AI semantic pass continue to receive the full library tag vocabulary
+(frequency counts are only meaningful library-wide). The change is in the
+*application* step: before writing any operation, check whether the affected
+books intersect the requested search scope. Operations that touch no in-scope
+books are silently skipped.
+
+Concretely:
+1. Add an optional `search_query: str | None` parameter to `run_tags_cleanup()`
+   in `calibre_toolkit/modules/tags.py`.
+2. When set, load the book IDs matching the query and map tags to those books
+   via `db.get_tags_for_books()`.
+3. In the operation-application loop, skip ops where no affected book is in
+   scope.
+4. Add a `search` argument to the `tags-cleanup` CLI command in `cli.py`.
+5. Add two TUI buttons under Tags Cleanup: "Scanner only — metadata queue" and
+   "Full cleanup — metadata queue", passing `--search "#metadata_queue:true"`.
+
+**Touch points.** `calibre_toolkit/modules/tags.py` (`run_tags_cleanup`),
+`calibre_toolkit/cli.py` (`tags_cleanup` command), `calibre_toolkit/tui/app.py`
+(two new buttons under Tags Cleanup).
+
+**Risk.** Low. Library-wide path is unchanged; the scope filter is additive.
+Main edge case: a tag shared between queue books and non-queue books — the merge
+applies to all books with that tag (because tag writes are library-wide in
+Calibre), so the operation note should mention this.
+
+---
+
 ## Process notes
 
 - Each item above is a single focused PR off `main`, not bundled work.
