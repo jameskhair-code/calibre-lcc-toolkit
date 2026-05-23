@@ -264,6 +264,7 @@ class _CatalogStats:
     tried_lccn: int = 0
     tried_isbn: int = 0
     hits: int = 0
+    ol_hits: int = 0
 
 
 def _catalog_lookup_batch(
@@ -309,6 +310,7 @@ def _catalog_lookup_batch(
             if hit:
                 hits[bid] = hit
     stats.hits = len(hits)
+    stats.ol_hits = sum(1 for h in hits.values() if h.source.startswith("Open Library"))
     return hits, stats
 
 
@@ -317,14 +319,18 @@ def _build_catalog_suggestion(
     current: dict[str, str],
     hit: CatalogHit,
 ) -> LccSuggestion:
-    """Build a high-confidence LccSuggestion directly from a catalog hit.
+    """Build an LccSuggestion directly from a catalog hit. Bypasses the AI.
 
-    Bypasses the AI entirely. Summary is generated mechanically from the
-    derived secondary class — concise, serviceable, flagged as catalog-derived.
+    LC catalog hits are high-confidence; Open Library hits are medium (LC
+    classification data there is community-sourced and less authoritative).
     """
     primary, secondary = _derive_classes(hit.call_number)
     summary_class = secondary or primary or "Library of Congress Classification"
     summary = f"Classified by Library of Congress catalog under {summary_class}."
+
+    is_ol = hit.source.startswith("Open Library")
+    confidence = "medium" if is_ol else "high"
+    notes = "Open Library classification; AI bypassed." if is_ol else "Catalog-derived; AI bypassed."
 
     proposed = {
         "lcc": hit.call_number,
@@ -338,9 +344,9 @@ def _build_catalog_suggestion(
         authors=book.authors,
         current=current,
         proposed=proposed,
-        confidence="high",
+        confidence=confidence,
         source=hit.source,
-        notes="Catalog-derived; AI bypassed.",
+        notes=notes,
     )
 
 
@@ -559,11 +565,12 @@ def run_lcc_enrichment(
             ai_books.append(b)
 
     # One-line diagnostic so misses are explainable rather than mysterious.
+    ol_note = f" ({cat_stats.ol_hits} via Open Library)" if cat_stats.ol_hits else ""
     cat_breakdown = (
         f"[dim]Catalog lookup: {cat_stats.tried_lccn} tried by LCCN, "
         f"{cat_stats.tried_isbn} by ISBN, "
         f"{cat_stats.no_identifiers} had no usable identifier — "
-        f"{cat_stats.hits} hit(s).[/dim]"
+        f"{cat_stats.hits} hit(s){ol_note}.[/dim]"
     )
     if catalog_suggestions:
         console.print(

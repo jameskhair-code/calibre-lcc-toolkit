@@ -1,5 +1,5 @@
 """
-Library of Congress catalog lookups.
+Library of Congress catalog lookups, with Open Library fallback.
 
 Public endpoints used (no API key needed):
 
@@ -7,9 +7,14 @@ Public endpoints used (no API key needed):
       Direct fetch of a single bibliographic record by LCCN.
       Response includes `item.call_number` as a list of strings.
 
-  • https://www.loc.gov/search/?fa=partof:catalog&q={isbn}&fo=json&c=1
-      ISBN-based search of the LC catalog. First result's `call_number`
-      field carries the canonical LC class number.
+  • https://www.loc.gov/books/?q={isbn}&fo=json&c=1
+      ISBN-based search of the LC books catalog. First result's
+      `call_number` field carries the canonical LC class number.
+
+  • https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&jscmd=data&format=json
+      Open Library fallback when LC misses (e.g. recent publications not
+      yet catalogued). Response's `classifications.lc_classifications` is
+      a list of LCC strings. Confidence: medium.
 
 The functions here are best-effort: any network failure, missing field,
 or parse error returns None so the caller can fall through to AI
@@ -155,8 +160,40 @@ def lookup_by_isbn(isbn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[Cat
     )
 
 
+def lookup_by_isbn_openlibrary(isbn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[CatalogHit]:
+    """Resolve an ISBN to an LC call number via Open Library. Confidence: medium.
+
+    Used as a fallback when the LC catalog misses (e.g. recent publications
+    not yet fully catalogued by LC).
+    """
+    if not isbn:
+        return None
+    cleaned = re.sub(r"[\s\-]", "", isbn.strip())
+    if not cleaned:
+        return None
+    params = urllib.parse.urlencode({
+        "bibkeys": f"ISBN:{cleaned}",
+        "jscmd": "data",
+        "format": "json",
+    })
+    url = f"https://openlibrary.org/api/books?{params}"
+    data = _http_get_json(url, timeout=timeout)
+    if not data:
+        return None
+    # Response is keyed by "ISBN:{cleaned}"
+    record = data.get(f"ISBN:{cleaned}") or {}
+    lc_classes = (record.get("classifications") or {}).get("lc_classifications") or []
+    call = _pick_lcc_call_number(lc_classes)
+    if not call:
+        return None
+    return CatalogHit(
+        call_number=call,
+        source=f"Open Library (ISBN {cleaned})",
+    )
+
+
 def lookup_book(identifiers: dict, timeout: float = _DEFAULT_TIMEOUT) -> Optional[CatalogHit]:
-    """Try LCCN first (most authoritative), then ISBN. Returns None if no hit.
+    """Try LCCN → LC ISBN → Open Library ISBN. Returns None if all miss.
 
     identifiers is the {type: value} dict from db.get_identifiers().
     """
@@ -170,11 +207,19 @@ def lookup_book(identifiers: dict, timeout: float = _DEFAULT_TIMEOUT) -> Optiona
         if hit:
             return hit
 
-    # Fall back to ISBN (any of the common keys).
+    # Try LC's books catalog by ISBN.
     for key in ("isbn", "isbn13", "isbn10", "ISBN"):
         isbn = identifiers.get(key)
         if isbn:
             hit = lookup_by_isbn(isbn, timeout=timeout)
+            if hit:
+                return hit
+
+    # Fall back to Open Library as a secondary source.
+    for key in ("isbn", "isbn13", "isbn10", "ISBN"):
+        isbn = identifiers.get(key)
+        if isbn:
+            hit = lookup_by_isbn_openlibrary(isbn, timeout=timeout)
             if hit:
                 return hit
 
