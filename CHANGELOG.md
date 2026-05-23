@@ -56,6 +56,13 @@ Complete rewrite from the original PowerShell-based toolkit. The new toolkit is 
   - `--skip-ai` for scanner-only runs; `--min-books` to ignore long-tail tags during the AI pass; `--dry-run` for auditing
 - `tags-review`: per-book interactive review of current vs. proposed tags with approve / keep / edit / skip flow; sets `#tags_reviewed` per locked book
 
+**Fixes and improvements (tags pipeline)**
+
+- **`tags-cleanup` batching** — the AI semantic pass previously issued a single API call with the entire tag vocabulary. On libraries with 3000+ tags this exceeded the API timeout. Tags are now sorted alphabetically and batched in chunks of 150, with up to 5 batches running concurrently via the shared `_run_batches_concurrent()` infrastructure. A Rich progress bar shows batch count, elapsed time, and any failed batches. Alphabetical sorting clusters near-variants (e.g. "Sci-Fi" / "Science Fiction") into the same batch.
+- **`tags-cleanup` full-table display and `except` approval** — the preview table previously capped at 8 rows. All proposed operations are now shown in full with a leading `#` index column. The apply prompt accepts a new `except` option: enter the row numbers to skip (e.g. `7 12 15`) and everything else is applied in one operation — avoiding hundreds of individual y/n prompts when only a handful of operations need to be declined.
+- **`tags-review` validation fix** — Form-tag uniqueness check and 4-word cap were only enforced on the batch `tags-enrich` path. The per-book TUI `tags-review` path bypassed `_validate_proposed_tags()` entirely. Fixed by wiring validation into `_parse_tags_review_response()`.
+- **Step 05 TUI surfacing** — the TUI Step 05 panel only exposed three Review actions; `tags-enrich` had no TUI entry point. Added three Enrich actions matching the MQG-04 pattern: "Enrich next N", "Enrich all unprocessed", "Enrich metadata queue".
+
 ### Tooling and TUI
 - `menu` command launches a Rich-based TUI covering all pipeline steps and maintenance commands
 

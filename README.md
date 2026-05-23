@@ -36,23 +36,37 @@ Copy `config.example.json` to `config.json` and fill in your library path, calib
 
 ```json
 {
-  "library_path": "path/to/your/Calibre Library",
-  "calibredb_path": "path/to/calibredb",
+  "library_path": "/path/to/your/Calibre Library",
+  "calibredb_path": "calibredb",
   "ai": {
-    "provider": "openai",
-    "model": "gpt-4o-mini",
     "api_key": "",
-    "lcc": {
-      "provider": "anthropic",
-      "model": "claude-sonnet-4-6",
-      "api_key": ""
-    }
+    "model": "claude-sonnet-4-6",
+    "title_author": { "model": "claude-sonnet-4-6" },
+    "lcc":          { "model": "claude-sonnet-4-6" },
+    "comments":     { "model": "claude-sonnet-4-6" },
+    "tags":         { "model": "claude-sonnet-4-6" }
   },
   "identifiers": {
-    "fetch_ebook_metadata_path": "path/to/fetch-ebook-metadata",
+    "fetch_ebook_metadata_path": "",
     "lookup_timeout_seconds": 45,
     "sufficient_types": ["isbn"],
     "mqg_complete_requires": ["grrating", "grvotes"]
+  },
+  "lcc": {
+    "lcc_column": "#lcc",
+    "primary_class_column": "#lcc_primary_class",
+    "secondary_class_column": "#lcc_secondary_class",
+    "lcc_summary_column": "#lcc_summary"
+  },
+  "comments": {
+    "mqg_column": "#mqg_comments",
+    "mqg_manual_column": "#mqg_comments_manual",
+    "lcc_summary_column": "#lcc_summary"
+  },
+  "tags": {
+    "reviewed_column": "#tags_reviewed",
+    "mqg_column": "#mqg_tags",
+    "mqg_manual_column": "#mqg_tags_manual"
   },
   "mqg": {
     "title_author_column": "#mqg_title_author",
@@ -60,17 +74,13 @@ Copy `config.example.json` to `config.json` and fill in your library path, calib
     "identifiers_manual_column": "#mqg_identifiers_manual",
     "lcc_column": "#mqg_lcc",
     "lcc_manual_column": "#mqg_lcc_manual"
-  },
-  "lcc": {
-    "lcc_column": "#lcc",
-    "primary_class_column": "#lcc_primary_class",
-    "secondary_class_column": "#lcc_secondary_class",
-    "lcc_summary_column": "#lcc_summary"
   }
 }
 ```
 
-The `ai.lcc` block is optional — it lets you use a different provider or model for LCC enrichment specifically. Any key not set in the override block falls back to the top-level `ai` block.
+The toolkit is Anthropic-only. Set `ai.api_key` once (or via the `ANTHROPIC_API_KEY` environment variable). Per-command blocks (`ai.lcc`, `ai.tags`, etc.) only need a `model` — they inherit the top-level key. Provide a separate `api_key` in a per-command block only if you want a different key for that command.
+
+`fetch_ebook_metadata_path` can be left blank to auto-detect from `calibredb_path`. On Windows use full paths (e.g. `C:\Program Files\Calibre2\calibredb.exe`).
 
 ---
 
@@ -173,15 +183,7 @@ Config block (add to config.json):
 }
 ```
 
-AI override (optional, add inside the `ai` block):
-
-```json
-"comments": {
-  "provider": "anthropic",
-  "model": "claude-sonnet-4-6",
-  "api_key": ""
-}
-```
+To use a different model for comments specifically, set `ai.comments.model` in `config.json` (already included in the config template above).
 
 ### `tags-enrich`
 
@@ -214,7 +216,7 @@ Library-wide tag vocabulary normalisation. Two passes:
 1. **Deterministic scanner.** LCSH date+name drops, bare date ranges, Calibre taxonomy noise, date-range → period-name lookups, formatting cleanup. No AI call.
 2. **AI semantic pass.** Fuzzy variant matches and near-synonyms the scanner cannot resolve. Skip with `--skip-ai` for scanner-only runs.
 
-Operations are grouped by pattern with bulk approval per group; safe groups default to "apply all", everything else defaults to "review".
+Operations are grouped by pattern with bulk approval per group; safe groups default to "apply all", everything else defaults to "review". The apply prompt also accepts `except` — enter the row numbers to skip (e.g. `7 12 15`) and everything else applies in one shot.
 
 ```bash
 # Audit only
@@ -301,7 +303,7 @@ Enumeration values for `#lcc_primary_class` and `#lcc_secondary_class` are defin
 ```
 calibre_toolkit/
   cli.py                  Entry point — all commands
-  ai.py                   AI client (OpenAI + Anthropic)
+  ai.py                   AI client (Anthropic)
   db.py                   Calibre SQLite + calibredb wrapper
   fetcher.py              fetch-ebook-metadata wrapper
   modules/
@@ -315,6 +317,8 @@ calibre_toolkit/
     clean_identifiers.py  Identifier cleanup utility
   services/
     lc_catalog.py         LCCN/ISBN lookups against the LC catalog
+  tui/
+    app.py                Rich-based TUI menu (launched by `menu` command)
 
 config/
   lcc-primary-canonical.csv     21 LCC primary class values
