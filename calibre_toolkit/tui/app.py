@@ -191,27 +191,45 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
         StepDef(
             key="tags_review", number="05", name="Tags",
             description=(
-                "Interactive per-book tag review with AI assessment. "
-                "For each book the full metadata context is shown — description, "
-                "LCC, current tags — and the AI proposes improvements. "
-                "You approve, edit, or keep before locking."
+                "Two workflows. Enrich (bulk): AI proposes a full tag set for "
+                "books with no tags yet, grouped into high/medium/low confidence "
+                "tiers for bulk approval — matches the LCC and Comments flow. "
+                "Review (per-book): one book at a time with full context, "
+                "approve/edit/keep before locking. Use Enrich first to seed "
+                "tags, Review to curate."
             ),
             mqg_column=rev_col,
             actions=[
                 StepAction(
+                    "Enrich next N unprocessed",
+                    ["tags-enrich", f"{lcc_col}:true and not #mqg_tags:true"],
+                    "Bulk AI tagging for the next N books with LCC done but no tags yet",
+                    prompt_limit=True,
+                ),
+                StepAction(
+                    "Enrich all unprocessed",
+                    ["tags-enrich", f"{lcc_col}:true and not #mqg_tags:true"],
+                    "Bulk AI tagging for all books with LCC done but no tags yet",
+                ),
+                StepAction(
+                    "Enrich metadata queue",
+                    ["tags-enrich", "#metadata_queue:true"],
+                    "Bulk AI tagging across your metadata queue",
+                ),
+                StepAction(
                     "Review unprocessed books",
                     ["tags-review"],
-                    f"All books where {rev_col} is not yet set",
+                    f"Per-book curation for books where {rev_col} is not yet set",
                 ),
                 StepAction(
                     "Review metadata queue",
                     ["tags-review", "#metadata_queue:true"],
-                    "Books currently in your metadata queue",
+                    "Per-book curation across your metadata queue",
                 ),
                 StepAction(
                     "Review without AI (manual only)",
                     ["tags-review", "--no-ai"],
-                    "Shows book metadata; you decide without AI input",
+                    "Per-book review without AI input",
                 ),
             ],
         ),
