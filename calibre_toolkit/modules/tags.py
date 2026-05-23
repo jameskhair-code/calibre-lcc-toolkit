@@ -408,12 +408,14 @@ def run_tags_cleanup(
         default = "all" if _is_safe_group(group_key) else "review"
         choice = Prompt.ask(
             f"\n[bold]{label}[/bold] — {len(ops)} op(s). Apply?",
-            choices=["all", "review", "skip"],
+            choices=["all", "except", "review", "skip"],
             default=default,
             show_choices=True,
         )
         if choice == "all":
             to_apply.extend(ops)
+        elif choice == "except":
+            to_apply.extend(_apply_all_except(ops))
         elif choice == "review":
             to_apply.extend(_review_ops_individually(ops))
 
@@ -480,13 +482,13 @@ def _display_pattern_group(group_key: str, ops: list[TagOperation]) -> None:
               f"[dim]({len(ops)} op(s), {total_books} book(s) affected)[/dim]",
         title_justify="left",
     )
+    table.add_column("#", width=4, no_wrap=True, justify="right", style="dim")
     table.add_column("Kind",  width=8, no_wrap=True)
     table.add_column("Change", ratio=5)
     table.add_column("Books", width=7, no_wrap=True, justify="right")
     table.add_column("Reason", ratio=3, style="dim")
 
-    sample = ops[:8]
-    for op in sample:
+    for idx, op in enumerate(ops, start=1):
         kind_style = {
             "drop":   "red",
             "merge":  "yellow",
@@ -494,19 +496,43 @@ def _display_pattern_group(group_key: str, ops: list[TagOperation]) -> None:
             "split":  "magenta",
         }.get(op.kind, "white")
         table.add_row(
+            str(idx),
             Text(op.kind, style=kind_style),
             op.display_arrow,
             str(op.book_count),
             op.reason,
         )
-    if len(ops) > len(sample):
-        table.add_row(
-            "",
-            Text(f"… + {len(ops) - len(sample)} more", style="dim italic"),
-            "",
-            "",
-        )
     console.print(table)
+
+
+def _apply_all_except(ops: list[TagOperation]) -> list[TagOperation]:
+    """Apply every op except the indices the user excludes (1-based, as shown)."""
+    while True:
+        raw = Prompt.ask(
+            f"  Exclude which row #(s)? (comma/space separated, 1–{len(ops)}, "
+            f"or blank to apply all)",
+            default="",
+        ).strip()
+        if not raw:
+            return list(ops)
+        tokens = [t for t in raw.replace(",", " ").split() if t]
+        try:
+            excluded = {int(t) for t in tokens}
+        except ValueError:
+            console.print("  [red]Could not parse — please enter numbers only.[/red]")
+            continue
+        bad = [n for n in excluded if n < 1 or n > len(ops)]
+        if bad:
+            console.print(f"  [red]Out of range: {bad}. Try again.[/red]")
+            continue
+        approved = [op for idx, op in enumerate(ops, start=1) if idx not in excluded]
+        console.print(
+            f"  [dim]Excluding {len(excluded)} op(s); applying {len(approved)}.[/dim]"
+        )
+        if excluded:
+            for n in sorted(excluded):
+                console.print(f"    [dim]✗ #{n}: {ops[n - 1].display_arrow}[/dim]")
+        return approved
 
 
 def _review_ops_individually(ops: list[TagOperation]) -> list[TagOperation]:
