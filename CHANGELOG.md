@@ -2,7 +2,7 @@
 
 ---
 
-## Current — Python CLI Rebuild
+## v1.0.0 — Calibre Metadata Toolkit
 
 Complete rewrite from the original PowerShell-based toolkit. The new toolkit is a Python CLI using Typer, Rich, and direct Calibre integration (SQLite reads + calibredb writes).
 

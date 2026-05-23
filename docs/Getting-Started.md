@@ -1,4 +1,4 @@
-# Getting Started — Calibre LCC Toolkit
+# Getting Started — Calibre Metadata Toolkit
 
 A step-by-step guide for setting up and running the toolkit for the first time.
 

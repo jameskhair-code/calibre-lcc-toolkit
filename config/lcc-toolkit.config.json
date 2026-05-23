@@ -23,7 +23,7 @@
                           "LCCSecondaryClass":  "lcc_secondary_class",
                           "LCCClassificationPath":  "lcc_class_path"
                       },
-    "Notes":  "Configuration for the Calibre LCC Toolkit. Paths are relative to the toolkit root unless absolute."
+    "Notes":  "Legacy PowerShell configuration (pre-v1.0). Not used by the Python CLI. Paths are relative to the toolkit root unless absolute."
 }
 
 

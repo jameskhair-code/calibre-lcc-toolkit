@@ -1,4 +1,4 @@
-# Calibre LCC Toolkit
+# Calibre Metadata Toolkit
 
 An AI-assisted Python CLI for enriching Calibre library metadata. Built for a personal collection of literary awards and nominees (~5,000 books).
 

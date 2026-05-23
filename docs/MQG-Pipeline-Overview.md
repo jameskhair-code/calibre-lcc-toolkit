@@ -1,4 +1,4 @@
-# MQG Pipeline — v1.0 Reference
+# Calibre Metadata Toolkit — MQG Pipeline v1.0 Reference
 
 Authoritative reference for the five-step Calibre metadata enrichment pipeline.
 For setup instructions see [Getting-Started.md](Getting-Started.md).
