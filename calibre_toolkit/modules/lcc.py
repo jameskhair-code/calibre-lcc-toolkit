@@ -307,10 +307,10 @@ def _catalog_lookup_batch(
                 hit = fut.result()
             except Exception:
                 hit = None
-            if hit:
+            if hit and not hit.source.startswith("Open Library"):
                 hits[bid] = hit
     stats.hits = len(hits)
-    stats.ol_hits = sum(1 for h in hits.values() if h.source.startswith("Open Library"))
+    stats.ol_hits = 0  # OL hits are routed through AI for summary quality
     return hits, stats
 
 

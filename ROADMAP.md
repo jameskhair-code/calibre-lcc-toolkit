@@ -57,6 +57,44 @@ confidence honestly instead of guessing.
 
 ---
 
+## ISBN cross-reference for non-US editions (improve catalog hit rate)
+
+**Problem.** UK and other non-US ISBNs rarely match LC catalog records directly.
+LC catalogues under the US publisher's ISBN. A 50-book batch of literary fiction
+(heavily UK-published) yielded 0 direct LC catalog hits; Open Library picked up
+16 but was disabled (v1.0) because it lacks reliable summaries. The batch fell
+entirely to AI classification.
+
+**Approach — two complementary strategies:**
+
+1. **Open Library edition cascade.** OL's `/api/books?bibkeys=ISBN:{isbn}&jscmd=details`
+   response includes `works[0].key`. Fetching `{work_key}/editions.json` returns all
+   known editions with their ISBNs. Re-run `lookup_by_isbn()` against each US ISBN
+   found among those editions. This crosses the UK→US ISBN bridge using OL as an
+   index, then confirms via LC.
+
+2. **LC SRU title+author search.** When ISBN lookups fail, query LC's SRU endpoint
+   (`https://lx2.loc.gov/sru/...`) with title and author. Returns MARCXML records;
+   parse `<marc:datafield tag="050">` for the LC call number. Works independently
+   of ISBN and covers books LC has catalogued under any edition.
+
+**Touch points.** `calibre_toolkit/services/lc_catalog.py` — add
+`lookup_by_isbn_with_edition_cascade()` and `lookup_by_title_author_sru()`.
+Update `lookup_book()` to try these after direct ISBN miss.
+Re-enable Open Library ISBN lookup (currently filtered at `lcc.py:310`) once
+a real summary source is wired in via the book-description pre-fetch item above.
+
+**Risk.** Moderate. Edition cascade adds 1–2 extra HTTP calls per miss; SRU
+response is XML-heavy. Both should be gated behind the same timeout as existing
+catalog calls. Combine with the book-description pre-fetch item so OL re-enablement
+lands with a real summary pipeline, not the placeholder.
+
+**Expected impact.** For collections heavy in UK/international editions, catalog
+hit rate should rise from near-0 to 40–60% — reducing AI-only classifications
+and improving `lcc` field accuracy.
+
+---
+
 ## Process notes
 
 - Each item above is a single focused PR off `main`, not bundled work.
