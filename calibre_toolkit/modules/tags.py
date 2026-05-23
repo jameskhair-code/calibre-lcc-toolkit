@@ -335,19 +335,49 @@ def run_tags_cleanup(
     if not skip_ai and ai is not None:
         remaining = [(t, c) for t, c in all_tags if t not in handled and c >= min_books]
         if remaining:
-            with console.status(
-                f"[cyan]AI semantic analysis on {len(remaining)} remaining tag(s)…"
-            ):
+            batch_size = 150
+            total_batches = (len(remaining) + batch_size - 1) // batch_size
+            console.print(
+                f"[dim]AI semantic analysis on [cyan]{len(remaining)}[/cyan] tag(s) "
+                f"in [cyan]{total_batches}[/cyan] batch(es) of [cyan]{batch_size}[/cyan] "
+                f"([cyan]{ai.max_concurrency}[/cyan] in flight)…[/dim]"
+            )
+            from rich.progress import (
+                Progress, SpinnerColumn, TextColumn, BarColumn,
+                MofNCompleteColumn, TimeElapsedColumn,
+            )
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[cyan]Batches"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeElapsedColumn(),
+                TextColumn("[red]{task.fields[failed]} failed"),
+                console=console,
+                transient=True,
+            ) as progress:
+                task = progress.add_task("ai", total=total_batches, failed=0)
+
+                def _on_progress(done: int, total: int, failed: int) -> None:
+                    progress.update(task, completed=done, failed=failed)
+
                 try:
-                    ai_ops = ai.suggest_tag_cleanup(remaining)
+                    ai_ops = ai.suggest_tag_cleanup(
+                        remaining,
+                        batch_size=batch_size,
+                        progress_callback=_on_progress,
+                    )
                 except RuntimeError as e:
                     console.print(Panel(
                         str(e), title="[red]AI analysis failed[/red]",
                         border_style="red",
                     ))
                     raise typer.Exit(1)
+            failed = len(getattr(ai, "last_failures", []) or [])
             console.print(
-                f"[dim]AI: [green]{len(ai_ops)}[/green] operation(s) proposed.[/dim]"
+                f"[dim]AI: [green]{len(ai_ops)}[/green] operation(s) proposed"
+                + (f"; [red]{failed}[/red] batch(es) failed" if failed else "")
+                + ".[/dim]"
             )
 
     all_ops = scanner_ops + ai_ops

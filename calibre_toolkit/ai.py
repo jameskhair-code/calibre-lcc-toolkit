@@ -510,13 +510,28 @@ class AIClient:
     def suggest_tag_cleanup(
         self,
         tags: list[tuple[str, int]],
+        batch_size: int = 150,
+        progress_callback: Callable[[int, int, int], None] | None = None,
     ) -> list[TagOperation]:
         if not tags:
             return []
         system_prompt = _build_tag_cleanup_system_prompt()
-        user_msg = _build_tag_cleanup_user_message(tags)
-        raw = self._call(user_msg, system_prompt, max_tokens=16384)
-        return _parse_tag_cleanup_response(raw, {t: c for t, c in tags})
+        count_map = {t: c for t, c in tags}
+        # Sort case-insensitively so near-duplicates and variant spellings
+        # ("Sci-Fi", "Sci Fi", "Science Fiction") tend to land in the same
+        # batch and remain mergeable.
+        sorted_tags = sorted(tags, key=lambda x: x[0].lower())
+        batches = [
+            sorted_tags[i : i + batch_size]
+            for i in range(0, len(sorted_tags), batch_size)
+        ]
+
+        def _run(batch: list[tuple[str, int]]) -> list[TagOperation]:
+            user_msg = _build_tag_cleanup_user_message(batch)
+            raw = self._call(user_msg, system_prompt, max_tokens=8192)
+            return _parse_tag_cleanup_response(raw, count_map)
+
+        return self._run_batches_concurrent(_run, batches, progress_callback)
 
     # ── Tags (batch) ──────────────────────────────────────────────────────
 
