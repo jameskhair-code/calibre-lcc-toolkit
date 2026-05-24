@@ -1039,7 +1039,25 @@ for _cmd in (clean_titles, enrich_identifiers, lcc_enrich,
 
 
 @app.callback(invoke_without_command=True)
-def main(ctx: typer.Context):
+def main(
+    ctx: typer.Context,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose", "-v",
+            help="Log DEBUG-level events to stderr (default: silent)",
+        ),
+    ] = False,
+    log_file: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--log-file",
+            help="Mirror all DEBUG events to this file in addition to stderr",
+        ),
+    ] = None,
+):
+    from .logging_config import setup_logging
+    setup_logging(verbose=verbose, log_file=log_file)
     # Fires once per invocation, before any command. Old flag names remain
     # functional (kept as hidden Typer aliases) but produce a visible warning.
     _warn_deprecated_flags()
