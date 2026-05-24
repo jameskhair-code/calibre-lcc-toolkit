@@ -48,7 +48,17 @@ and set at minimum:
 | `calibredb_path` | `calibredb` (if on PATH) or the full path to the `calibredb` executable |
 | `ai.api_key` | Your Anthropic API key |
 
-The `ai.model` values default to `claude-sonnet-4-6`. Change them if you want to use a different Claude model.
+The `ai.model` values default to the alias `latest`. The supported aliases are:
+
+| Alias    | Resolves to                  | Use when                                                  |
+|----------|------------------------------|-----------------------------------------------------------|
+| `fast`   | the latest Haiku model       | speed and cost matter more than nuance                    |
+| `latest` | the newest recommended model | normal operation (default)                                |
+| `legacy` | `claude-sonnet-4-6`          | reproducibility — pin to the model used at v1.0/v1.1 ship |
+
+You can also pass a literal Anthropic model ID (e.g. `claude-sonnet-4-6` or any current ID); it is forwarded to the API unchanged. When Anthropic ships a new generation we update `calibre_toolkit/models.py` and the alias rolls forward — no config edits required.
+
+`--ai-model <alias>` works on every AI step and overrides the config for that run.
 
 `identifiers.fetch_ebook_metadata_path` can be left blank — it auto-detects from `calibredb_path`. On Windows use full paths: `C:\Program Files\Calibre2\fetch-ebook-metadata.exe`.
 
