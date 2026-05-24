@@ -26,13 +26,21 @@ This installs the `calibre_toolkit` package and its dependencies (Typer, Rich, h
 
 ## Step 2 — Configure
 
-Copy the example config and fill it in:
+The fastest path is the interactive wizard:
+
+```bash
+py -m calibre_toolkit.cli init
+```
+
+`init` prompts for your library path, verifies `calibredb` runs, tests your Anthropic API key with a minimal call, and writes a complete `config.json` atomically.
+
+If you prefer to edit JSON by hand, copy the example instead:
 
 ```bash
 cp config.example.json config.json
 ```
 
-Open `config.json` and set at minimum:
+and set at minimum:
 
 | Key | What to set |
 |-----|-------------|
@@ -50,7 +58,15 @@ The `ai.model` values default to `claude-sonnet-4-6`. Change them if you want to
 
 ## Step 3 — Create Calibre Custom Columns
 
-The toolkit expects these custom columns to exist in your Calibre library. Create them via **Preferences → Add your own columns** in Calibre:
+The toolkit expects 14 custom columns to exist in your Calibre library. Close Calibre, then run:
+
+```bash
+py -m calibre_toolkit.cli setup-columns
+```
+
+This creates any missing columns via `calibredb add_custom_column` and loads the LCC enumeration values from `config/lcc-*-canonical.csv`. It is idempotent — re-running it skips columns that already exist with the right type.
+
+To create them by hand instead, use **Preferences → Add your own columns** in Calibre:
 
 | Column label | Lookup name | Type | Notes |
 |---|---|---|---|
@@ -70,6 +86,18 @@ The toolkit expects these custom columns to exist in your Calibre library. Creat
 | Tags reviewed | `#tags_reviewed` | Yes/No | |
 
 **For the enumeration columns:** after creating the column, open the column editor and paste the values from the CSV files one per line. There are 21 primary class values and 231 secondary class values.
+
+---
+
+## Step 3a — Verify with `doctor`
+
+After `init` and `setup-columns`, confirm everything is wired up:
+
+```bash
+py -m calibre_toolkit.cli doctor
+```
+
+`doctor` is a read-only validation pass: config parses and has required keys, `metadata.db` exists at `library_path`, `calibredb --version` runs, the Anthropic API key authenticates, and every required custom column exists with the expected datatype. It exits non-zero on any failure, so you can wire it into a CI gate.
 
 ---
 

@@ -928,6 +928,60 @@ def library_info(
         console.print("\n  [green]✓ SQLite and calibredb counts match — no restriction detected.[/green]")
 
 
+@app.command()
+def doctor(
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+):
+    """
+    Validate config, library, calibredb, API key, and custom columns.
+
+    Read-only. Exits non-zero on any failure so it can be used in CI or as a
+    pre-flight check before running a batch.
+    """
+    from .setup import run_doctor
+    raise typer.Exit(run_doctor(config, console))
+
+
+@app.command()
+def init(
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Where to write config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+):
+    """
+    Interactive setup wizard. Prompts for library path, calibredb, and API
+    key, verifies each, then writes a complete config.json atomically.
+
+    Use this for a fresh install. Existing configs are not overwritten
+    without explicit confirmation.
+    """
+    from .setup import run_init
+    raise typer.Exit(run_init(config, console))
+
+
+@app.command()
+def setup_columns(
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+):
+    """
+    Create the 14 required Calibre custom columns via calibredb.
+
+    Idempotent — columns that already exist with the correct type are
+    skipped. Enumeration values for #lcc_primary_class and
+    #lcc_secondary_class are loaded from config/lcc-*-canonical.csv.
+    Calibre must be closed before running.
+    """
+    from .setup import run_setup_columns
+    raise typer.Exit(run_setup_columns(config, console))
+
+
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context):
     if ctx.invoked_subcommand is None:
