@@ -370,10 +370,14 @@ class AIClient:
         api_key: str,
         model: str | None = None,
         max_concurrency: int = 5,
+        request_timeout_seconds: float = 120.0,
+        max_retries: int = 3,
     ):
         self.api_key = api_key
         self.model = model or "claude-sonnet-4-6"
         self.max_concurrency = max_concurrency
+        self.request_timeout_seconds = request_timeout_seconds
+        self.max_retries = max_retries
         self._client = None
         # Populated by the last suggest_* call so callers can surface failures.
         self.last_failures: list[BatchFailure] = []
@@ -382,7 +386,11 @@ class AIClient:
         if self._client is None:
             from anthropic import Anthropic
             # max_retries handles transient 429/5xx with built-in backoff.
-            self._client = Anthropic(api_key=self.api_key, max_retries=3, timeout=120.0)
+            self._client = Anthropic(
+                api_key=self.api_key,
+                max_retries=self.max_retries,
+                timeout=self.request_timeout_seconds,
+            )
         return self._client
 
     def _call(self, user_msg: str, system_prompt: str, max_tokens: int = 8192) -> str:

@@ -9,6 +9,15 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Literal
 
+from .logging_config import get_logger
+from .retry import retry_with_backoff
+
+_log = get_logger(__name__)
+
+
+class _TransientFetchError(Exception):
+    """Internal sentinel — a fetch failure worth retrying."""
+
 
 # Identifier types we surface, in display order
 IDENTIFIER_TYPES = ["isbn", "amazon", "goodreads", "google", "oclc", "openlibrary", "librarything"]
@@ -31,9 +40,15 @@ class FetchResult:
 
 
 class IdentifierFetcher:
-    def __init__(self, fetch_path: str = "fetch-ebook-metadata", timeout: int = 45):
+    def __init__(
+        self,
+        fetch_path: str = "fetch-ebook-metadata",
+        timeout: int = 45,
+        max_retries: int = 2,
+    ):
         self.fetch_path = fetch_path
         self.timeout = timeout
+        self.max_retries = max(1, max_retries)
 
     def probe(self) -> str | None:
         """Return None if the binary is reachable, or an error string if not."""
@@ -78,29 +93,52 @@ class IdentifierFetcher:
         confidence: Literal["high", "low"],
     ) -> FetchResult:
         cmd = [self.fetch_path, "--opf"] + extra_args
+
+        def _attempt() -> FetchResult:
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=self.timeout,
+                )
+            except FileNotFoundError:
+                # Missing binary won't recover on retry.
+                return FetchResult(lookup_method=method, confidence=confidence, error="binary_not_found")
+            except subprocess.TimeoutExpired as e:
+                # Timeouts may be transient — let retry_with_backoff handle them.
+                raise _TransientFetchError("timeout") from e
+
+            if not result.stdout.strip():
+                stderr = result.stderr.strip()
+                # Heuristic: stderr mentioning network/timeout/ssl => transient.
+                lowered = stderr.lower()
+                if any(tok in lowered for tok in ("timeout", "network", "temporar", "ssl", "connection")):
+                    raise _TransientFetchError(stderr[:120] or "transient")
+                error_msg = f"no_results: {stderr[:120]}" if stderr else "no_results"
+                return FetchResult(lookup_method=method, confidence=confidence, error=error_msg)
+
+            fr = _parse_opf(result.stdout)
+            fr.lookup_method = method
+            fr.confidence = confidence
+            return fr
+
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=self.timeout,
+            return retry_with_backoff(
+                _attempt,
+                max_retries=self.max_retries,
+                retry_on=(_TransientFetchError,),
+                description=f"fetch-ebook-metadata ({method})",
             )
-        except FileNotFoundError:
-            return FetchResult(lookup_method=method, confidence=confidence, error="binary_not_found")
-        except subprocess.TimeoutExpired:
-            return FetchResult(lookup_method=method, confidence=confidence, error="timeout")
-
-        if not result.stdout.strip():
-            stderr = result.stderr.strip()
-            error_msg = f"no_results: {stderr[:120]}" if stderr else "no_results"
-            return FetchResult(lookup_method=method, confidence=confidence, error=error_msg)
-
-        fr = _parse_opf(result.stdout)
-        fr.lookup_method = method
-        fr.confidence = confidence
-        return fr
+        except _TransientFetchError as e:
+            # Final attempt timed out or hit a transient stderr — surface
+            # the same error code the previous version would have produced
+            # so downstream display is unchanged.
+            msg = str(e)
+            error = "timeout" if msg == "timeout" else f"no_results: {msg}"
+            return FetchResult(lookup_method=method, confidence=confidence, error=error)
 
 
 def _parse_opf(xml_str: str) -> FetchResult:

@@ -36,7 +36,7 @@ def stub_http(monkeypatch, fixtures_dir):
         else:
             routes[url_substring] = _load_fixture(fixtures_dir, fixture)
 
-    def fake_get(url: str, timeout=10.0):
+    def fake_get(url: str, timeout=10.0, max_retries=3):
         for sub, response in routes.items():
             if sub in url:
                 return response
@@ -124,7 +124,7 @@ class TestLookupByOpenLibrary:
     def test_missing_classifications_returns_none(self, stub_http, fixtures_dir, monkeypatch):
         # Empty response → record exists but no LC classifications.
         monkeypatch.setattr(lc_catalog, "_http_get_json",
-                            lambda url, timeout=10: {"ISBN:9780000000000": {}})
+                            lambda url, timeout=10, max_retries=3: {"ISBN:9780000000000": {}})
         assert lookup_by_isbn_openlibrary("9780000000000") is None
 
 
@@ -161,3 +161,66 @@ class TestLookupBookCascade:
     def test_all_misses_returns_none(self, stub_http):
         # No routes wired → every call returns None
         assert lookup_book({"isbn": "9780000000000"}) is None
+
+
+class TestHttpRetryBehaviour:
+    """The _http_get_json layer should retry transient (5xx, network) failures
+    but treat 4xx as a permanent miss to avoid hammering bad URLs."""
+
+    def test_5xx_triggers_retry_then_succeeds(self, monkeypatch):
+        import urllib.error
+        from calibre_toolkit.services import lc_catalog as lc
+        import calibre_toolkit.retry as rmod
+
+        # No real sleeps during the test.
+        monkeypatch.setattr(rmod.time, "sleep", lambda _s: None)
+
+        attempts = {"n": 0}
+
+        def fake_urlopen(req, timeout):
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, None)
+            class _Resp:
+                status = 200
+                def read(self): return b'{"ok": true}'
+                def __enter__(self): return self
+                def __exit__(self, *a): return False
+            return _Resp()
+
+        monkeypatch.setattr(lc.urllib.request, "urlopen", fake_urlopen)
+        result = lc._http_get_json("https://example.test/", timeout=1.0, max_retries=5)
+        assert result == {"ok": True}
+        assert attempts["n"] == 3
+
+    def test_4xx_returns_none_without_retry(self, monkeypatch):
+        import urllib.error
+        from calibre_toolkit.services import lc_catalog as lc
+
+        attempts = {"n": 0}
+
+        def fake_urlopen(req, timeout):
+            attempts["n"] += 1
+            raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+        monkeypatch.setattr(lc.urllib.request, "urlopen", fake_urlopen)
+        result = lc._http_get_json("https://example.test/", timeout=1.0, max_retries=5)
+        assert result is None
+        assert attempts["n"] == 1
+
+    def test_network_error_retried_until_exhausted(self, monkeypatch):
+        import urllib.error
+        from calibre_toolkit.services import lc_catalog as lc
+        import calibre_toolkit.retry as rmod
+        monkeypatch.setattr(rmod.time, "sleep", lambda _s: None)
+
+        attempts = {"n": 0}
+
+        def fake_urlopen(req, timeout):
+            attempts["n"] += 1
+            raise urllib.error.URLError("DNS fail")
+
+        monkeypatch.setattr(lc.urllib.request, "urlopen", fake_urlopen)
+        result = lc._http_get_json("https://example.test/", timeout=1.0, max_retries=3)
+        assert result is None
+        assert attempts["n"] == 3

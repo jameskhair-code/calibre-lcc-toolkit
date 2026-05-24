@@ -10,6 +10,9 @@
     "_comment": "Anthropic-only. Set api_key once here (or via ANTHROPIC_API_KEY env var). Per-command blocks only need a model — they inherit the top-level api_key. Add api_key to a per-command block only if you want a different key for that command.",
     "api_key": "",
     "model": "claude-sonnet-4-6",
+    "request_timeout_seconds": 120,
+    "max_retries": 3,
+    "_comment_retries": "Anthropic client per-request timeout and number of retries on transient (429/5xx) errors. Built-in exponential backoff.",
     "title_author": { "model": "claude-sonnet-4-6" },
     "lcc":          { "model": "claude-sonnet-4-6" },
     "comments":     { "model": "claude-sonnet-4-6" },
@@ -27,6 +30,18 @@
     "_comment_sufficient": "A book is considered already sufficient if it has at least one of these identifier types. Sufficient books skip the live lookup.",
     "mqg_complete_requires": ["grrating", "grvotes"],
     "_comment_mqg_complete": "Extra identifier types that must be present before MQG-02 is marked complete. Books enriched but missing these are reported as 'pending ratings' and not marked done. Set to [] to disable the gate."
+  },
+
+  "fetcher": {
+    "_comment": "fetch-ebook-metadata subprocess discipline. Overrides identifiers.lookup_timeout_seconds when present. max_retries applies only to transient failures (timeouts, network errors in stderr); missing-binary and no-results responses are not retried.",
+    "request_timeout_seconds": 45,
+    "max_retries": 2
+  },
+
+  "catalog": {
+    "_comment": "LC catalog and Open Library HTTP discipline. max_retries applies to 5xx responses and connection failures; 4xx responses are treated as a definitive miss and not retried.",
+    "request_timeout_seconds": 10,
+    "max_retries": 3
   },
 
   "lcc": {
