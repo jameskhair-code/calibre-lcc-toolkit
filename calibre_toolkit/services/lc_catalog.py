@@ -31,8 +31,18 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Optional
 
+from ..logging_config import get_logger
+from ..retry import retry_with_backoff
+
 _USER_AGENT = "calibre-lcc-toolkit/1.0 (personal library; +https://github.com/)"
 _DEFAULT_TIMEOUT = 10.0
+_DEFAULT_MAX_RETRIES = 3
+
+_log = get_logger(__name__)
+
+
+class _TransientHTTPError(Exception):
+    """Internal sentinel — a network/HTTP error worth retrying."""
 
 
 @dataclass
@@ -46,19 +56,45 @@ class CatalogHit:
 # ── HTTP helper ───────────────────────────────────────────────────────────────
 
 
-def _http_get_json(url: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[dict]:
-    """Fetch a URL and parse JSON. Returns None on any failure."""
-    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+def _http_get_json(
+    url: str,
+    timeout: float = _DEFAULT_TIMEOUT,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+) -> Optional[dict]:
+    """Fetch a URL and parse JSON. Returns None on any non-retryable failure.
+
+    Retries 5xx responses, timeouts, and connection errors with exponential
+    backoff. 4xx responses and JSON parse errors are returned as None
+    immediately — they will not improve on retry.
+    """
+
+    def _attempt() -> Optional[dict]:
+        req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if resp.status != 200:
+                    return None
+                data = resp.read()
+        except urllib.error.HTTPError as e:
+            # 4xx = permanent (bad LCCN/ISBN); 5xx = transient → retry.
+            if 500 <= e.code < 600:
+                raise _TransientHTTPError(f"HTTP {e.code} from {url}") from e
+            return None
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            raise _TransientHTTPError(f"network error from {url}: {e}") from e
+        try:
+            return json.loads(data)
+        except (json.JSONDecodeError, ValueError):
+            return None
+
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            if resp.status != 200:
-                return None
-            data = resp.read()
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
-        return None
-    try:
-        return json.loads(data)
-    except (json.JSONDecodeError, ValueError):
+        return retry_with_backoff(
+            _attempt,
+            max_retries=max_retries,
+            retry_on=(_TransientHTTPError,),
+            description=f"LC/OL HTTP GET {urllib.parse.urlparse(url).netloc}",
+        )
+    except _TransientHTTPError:
         return None
 
 
@@ -107,13 +143,17 @@ def _pick_lcc_call_number(call_numbers: list) -> Optional[str]:
 # ── Public lookups ────────────────────────────────────────────────────────────
 
 
-def lookup_by_lccn(lccn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[CatalogHit]:
+def lookup_by_lccn(
+    lccn: str,
+    timeout: float = _DEFAULT_TIMEOUT,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+) -> Optional[CatalogHit]:
     """Resolve an LCCN to a confirmed LC call number, or None on miss / error."""
     norm = _normalise_lccn(lccn)
     if not norm:
         return None
     url = f"https://www.loc.gov/item/{urllib.parse.quote(norm)}/?fo=json"
-    data = _http_get_json(url, timeout=timeout)
+    data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
     if not data:
         return None
     item = data.get("item") or {}
@@ -127,7 +167,11 @@ def lookup_by_lccn(lccn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[Cat
     )
 
 
-def lookup_by_isbn(isbn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[CatalogHit]:
+def lookup_by_isbn(
+    isbn: str,
+    timeout: float = _DEFAULT_TIMEOUT,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+) -> Optional[CatalogHit]:
     """Resolve an ISBN to a confirmed LC call number, or None on miss / error.
 
     Searches the /books/ endpoint specifically (more reliable for
@@ -144,7 +188,7 @@ def lookup_by_isbn(isbn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[Cat
         "c": "1",
     })
     url = f"https://www.loc.gov/books/?{params}"
-    data = _http_get_json(url, timeout=timeout)
+    data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
     if not data:
         return None
     results = data.get("results") or []
@@ -160,7 +204,11 @@ def lookup_by_isbn(isbn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[Cat
     )
 
 
-def lookup_by_isbn_openlibrary(isbn: str, timeout: float = _DEFAULT_TIMEOUT) -> Optional[CatalogHit]:
+def lookup_by_isbn_openlibrary(
+    isbn: str,
+    timeout: float = _DEFAULT_TIMEOUT,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+) -> Optional[CatalogHit]:
     """Resolve an ISBN to an LC call number via Open Library. Confidence: medium.
 
     Used as a fallback when the LC catalog misses (e.g. recent publications
@@ -177,7 +225,7 @@ def lookup_by_isbn_openlibrary(isbn: str, timeout: float = _DEFAULT_TIMEOUT) -> 
         "format": "json",
     })
     url = f"https://openlibrary.org/api/books?{params}"
-    data = _http_get_json(url, timeout=timeout)
+    data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
     if not data:
         return None
     # Response is keyed by "ISBN:{cleaned}"
@@ -192,7 +240,11 @@ def lookup_by_isbn_openlibrary(isbn: str, timeout: float = _DEFAULT_TIMEOUT) -> 
     )
 
 
-def lookup_book(identifiers: dict, timeout: float = _DEFAULT_TIMEOUT) -> Optional[CatalogHit]:
+def lookup_book(
+    identifiers: dict,
+    timeout: float = _DEFAULT_TIMEOUT,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+) -> Optional[CatalogHit]:
     """Try LCCN → LC ISBN → Open Library ISBN. Returns None if all miss.
 
     identifiers is the {type: value} dict from db.get_identifiers().
@@ -203,7 +255,7 @@ def lookup_book(identifiers: dict, timeout: float = _DEFAULT_TIMEOUT) -> Optiona
     # LCCN is the gold standard — try first.
     lccn = identifiers.get("lccn") or identifiers.get("LCCN")
     if lccn:
-        hit = lookup_by_lccn(lccn, timeout=timeout)
+        hit = lookup_by_lccn(lccn, timeout=timeout, max_retries=max_retries)
         if hit:
             return hit
 
@@ -211,7 +263,7 @@ def lookup_book(identifiers: dict, timeout: float = _DEFAULT_TIMEOUT) -> Optiona
     for key in ("isbn", "isbn13", "isbn10", "ISBN"):
         isbn = identifiers.get(key)
         if isbn:
-            hit = lookup_by_isbn(isbn, timeout=timeout)
+            hit = lookup_by_isbn(isbn, timeout=timeout, max_retries=max_retries)
             if hit:
                 return hit
 
@@ -219,7 +271,7 @@ def lookup_book(identifiers: dict, timeout: float = _DEFAULT_TIMEOUT) -> Optiona
     for key in ("isbn", "isbn13", "isbn10", "ISBN"):
         isbn = identifiers.get(key)
         if isbn:
-            hit = lookup_by_isbn_openlibrary(isbn, timeout=timeout)
+            hit = lookup_by_isbn_openlibrary(isbn, timeout=timeout, max_retries=max_retries)
             if hit:
                 return hit
 

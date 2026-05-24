@@ -272,6 +272,8 @@ class _CatalogStats:
 def _catalog_lookup_batch(
     db: CalibreDB,
     books: list,
+    timeout: float = _CATALOG_LOOKUP_TIMEOUT,
+    max_retries: int = 3,
 ) -> tuple[dict[int, CatalogHit], _CatalogStats]:
     """Try LC catalog lookups for each book in parallel.
 
@@ -300,7 +302,7 @@ def _catalog_lookup_batch(
     hits: dict[int, CatalogHit] = {}
     with ThreadPoolExecutor(max_workers=_CATALOG_LOOKUP_WORKERS) as ex:
         futures = {
-            ex.submit(lookup_book, id_map.get(b.id, {}), _CATALOG_LOOKUP_TIMEOUT): b.id
+            ex.submit(lookup_book, id_map.get(b.id, {}), timeout, max_retries): b.id
             for b in books
         }
         for fut in as_completed(futures):
@@ -507,6 +509,8 @@ def run_lcc_enrichment(
     mqg_manual_column: str | None = None,
     force: bool = False,
     dry_run: bool = False,
+    catalog_timeout: float = _CATALOG_LOOKUP_TIMEOUT,
+    catalog_max_retries: int = 3,
 ) -> None:
     """Full MQG-03 LCC enrichment flow for a Calibre search string.
 
@@ -569,7 +573,11 @@ def run_lcc_enrichment(
         f"[cyan]Looking up {len(books)} book(s) in the LC catalog "
         "(LCCN → ISBN)…[/cyan]"
     ):
-        catalog_hits, cat_stats = _catalog_lookup_batch(db, books)
+        catalog_hits, cat_stats = _catalog_lookup_batch(
+            db, books,
+            timeout=catalog_timeout,
+            max_retries=catalog_max_retries,
+        )
 
     catalog_suggestions: list[LccSuggestion] = []
     ai_books = []

@@ -145,6 +145,8 @@ def _make_ai(
     return AIClient(
         api_key=api_key,
         model=ai_cfg.get("model"),
+        request_timeout_seconds=float(ai_cfg.get("request_timeout_seconds", 120.0)),
+        max_retries=int(ai_cfg.get("max_retries", 3)),
     )
 
 
@@ -264,14 +266,23 @@ def enrich_identifiers(
 
     id_cfg = cfg.get("identifiers", {})
     fetch_path = _infer_fetch_path(cfg)
-    timeout = id_cfg.get("lookup_timeout_seconds", 45)
+    fetcher_cfg = cfg.get("fetcher", {})
+    timeout = fetcher_cfg.get(
+        "request_timeout_seconds",
+        id_cfg.get("lookup_timeout_seconds", 45),
+    )
+    max_retries = int(fetcher_cfg.get("max_retries", 2))
     sufficient_types = id_cfg.get("sufficient_types", ["isbn"])
     mqg_complete_requires = id_cfg.get("mqg_complete_requires", [])
     max_workers = int(id_cfg.get("max_workers", 4))
     mqg_column = cfg.get("mqg", {}).get("identifiers_column")
     mqg_manual_column = cfg.get("mqg", {}).get("identifiers_manual_column")
 
-    fetcher = IdentifierFetcher(fetch_path=fetch_path, timeout=timeout)
+    fetcher = IdentifierFetcher(
+        fetch_path=fetch_path,
+        timeout=timeout,
+        max_retries=max_retries,
+    )
 
     console.print(
         Panel(
@@ -390,6 +401,7 @@ def lcc_enrich(
         )
     )
 
+    catalog_cfg = cfg.get("catalog", {})
     run_lcc_enrichment(
         db=db,
         ai=ai,
@@ -402,6 +414,8 @@ def lcc_enrich(
         mqg_manual_column=mqg_manual_column,
         force=force,
         dry_run=dry_run,
+        catalog_timeout=float(catalog_cfg.get("request_timeout_seconds", 10.0)),
+        catalog_max_retries=int(catalog_cfg.get("max_retries", 3)),
     )
 
 
