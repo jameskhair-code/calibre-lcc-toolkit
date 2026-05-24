@@ -82,6 +82,25 @@ def _extract_json_object(raw: str) -> dict:
 
 # ── Data classes ────────────────────────────────────────────────────────────
 
+SourceAuthority = Literal[
+    "lc_catalog",
+    "worldcat_consensus",
+    "open_library",
+    "ai_inference",
+]
+
+_SOURCE_AUTHORITY_VALUES: frozenset[str] = frozenset({
+    "lc_catalog", "worldcat_consensus", "open_library", "ai_inference",
+})
+
+_ATTRIBUTION_PREFIX = {
+    "lc_catalog":         "[LC]",
+    "worldcat_consensus": "[WC]",
+    "open_library":       "[OL]",
+    "ai_inference":       "[AI]",
+}
+
+
 @dataclass
 class LccSuggestion:
     book_id: int
@@ -93,6 +112,11 @@ class LccSuggestion:
     source: str = ""
     notes: str = ""
     parse_error: str = ""
+    # Structural provenance. The AI returns it as a hint; the parser
+    # downgrades any unsupported claim to "ai_inference" (see
+    # _normalise_lcc_source_authority). Catalog-built suggestions
+    # populate this directly in _build_catalog_suggestion.
+    source_authority: SourceAuthority = "ai_inference"
 
     @property
     def authors_display(self) -> str:
@@ -104,6 +128,14 @@ class LccSuggestion:
             self.proposed.get(k, "") != self.current.get(k, "")
             for k in ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_summary")
         )
+
+    @property
+    def attribution_prefix(self) -> str:
+        """Display prefix derived purely from source_authority — never from
+        the AI's free-text source string. Reviewers and the audit log can
+        rely on this to distinguish AI-only rows from catalog-confirmed ones.
+        """
+        return _ATTRIBUTION_PREFIX.get(self.source_authority, "[AI]")
 
 
 @dataclass
@@ -712,9 +744,20 @@ Each object must have exactly these keys:
   "lcc_secondary_class": "<exact canonical drop-down string from SEC-05>",
   "lcc_summary": "<one-sentence subject summary per PATH section — plain prose, 20–40 words>",
   "confidence": "high" | "medium" | "low",
+  "source_authority": "lc_catalog" | "worldcat_consensus" | "open_library" | "ai_inference",
   "source": "<short phrase describing the strongest evidence used>",
   "notes": "<one short sentence; reasoning or caveat>"
 }
+
+source_authority semantics — see SRC-06 in the rules:
+  - "lc_catalog"         only if you can cite a specific LC record (LCCN or ISBN).
+  - "worldcat_consensus" only if you can cite multiple library catalog records.
+  - "open_library"       only if you can cite an OL bibkey/work.
+  - "ai_inference"       otherwise — including all reasoning from training data,
+                         topic inference, or schedule-derived classification.
+
+You are being called as a fallback for books that already failed direct catalog
+lookups. Return "ai_inference" unless you can cite a specific catalog record.
 
 Return ONLY the JSON array. No markdown fences, no commentary outside the array.
 """
@@ -741,6 +784,35 @@ def _build_lcc_user_message(books: list[Book], current_map: dict[int, dict[str, 
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+def _normalise_lcc_source_authority(
+    raw_value: object,
+    notes: str,
+) -> tuple[SourceAuthority, str]:
+    """Enforce the source_authority contract documented in SRC-06.
+
+    The AI is called only after direct catalog lookups have already missed,
+    so any `lc_catalog` or `worldcat_consensus` claim it returns cannot be
+    structurally verified by us and is downgraded to `ai_inference` with a
+    visible note appended.
+
+    Returns (normalised_authority, normalised_notes).
+    """
+    value = (str(raw_value) if raw_value is not None else "").strip().lower()
+    if value not in _SOURCE_AUTHORITY_VALUES:
+        return "ai_inference", notes
+
+    if value in ("lc_catalog", "worldcat_consensus"):
+        suffix = (
+            f"AI claimed source_authority={value!r} but no catalog hit was "
+            "passed in; downgraded to ai_inference."
+        )
+        new_notes = f"{notes} {suffix}".strip() if notes else suffix
+        return "ai_inference", new_notes
+
+    # open_library and ai_inference pass through as-is.
+    return value, notes  # type: ignore[return-value]
+
+
 def _transform_lcc_items(
     items: list[LccItem],
     books: list[Book],
@@ -758,6 +830,10 @@ def _transform_lcc_items(
             "lcc_secondary_class": item.lcc_secondary_class.strip(),
             "lcc_summary": item.lcc_summary.strip(),
         }
+        notes = item.notes.strip()
+        authority, notes = _normalise_lcc_source_authority(
+            item.source_authority, notes,
+        )
         suggestions.append(LccSuggestion(
             book_id=item.id,
             title=book.title,
@@ -766,7 +842,8 @@ def _transform_lcc_items(
             proposed=proposed,
             confidence=item.confidence,
             source=item.source.strip(),
-            notes=item.notes.strip(),
+            notes=notes,
+            source_authority=authority,
         ))
     return suggestions
 

@@ -65,6 +65,11 @@ class LccItem(BaseModel):
     lcc_summary: str = ""
     confidence: Confidence = "low"
     source: str = ""
+    # Structural provenance — enforced by _normalise_lcc_source_authority in
+    # ai.py, which downgrades unsupported lc_catalog/worldcat_consensus claims.
+    # Accept any string here; the normaliser handles bad values rather than
+    # raising a SchemaViolation (we don't want one bad enum to fail the row).
+    source_authority: str = ""
     notes: str = ""
 
 

@@ -245,7 +245,17 @@ def _build_review_table(validated: list[ValidatedSuggestion]) -> Table:
         prop_text.append(s.proposed["lcc_summary"] or "(empty)")
 
         src_text = Text()
-        src_text.append(s.source or "(no source)", style="dim italic")
+        # Structural attribution prefix is the trustworthy provenance —
+        # the AI's free-text source string can claim things we never verified.
+        prefix_style = {
+            "[LC]": "bold green",
+            "[WC]": "bold cyan",
+            "[OL]": "bold yellow",
+            "[AI]": "bold magenta",
+        }.get(s.attribution_prefix, "bold")
+        src_text.append(s.attribution_prefix, style=prefix_style)
+        src_text.append(" ")
+        src_text.append(s.source or "(no source text)", style="dim italic")
         if s.notes:
             src_text.append(f"\n{s.notes}", style="dim")
 
@@ -335,6 +345,7 @@ def _build_catalog_suggestion(
     is_ol = hit.source.startswith("Open Library")
     confidence = "medium" if is_ol else "high"
     notes = "Open Library classification; AI bypassed." if is_ol else "Catalog-derived; AI bypassed."
+    authority = "open_library" if is_ol else "lc_catalog"
 
     proposed = {
         "lcc": hit.call_number,
@@ -351,6 +362,7 @@ def _build_catalog_suggestion(
         confidence=confidence,
         source=hit.source,
         notes=notes,
+        source_authority=authority,
     )
 
 
@@ -387,7 +399,10 @@ def _apply_suggestion(db: CalibreDB, v: ValidatedSuggestion, columns: dict[str, 
     db.apply_custom_fields(v.book_id, fields)
 
     # Audit each field individually so a later analysis can grep by field.
-    source = v.suggestion.source or "ai"
+    # `source` is the structural enum — a future audit can trust it; the
+    # AI's free-text source string is preserved separately as `source_text`.
+    structural_source = v.suggestion.source_authority
+    source_text = v.suggestion.source or ""
     confidence = v.suggestion.confidence
     for label, value in fields.items():
         audit_log(
@@ -395,11 +410,14 @@ def _apply_suggestion(db: CalibreDB, v: ValidatedSuggestion, columns: dict[str, 
             field=label,
             new_value=value,
             confidence=confidence,
-            source=source,
+            source=structural_source,
+            source_text=source_text,
             step="lcc-enrich",
         )
-    _log.debug("applied LCC suggestion for book %s (conf=%s, source=%s)",
-               v.book_id, confidence, source)
+    _log.debug(
+        "applied LCC suggestion for book %s (conf=%s, source=%s, prefix=%s)",
+        v.book_id, confidence, structural_source, v.suggestion.attribution_prefix,
+    )
 
 
 # ── Audit display ─────────────────────────────────────────────────────────────
@@ -772,8 +790,10 @@ def _prompt_and_apply(
         console.print(f"  [dim]{s.authors_display}[/dim]")
         icon, style = _CONF_DISPLAY.get(s.confidence, ("—", "dim"))
         console.print(f"  Confidence: [{style}]{icon} {s.confidence}[/{style}]")
-        if s.source:
-            console.print(f"  Source: [dim italic]{s.source}[/dim italic]")
+        console.print(
+            f"  Source: [bold]{s.attribution_prefix}[/bold] "
+            f"[dim italic]{s.source or '(no source text)'}[/dim italic]"
+        )
         for field_name in _LCC_FIELDS:
             console.print(f"  [green]→[/green] {field_name}: {v.final_fields[field_name]}")
         if v.has_warnings:
