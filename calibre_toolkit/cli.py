@@ -23,6 +23,45 @@ app = typer.Typer(
 )
 console = Console()
 
+
+# ── Flag standardisation ───────────────────────────────────────────────────────
+#
+# The canonical names for AI-confidence-gated review flags are:
+#
+#   --auto-apply-high       Apply high-confidence proposals without prompting.
+#   --force                 Re-process books normally skipped (already-complete,
+#                           manually-flagged, etc.). Per-command help explains
+#                           what is overridden.
+#   --dry-run               Show proposed changes only; write nothing.
+#
+# Pre-v1.1 names that meant the same thing are retained as hidden aliases and
+# emit a one-line deprecation warning on stderr when used, so existing scripts
+# keep working. The lookup table below documents the renames.
+_DEPRECATED_FLAGS: dict[str, str] = {
+    "--auto-approve": "--auto-apply-high",
+    "--force-lookup": "--force",
+}
+
+
+def _warn_deprecated_flags() -> None:
+    """Print a one-line deprecation notice for any old-name flags in argv."""
+    for old, new in _DEPRECATED_FLAGS.items():
+        if old in sys.argv:
+            console.print(
+                f"[yellow]warning:[/yellow] [bold]{old}[/bold] is deprecated; "
+                f"use [bold]{new}[/bold] instead. The old name still works in v1.x.",
+            )
+
+
+_TIER_DEFAULTS_HELP = (
+    "\n\nReview tier defaults (per confidence level, applied at the bulk-approval prompt):\n"
+    "  high   → all      (apply without further review)\n"
+    "  medium → review   (decide per book)\n"
+    "  low    → skip     (do not apply)\n"
+    "Press Enter at the prompt to accept the default; pass --auto-apply-high "
+    "to skip the prompt entirely for the high tier."
+)
+
 # ── Config loading ─────────────────────────────────────────────────────────────
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "config.json"
@@ -196,7 +235,11 @@ def enrich_identifiers(
     ] = False,
     force_lookup: Annotated[
         bool,
-        typer.Option("--force-lookup", help="Look up all books even if already sufficient"),
+        typer.Option(
+            "--force", "--force-lookup",
+            help="Look up all books even if they already have a sufficient identifier "
+                 "(--force-lookup is a deprecated alias)",
+        ),
     ] = False,
 ):
     """
@@ -283,7 +326,7 @@ def lcc_enrich(
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="Show what the AI would write vs. current values — no changes saved"),
+        typer.Option("--dry-run", help="Preview proposed changes without writing to Calibre"),
     ] = False,
     ai_provider: Annotated[
         Optional[str],
@@ -380,7 +423,7 @@ def tags_enrich(
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="Show proposed tags without writing"),
+        typer.Option("--dry-run", help="Preview proposed changes without writing to Calibre"),
     ] = False,
     ai_provider: Annotated[
         Optional[str],
@@ -461,7 +504,7 @@ def tags_cleanup(
     ] = DEFAULT_CONFIG_PATH,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="Show proposed merges without applying"),
+        typer.Option("--dry-run", help="Preview proposed changes without writing to Calibre"),
     ] = False,
     min_books: Annotated[
         int,
@@ -558,7 +601,7 @@ def comments_enrich(
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="Show what the AI would write — no changes saved"),
+        typer.Option("--dry-run", help="Preview proposed changes without writing to Calibre"),
     ] = False,
     force: Annotated[
         bool,
@@ -751,7 +794,11 @@ def tags_review(
     ] = False,
     auto_approve: Annotated[
         bool,
-        typer.Option("--auto-approve", help="Auto-lock books where AI says complete + high confidence"),
+        typer.Option(
+            "--auto-apply-high", "--auto-approve",
+            help="Auto-lock books where AI says complete + high confidence "
+                 "(--auto-approve is a deprecated alias)",
+        ),
     ] = False,
     ai_provider: Annotated[
         Optional[str],
@@ -982,8 +1029,20 @@ def setup_columns(
     raise typer.Exit(run_setup_columns(config, console))
 
 
+# Append the tier-defaults block to every command that runs a tiered
+# bulk-approval prompt. Typer reads __doc__ when rendering --help, so
+# mutating it after definition keeps the single-source-of-truth block out
+# of every individual docstring.
+for _cmd in (clean_titles, enrich_identifiers, lcc_enrich,
+             tags_enrich, comments_enrich):
+    _cmd.__doc__ = (_cmd.__doc__ or "").rstrip() + "\n" + _TIER_DEFAULTS_HELP + "\n"
+
+
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context):
+    # Fires once per invocation, before any command. Old flag names remain
+    # functional (kept as hidden Typer aliases) but produce a visible warning.
+    _warn_deprecated_flags()
     if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
 
