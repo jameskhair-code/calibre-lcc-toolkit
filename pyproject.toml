@@ -15,6 +15,11 @@ dependencies = [
     "textual>=0.50",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
 [project.scripts]
 calibre-toolkit = "calibre_toolkit.cli:app"
 
