@@ -347,7 +347,7 @@ def lcc_enrich(
     ] = None,
     ai_model: Annotated[
         Optional[str],
-        typer.Option("--ai-model", help="Override AI model for this run (e.g. gpt-4o, claude-sonnet-4-6)"),
+        typer.Option("--ai-model", help="Override AI model. Accepts an alias (fast / latest / legacy) or a literal model ID."),
     ] = None,
 ):
     """
@@ -447,7 +447,7 @@ def tags_enrich(
     ] = None,
     ai_model: Annotated[
         Optional[str],
-        typer.Option("--ai-model", help="Override AI model for this run"),
+        typer.Option("--ai-model", help="Override AI model. Accepts an alias (fast / latest / legacy) or a literal model ID."),
     ] = None,
 ):
     """
@@ -536,7 +536,7 @@ def tags_cleanup(
     ] = None,
     ai_model: Annotated[
         Optional[str],
-        typer.Option("--ai-model", help="Override AI model for this run"),
+        typer.Option("--ai-model", help="Override AI model. Accepts an alias (fast / latest / legacy) or a literal model ID."),
     ] = None,
 ):
     """
@@ -625,7 +625,7 @@ def comments_enrich(
     ] = False,
     ai_model: Annotated[
         Optional[str],
-        typer.Option("--ai-model", help="Override AI model for this run"),
+        typer.Option("--ai-model", help="Override AI model. Accepts an alias (fast / latest / legacy) or a literal model ID."),
     ] = None,
 ):
     """
@@ -822,7 +822,7 @@ def tags_review(
     ] = None,
     ai_model: Annotated[
         Optional[str],
-        typer.Option("--ai-model", help="Override AI model for this run"),
+        typer.Option("--ai-model", help="Override AI model. Accepts an alias (fast / latest / legacy) or a literal model ID."),
     ] = None,
 ):
     """

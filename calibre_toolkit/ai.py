@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from .db import Book, BookDetails
+from .models import resolve_model
 from .normalize import normalize_text
 
 # Rules file lives alongside the package root
@@ -374,7 +375,9 @@ class AIClient:
         max_retries: int = 3,
     ):
         self.api_key = api_key
-        self.model = model or "claude-sonnet-4-6"
+        resolved = resolve_model(model)
+        self.model = resolved.model_id
+        self.model_alias = resolved.alias
         self.max_concurrency = max_concurrency
         self.request_timeout_seconds = request_timeout_seconds
         self.max_retries = max_retries

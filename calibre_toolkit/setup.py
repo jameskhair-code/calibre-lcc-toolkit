@@ -225,7 +225,9 @@ def _check_api_key(cfg: dict) -> CheckResult:
     except ImportError:
         return CheckResult("Anthropic API key authenticates", "warn",
                            "anthropic package not installed; skipping live check")
-    model = ai_cfg.get("model") or "claude-sonnet-4-6"
+    from .models import resolve_model
+    resolved = resolve_model(ai_cfg.get("model"))
+    model = resolved.model_id
     try:
         client = Anthropic(api_key=api_key, max_retries=0, timeout=15.0)
         client.messages.create(
@@ -242,7 +244,10 @@ def _check_api_key(cfg: dict) -> CheckResult:
     except Exception as e:                       # network, timeout, etc.
         return CheckResult("Anthropic API key authenticates", "warn",
                            f"Could not reach Anthropic: {e}")
-    return CheckResult("Anthropic API key authenticates", "ok", f"model={model}")
+    detail = f"model={model}"
+    if resolved.alias:
+        detail += f" (alias={resolved.alias})"
+    return CheckResult("Anthropic API key authenticates", "ok", detail)
 
 
 def _check_columns(cfg: dict) -> list[CheckResult]:
@@ -318,7 +323,7 @@ def run_doctor(config_path: Path, console: Console | None = None) -> int:
 
 # ── init ────────────────────────────────────────────────────────────────────
 
-_DEFAULT_MODEL = "claude-sonnet-4-6"
+_DEFAULT_MODEL = "latest"
 
 
 def _autodetect_calibredb() -> str:
@@ -372,9 +377,10 @@ def run_init(config_path: Path, console: Console | None = None,
     if api_key:
         try:
             from anthropic import Anthropic, AuthenticationError
+            from .models import resolve_model
             client = Anthropic(api_key=api_key, max_retries=0, timeout=15.0)
             client.messages.create(
-                model=_DEFAULT_MODEL,
+                model=resolve_model(_DEFAULT_MODEL).model_id,
                 max_tokens=1,
                 messages=[{"role": "user", "content": "."}],
             )

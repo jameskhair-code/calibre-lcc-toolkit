@@ -8,15 +8,16 @@
 
   "ai": {
     "_comment": "Anthropic-only. Set api_key once here (or via ANTHROPIC_API_KEY env var). Per-command blocks only need a model — they inherit the top-level api_key. Add api_key to a per-command block only if you want a different key for that command.",
+    "_comment_models": "Use a named alias ('fast', 'latest', 'legacy') or a literal Anthropic model ID. Aliases are resolved at startup against calibre_toolkit/models.py — when a new generation ships, only that file needs updating. Literal IDs continue to work.",
     "api_key": "",
-    "model": "claude-sonnet-4-6",
+    "model": "latest",
     "request_timeout_seconds": 120,
     "max_retries": 3,
     "_comment_retries": "Anthropic client per-request timeout and number of retries on transient (429/5xx) errors. Built-in exponential backoff.",
-    "title_author": { "model": "claude-sonnet-4-6" },
-    "lcc":          { "model": "claude-sonnet-4-6" },
-    "comments":     { "model": "claude-sonnet-4-6" },
-    "tags":         { "model": "claude-sonnet-4-6" }
+    "title_author": { "model": "latest" },
+    "lcc":          { "model": "latest" },
+    "comments":     { "model": "latest" },
+    "tags":         { "model": "latest" }
   },
 
   "identifiers": {
