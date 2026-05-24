@@ -127,6 +127,28 @@ The five steps are designed to run in order. Each step marks books complete with
 
 Each step is **human-in-the-loop**: the AI proposes changes, the tool shows a review table with confidence tiers (● high / ◐ medium / ○ low), and you decide before anything is written to Calibre.
 
+### Tier defaults at the bulk-approval prompt
+
+Every AI-confidence step (clean-titles, enrich-identifiers, lcc-enrich, comments-enrich, tags-enrich) groups proposals by confidence and offers a bulk choice per tier. The defaults — applied if you press Enter — are:
+
+| Tier | Default action | What it does |
+|------|----------------|--------------|
+| **high** (●)   | `all`    | Apply every high-confidence proposal in one shot |
+| **medium** (◐) | `review` | Step through each book individually |
+| **low** (○)    | `skip`   | Do not apply; leave for a future pass |
+
+Pass `--auto-apply-high` to skip the prompt entirely for the high tier — useful when you trust the model's confidence calibration and want to power through a large batch.
+
+### Flag conventions
+
+Across commands the canonical names for review flags are:
+
+- `--auto-apply-high` — apply high-confidence proposals without prompting (was `--auto-approve` on `tags-review` before v1.1).
+- `--force` — re-process books normally skipped; each command's `--help` describes what is overridden (was `--force-lookup` on `enrich-identifiers`).
+- `--dry-run` — preview proposed changes without writing.
+
+Old flag names still work but print a one-line deprecation notice.
+
 ---
 
 ## Step 6 — First-Run Tips
