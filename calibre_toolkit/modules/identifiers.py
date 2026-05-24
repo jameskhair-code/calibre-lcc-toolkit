@@ -7,9 +7,19 @@ from __future__ import annotations
 
 import re
 import typer
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 from rich.text import Text
 from rich import box
@@ -17,6 +27,9 @@ from rich.prompt import Prompt
 
 from ..db import CalibreDB, Book
 from ..fetcher import IdentifierFetcher, IDENTIFIER_TYPES
+from ..logging_config import get_logger
+
+_log = get_logger(__name__)
 
 
 console = Console()
@@ -203,6 +216,91 @@ def _build_review_table(
     return table
 
 
+def _parallel_lookup(
+    fetcher: IdentifierFetcher,
+    pending: list[tuple[Book, dict[str, str]]],
+    max_workers: int,
+) -> dict[int, "IdentifierSuggestion"]:
+    """Run fetcher.fetch for each (book, current_ids) pair concurrently.
+
+    Returns a {book_id: IdentifierSuggestion} map; the caller stitches these
+    into the final list in input order so the review table is deterministic.
+
+    `subprocess.run` releases the GIL during the wait, so threading gives real
+    concurrency for the I/O-bound lookups. A single Rich progress bar keeps
+    output coherent across worker threads — per-worker `console.status()`
+    would interleave illegibly.
+    """
+    results: dict[int, IdentifierSuggestion] = {}
+    if not pending:
+        return results
+
+    workers = max(1, min(max_workers, len(pending)))
+
+    def _lookup_one(book: Book, current: dict[str, str]) -> IdentifierSuggestion:
+        isbn = current.get("isbn")
+        try:
+            result = fetcher.fetch(isbn=isbn, title=book.title, authors=book.authors)
+        except Exception as exc:  # last-resort safety net
+            _log.exception("identifier lookup raised for book %d", book.id)
+            return IdentifierSuggestion(
+                book_id=book.id,
+                title=book.title,
+                authors=book.authors,
+                current_identifiers=current,
+                found_identifiers={},
+                new_identifiers={},
+                lookup_method="",
+                confidence="low",
+                lookup_attempted=True,
+                lookup_error=f"unexpected: {exc!r}"[:200],
+                already_sufficient=False,
+            )
+
+        new_ids = {k: v for k, v in result.identifiers.items() if k not in current}
+        return IdentifierSuggestion(
+            book_id=book.id,
+            title=book.title,
+            authors=book.authors,
+            current_identifiers=current,
+            found_identifiers=result.identifiers,
+            new_identifiers=new_ids,
+            lookup_method=result.lookup_method,
+            confidence=result.confidence,
+            lookup_attempted=True,
+            lookup_error=result.error,
+            already_sufficient=False,
+            returned_title=result.title,
+            returned_authors=result.authors,
+        )
+
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[cyan]Looking up identifiers"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+        console=console,
+        transient=True,
+    )
+    with progress:
+        task = progress.add_task("lookup", total=len(pending))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(_lookup_one, book, current): book.id
+                for book, current in pending
+            }
+            for fut in as_completed(futures):
+                bid = futures[fut]
+                results[bid] = fut.result()
+                progress.advance(task)
+
+    return results
+
+
 def run_enrichment(
     db: CalibreDB,
     fetcher: IdentifierFetcher,
@@ -214,6 +312,7 @@ def run_enrichment(
     sufficient_types: list[str] | None = None,
     mqg_complete_requires: list[str] | None = None,
     force_lookup: bool = False,
+    max_workers: int = 4,
 ) -> None:
     """Full MQG-02 identifier enrichment flow for a given Calibre search string.
 
@@ -272,17 +371,43 @@ def run_enrichment(
         console.print()
 
     # ── 2. Lookup identifiers ─────────────────────────────────────────────────
+    # Pre-classify books: those already sufficient skip the network entirely;
+    # the rest go through the parallel lookup pool.
     suggestions: list[IdentifierSuggestion] = []
+    pending: list[tuple[Book, dict[str, str]]] = []
+    current_by_id: dict[int, dict[str, str]] = {}
 
-    for idx, book in enumerate(books, 1):
+    for book in books:
         current = db.get_identifiers(book.id)
+        current_by_id[book.id] = current
+        if (
+            not force_lookup
+            and _is_sufficient(current, sufficient_types)
+            and _is_sufficient(current, mqg_complete_requires)
+        ):
+            continue
+        pending.append((book, current))
 
-        if not force_lookup and _is_sufficient(current, sufficient_types) and _is_sufficient(current, mqg_complete_requires):
+    _log.debug(
+        "MQG-02: %d total / %d already sufficient / %d to look up (workers=%d)",
+        len(books), len(books) - len(pending), len(pending), max_workers,
+    )
+
+    if pending:
+        lookup_results = _parallel_lookup(fetcher, pending, max_workers=max_workers)
+    else:
+        lookup_results = {}
+
+    # Reassemble in input order so the review table matches the search result.
+    for book in books:
+        if book.id in lookup_results:
+            suggestions.append(lookup_results[book.id])
+        else:
             suggestions.append(IdentifierSuggestion(
                 book_id=book.id,
                 title=book.title,
                 authors=book.authors,
-                current_identifiers=current,
+                current_identifiers=current_by_id[book.id],
                 found_identifiers={},
                 new_identifiers={},
                 lookup_method="",
@@ -290,31 +415,6 @@ def run_enrichment(
                 lookup_attempted=False,
                 already_sufficient=True,
             ))
-            continue
-
-        isbn = current.get("isbn")
-        with console.status(
-            f"[cyan]Looking up [{idx}/{len(books)}]:[/] {book.title[:60]}"
-        ):
-            result = fetcher.fetch(isbn=isbn, title=book.title, authors=book.authors)
-
-        new_ids = {k: v for k, v in result.identifiers.items() if k not in current}
-
-        suggestions.append(IdentifierSuggestion(
-            book_id=book.id,
-            title=book.title,
-            authors=book.authors,
-            current_identifiers=current,
-            found_identifiers=result.identifiers,
-            new_identifiers=new_ids,
-            lookup_method=result.lookup_method,
-            confidence=result.confidence,
-            lookup_attempted=True,
-            lookup_error=result.error,
-            already_sufficient=False,
-            returned_title=result.title,
-            returned_authors=result.authors,
-        ))
 
     # ── 3. Partition results ──────────────────────────────────────────────────
     already_sufficient = [s for s in suggestions if s.already_sufficient]
