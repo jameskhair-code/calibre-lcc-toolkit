@@ -15,8 +15,27 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from .db import Book, BookDetails
+from .logging_config import get_logger
 from .models import resolve_model
 from .normalize import normalize_text
+from .schemas import (
+    CleanupItem,
+    CommentsItem,
+    LccItem,
+    SchemaViolation,
+    TagCleanupOp,
+    TagsItem,
+    TagsReviewResponse,
+    build_correction_prompt,
+    validate_cleanup,
+    validate_comments,
+    validate_lcc,
+    validate_tag_cleanup,
+    validate_tags,
+    validate_tags_review,
+)
+
+_log = get_logger(__name__)
 
 # Rules file lives alongside the package root
 _RULES_DIR = Path(__file__).parent.parent / "rules"
@@ -285,19 +304,21 @@ def _build_user_message(books: list[Book]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
-    items = _extract_json_array(raw)
+def _transform_cleanup_items(
+    items: list[CleanupItem],
+    books: list[Book],
+) -> list[CleanupSuggestion]:
     book_map = {b.id: b for b in books}
-    suggestions = []
+    suggestions: list[CleanupSuggestion] = []
     for item in items:
-        book_id = item["id"]
+        book_id = item.id
         book = book_map.get(book_id)
         if book is None:
             continue
 
-        raw_title = item.get("title", book.title).strip()
-        raw_authors = []
-        for a in item.get("authors", book.authors):
+        raw_title = (item.title or book.title).strip()
+        raw_authors: list[str] = []
+        for a in (item.authors or book.authors):
             if ";" in a:
                 raw_authors.extend(x.strip() for x in a.split(";") if x.strip())
             else:
@@ -314,7 +335,7 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
         title_changed = suggested_title != book.title
         authors_changed = suggested_authors != book.authors
 
-        notes = item.get("notes", "")
+        notes = item.notes or ""
         _notes_lower = notes.lower().strip(".").strip()
         no_changes_note = _notes_lower in ("no changes needed", "already correctly formatted")
 
@@ -340,12 +361,17 @@ def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
             original_authors=book.authors,
             suggested_title=suggested_title,
             suggested_authors=suggested_authors,
-            confidence=item.get("confidence", "medium"),
+            confidence=item.confidence,
             title_changed=title_changed,
             authors_changed=authors_changed,
             notes=notes,
         ))
     return suggestions
+
+
+def _parse_response(raw: str, books: list[Book]) -> list[CleanupSuggestion]:
+    """Backward-compatible wrapper: validate + transform in one call."""
+    return _transform_cleanup_items(validate_cleanup(raw), books)
 
 
 # ── AIClient ────────────────────────────────────────────────────────────────
@@ -395,6 +421,40 @@ class AIClient:
                 timeout=self.request_timeout_seconds,
             )
         return self._client
+
+    def _call_with_validation(
+        self,
+        user_msg: str,
+        system_prompt: str,
+        validator: Callable[[str], object],
+        max_tokens: int = 8192,
+    ) -> object:
+        """Call the model and validate the response shape. Retries once with
+        a targeted correction prompt on the first SchemaViolation; re-raises
+        on the second.
+
+        validator is one of the `validate_*` helpers in `schemas.py`; it returns
+        the parsed Pydantic object(s) on success or raises SchemaViolation.
+        """
+        raw = self._call(user_msg, system_prompt, max_tokens=max_tokens)
+        try:
+            return validator(raw)
+        except SchemaViolation as first_err:
+            _log.warning(
+                "AI response failed schema validation; retrying with correction prompt: %s",
+                str(first_err).splitlines()[0] if str(first_err) else "(no detail)",
+            )
+            correction = build_correction_prompt(user_msg, first_err)
+            raw2 = self._call(correction, system_prompt, max_tokens=max_tokens)
+            try:
+                return validator(raw2)
+            except SchemaViolation as second_err:
+                _log.error(
+                    "AI response failed schema validation twice in a row; "
+                    "surfacing failure to caller. error=%s",
+                    str(second_err).splitlines()[0] if str(second_err) else "(no detail)",
+                )
+                raise
 
     def _call(self, user_msg: str, system_prompt: str, max_tokens: int = 8192) -> str:
         """Single Anthropic call with prompt caching on the system block."""
@@ -464,8 +524,10 @@ class AIClient:
     def _process_batch(self, books: list[Book]) -> list[CleanupSuggestion]:
         user_msg = _build_user_message(books)
         system_prompt = _build_system_prompt("author_title.md")
-        raw = self._call(user_msg, system_prompt, max_tokens=8192)
-        return _parse_response(raw, books)
+        items = self._call_with_validation(
+            user_msg, system_prompt, validate_cleanup, max_tokens=8192,
+        )
+        return _transform_cleanup_items(items, books)
 
     # ── LCC ───────────────────────────────────────────────────────────────
 
@@ -492,8 +554,10 @@ class AIClient:
     ) -> list[LccSuggestion]:
         system_prompt = _build_lcc_system_prompt()
         user_msg = _build_lcc_user_message(books, current_map)
-        raw = self._call(user_msg, system_prompt, max_tokens=8192)
-        return _parse_lcc_response(raw, books, current_map)
+        items = self._call_with_validation(
+            user_msg, system_prompt, validate_lcc, max_tokens=8192,
+        )
+        return _transform_lcc_items(items, books, current_map)
 
     # ── Tags-review (single book, no batching) ────────────────────────────
 
@@ -513,8 +577,19 @@ class AIClient:
             book, current_tags, description, series, year, publisher,
             lcc_summary, lcc_primary, lcc_secondary,
         )
-        raw = self._call(user_msg, _TAGS_REVIEW_SYSTEM_PROMPT, max_tokens=1024)
-        return _parse_tags_review_response(raw, book, current_tags)
+        try:
+            obj = self._call_with_validation(
+                user_msg, _TAGS_REVIEW_SYSTEM_PROMPT,
+                validate_tags_review, max_tokens=1024,
+            )
+        except SchemaViolation as e:
+            return TagsReviewSuggestion(
+                book_id=book.id, title=book.title, authors=book.authors,
+                current_tags=list(current_tags), proposed_tags=list(current_tags),
+                assessment="complete", confidence="low",
+                parse_error=str(e)[:200],
+            )
+        return _transform_tags_review_item(obj, book, current_tags)
 
     # ── Tag-cleanup (single big call, no batching) ────────────────────────
 
@@ -539,8 +614,10 @@ class AIClient:
 
         def _run(batch: list[tuple[str, int]]) -> list[TagOperation]:
             user_msg = _build_tag_cleanup_user_message(batch)
-            raw = self._call(user_msg, system_prompt, max_tokens=8192)
-            return _parse_tag_cleanup_response(raw, count_map)
+            ops = self._call_with_validation(
+                user_msg, system_prompt, validate_tag_cleanup, max_tokens=8192,
+            )
+            return _transform_tag_cleanup_ops(ops, count_map)
 
         return self._run_batches_concurrent(_run, batches, progress_callback)
 
@@ -572,8 +649,10 @@ class AIClient:
     ) -> list[TagsSuggestion]:
         system_prompt = _build_tags_system_prompt()
         user_msg = _build_tags_user_message(books, tags_map, context_map)
-        raw = self._call(user_msg, system_prompt, max_tokens=8192)
-        return _parse_tags_response(raw, books, tags_map)
+        items = self._call_with_validation(
+            user_msg, system_prompt, validate_tags, max_tokens=8192,
+        )
+        return _transform_tags_items(items, books, tags_map)
 
     # ── Comments (batch) ──────────────────────────────────────────────────
 
@@ -602,8 +681,10 @@ class AIClient:
     ) -> list[CommentsSuggestion]:
         system_prompt = _build_comments_system_prompt()
         user_msg = _build_comments_user_message(books, details_map, lcc_summary_map)
-        raw = self._call(user_msg, system_prompt, max_tokens=8192)
-        return _parse_comments_response(raw, books)
+        items = self._call_with_validation(
+            user_msg, system_prompt, validate_comments, max_tokens=8192,
+        )
+        return _transform_comments_items(items, books)
 
 
 # ── LCC prompt + parsing ─────────────────────────────────────────────────────
@@ -660,36 +741,42 @@ def _build_lcc_user_message(books: list[Book], current_map: dict[int, dict[str, 
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+def _transform_lcc_items(
+    items: list[LccItem],
+    books: list[Book],
+    current_map: dict[int, dict[str, str]],
+) -> list[LccSuggestion]:
+    book_map = {b.id: b for b in books}
+    suggestions: list[LccSuggestion] = []
+    for item in items:
+        book = book_map.get(item.id)
+        if book is None:
+            continue
+        proposed = {
+            "lcc": item.lcc.strip(),
+            "lcc_primary_class": item.lcc_primary_class.strip(),
+            "lcc_secondary_class": item.lcc_secondary_class.strip(),
+            "lcc_summary": item.lcc_summary.strip(),
+        }
+        suggestions.append(LccSuggestion(
+            book_id=item.id,
+            title=book.title,
+            authors=book.authors,
+            current=current_map.get(item.id, {}),
+            proposed=proposed,
+            confidence=item.confidence,
+            source=item.source.strip(),
+            notes=item.notes.strip(),
+        ))
+    return suggestions
+
+
 def _parse_lcc_response(
     raw: str,
     books: list[Book],
     current_map: dict[int, dict[str, str]],
 ) -> list[LccSuggestion]:
-    items = _extract_json_array(raw)
-    book_map = {b.id: b for b in books}
-    suggestions: list[LccSuggestion] = []
-    for item in items:
-        book_id = item.get("id")
-        book = book_map.get(book_id)
-        if book is None:
-            continue
-        proposed = {
-            "lcc": (item.get("lcc") or "").strip(),
-            "lcc_primary_class": (item.get("lcc_primary_class") or "").strip(),
-            "lcc_secondary_class": (item.get("lcc_secondary_class") or "").strip(),
-            "lcc_summary": (item.get("lcc_summary") or "").strip(),
-        }
-        suggestions.append(LccSuggestion(
-            book_id=book_id,
-            title=book.title,
-            authors=book.authors,
-            current=current_map.get(book_id, {}),
-            proposed=proposed,
-            confidence=item.get("confidence", "low"),
-            source=item.get("source", "").strip(),
-            notes=item.get("notes", "").strip(),
-        ))
-    return suggestions
+    return _transform_lcc_items(validate_lcc(raw), books, current_map)
 
 
 # ── Comments prompt + parsing ─────────────────────────────────────────────────
@@ -810,26 +897,30 @@ def _coerce_score(value) -> int | None:
     return max(0, min(10, n))
 
 
-def _parse_comments_response(raw: str, books: list[Book]) -> list[CommentsSuggestion]:
-    items = _extract_json_array(raw)
+def _transform_comments_items(
+    items: list[CommentsItem],
+    books: list[Book],
+) -> list[CommentsSuggestion]:
     book_map = {b.id: b for b in books}
     suggestions: list[CommentsSuggestion] = []
     for item in items:
-        book_id = item.get("id")
-        book = book_map.get(book_id)
+        book = book_map.get(item.id)
         if book is None:
             continue
-        sections = {
-            key: (item.get(key) or "").strip()
-            for key, _ in _COMMENTS_SECTION_KEYS
+        section_data = {
+            "the_book": item.the_book,
+            "the_argument": item.the_argument,
+            "the_story": item.the_story,
+            "what_its_really_about": item.what_its_really_about,
+            "something_you_might_not_know": item.something_you_might_not_know,
+            "why_read_it": item.why_read_it,
         }
-        book_type = (item.get("book_type") or "").strip().lower()
-        if book_type not in ("fiction", "nonfiction"):
-            book_type = ""
-        score = _coerce_score(item.get("must_read_score"))
-        rationale = (item.get("must_read_rationale") or "").strip()
+        sections = {key: (section_data.get(key) or "").strip() for key, _ in _COMMENTS_SECTION_KEYS}
+        book_type = item.book_type if item.book_type in ("fiction", "nonfiction") else ""
+        score = _coerce_score(item.must_read_score)
+        rationale = (item.must_read_rationale or "").strip()
         suggestions.append(CommentsSuggestion(
-            book_id=book_id,
+            book_id=item.id,
             title=book.title,
             authors=book.authors,
             book_type=book_type,
@@ -837,10 +928,14 @@ def _parse_comments_response(raw: str, books: list[Book]) -> list[CommentsSugges
             must_read_score=score if score is not None else -1,
             must_read_rationale=rationale,
             html=_format_comments_html(sections, score, rationale),
-            confidence=item.get("confidence", "low"),
-            notes=item.get("notes", "").strip(),
+            confidence=item.confidence,
+            notes=(item.notes or "").strip(),
         ))
     return suggestions
+
+
+def _parse_comments_response(raw: str, books: list[Book]) -> list[CommentsSuggestion]:
+    return _transform_comments_items(validate_comments(raw), books)
 
 
 # ── Tags prompt + parsing ─────────────────────────────────────────────────────
@@ -914,16 +1009,15 @@ def _build_tag_cleanup_user_message(tags: list[tuple[str, int]]) -> str:
     return "Current tag vocabulary:\n\n" + "\n".join(lines)
 
 
-def _parse_tag_cleanup_response(
-    raw: str,
+def _transform_tag_cleanup_ops(
+    raw_ops: list[TagCleanupOp],
     counts: dict[str, int],
 ) -> list[TagOperation]:
-    items = _extract_json_array(raw)
     ops: list[TagOperation] = []
-    for item in items:
-        sources = [t.strip() for t in (item.get("source_tags") or []) if t.strip()]
-        targets = [t.strip() for t in (item.get("target_tags") or []) if t.strip()]
-        reason = (item.get("reason") or "").strip()
+    for raw_op in raw_ops:
+        sources = [t.strip() for t in raw_op.source_tags if t.strip()]
+        targets = [t.strip() for t in raw_op.target_tags if t.strip()]
+        reason = (raw_op.reason or "").strip()
         reason_words = reason.split()
         if len(reason_words) > 10:
             reason = " ".join(reason_words[:10])
@@ -940,6 +1034,13 @@ def _parse_tag_cleanup_response(
             pattern_group="ai-semantic",
         ))
     return ops
+
+
+def _parse_tag_cleanup_response(
+    raw: str,
+    counts: dict[str, int],
+) -> list[TagOperation]:
+    return _transform_tag_cleanup_ops(validate_tag_cleanup(raw), counts)
 
 
 # ── Tags Review prompt + parsing ─────────────────────────────────────────────
@@ -1013,39 +1114,44 @@ def _build_tags_review_user_message(
     return json.dumps(item, ensure_ascii=False, indent=2)
 
 
-def _parse_tags_review_response(
-    raw: str,
+def _transform_tags_review_item(
+    obj: TagsReviewResponse,
     book: Book,
     current_tags: list[str],
 ) -> TagsReviewSuggestion:
-    try:
-        item = _extract_json_object(raw)
-    except RuntimeError as e:
-        return TagsReviewSuggestion(
-            book_id=book.id, title=book.title, authors=book.authors,
-            current_tags=current_tags, proposed_tags=list(current_tags),
-            assessment="complete", confidence="low",
-            parse_error=str(e),
-        )
-    proposed = [
-        t.strip() for t in (item.get("proposed_tags") or [])
-        if isinstance(t, str) and t.strip()
-    ]
+    proposed = [t.strip() for t in obj.proposed_tags if isinstance(t, str) and t.strip()]
     if not proposed:
         proposed = list(current_tags)
-    notes = (item.get("notes") or "").strip()
-    confidence = item.get("confidence", "medium")
-    proposed, notes, confidence = _validate_proposed_tags(proposed, notes, confidence)
+    proposed, notes, confidence = _validate_proposed_tags(
+        proposed, obj.notes.strip(), obj.confidence,
+    )
     return TagsReviewSuggestion(
         book_id=book.id,
         title=book.title,
         authors=book.authors,
         current_tags=list(current_tags),
         proposed_tags=proposed,
-        assessment=item.get("assessment", "complete"),
+        assessment=obj.assessment,
         confidence=confidence,
         notes=notes,
     )
+
+
+def _parse_tags_review_response(
+    raw: str,
+    book: Book,
+    current_tags: list[str],
+) -> TagsReviewSuggestion:
+    try:
+        obj = validate_tags_review(raw)
+    except SchemaViolation as e:
+        return TagsReviewSuggestion(
+            book_id=book.id, title=book.title, authors=book.authors,
+            current_tags=current_tags, proposed_tags=list(current_tags),
+            assessment="complete", confidence="low",
+            parse_error=str(e)[:200],
+        )
+    return _transform_tags_review_item(obj, book, current_tags)
 
 
 _FORM_TAGS = frozenset({
@@ -1081,31 +1187,37 @@ def _validate_proposed_tags(
     return cleaned, notes, confidence
 
 
+def _transform_tags_items(
+    items: list[TagsItem],
+    books: list[Book],
+    tags_map: dict[int, list[str]],
+) -> list[TagsSuggestion]:
+    book_map = {b.id: b for b in books}
+    suggestions: list[TagsSuggestion] = []
+    for item in items:
+        book = book_map.get(item.id)
+        if book is None:
+            continue
+        proposed = [t.strip() for t in item.tags if isinstance(t, str) and t.strip()]
+        proposed, notes, confidence = _validate_proposed_tags(
+            proposed, (item.notes or "").strip(), item.confidence,
+        )
+        suggestions.append(TagsSuggestion(
+            book_id=item.id,
+            title=book.title,
+            authors=book.authors,
+            current_tags=tags_map.get(item.id, []),
+            proposed_tags=proposed,
+            confidence=confidence,
+            notes=notes,
+        ))
+    return suggestions
+
+
 def _parse_tags_response(
     raw: str,
     books: list[Book],
     tags_map: dict[int, list[str]],
 ) -> list[TagsSuggestion]:
-    items = _extract_json_array(raw)
-    book_map = {b.id: b for b in books}
-    suggestions: list[TagsSuggestion] = []
-    for item in items:
-        book_id = item.get("id")
-        book = book_map.get(book_id)
-        if book is None:
-            continue
-        raw_tags = item.get("tags") or []
-        proposed = [t.strip() for t in raw_tags if isinstance(t, str) and t.strip()]
-        confidence = item.get("confidence", "low")
-        notes = item.get("notes", "").strip()
-        proposed, notes, confidence = _validate_proposed_tags(proposed, notes, confidence)
-        suggestions.append(TagsSuggestion(
-            book_id=book_id,
-            title=book.title,
-            authors=book.authors,
-            current_tags=tags_map.get(book_id, []),
-            proposed_tags=proposed,
-            confidence=confidence,
-            notes=notes,
-        ))
+    return _transform_tags_items(validate_tags(raw), books, tags_map)
     return suggestions
