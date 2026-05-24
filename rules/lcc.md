@@ -77,6 +77,27 @@ SRC-05: The "source" field should be a short phrase describing the strongest
             "Harvard catalog, matching edition"
             "LCC schedule, derived from subject (no catalog record found)"
 
+SRC-06: The "source_authority" enum is structural — it tells downstream
+          tooling which provenance bucket the proposal belongs in, independent
+          of the free-text "source" string. Allowed values:
+            "lc_catalog"          — only if you can cite a specific LC record
+                                    (LCCN or ISBN that you verified).
+            "worldcat_consensus"  — only if you can cite multiple library
+                                    catalog records agreeing on the value.
+            "open_library"        — only if you can cite an OL bibkey or work.
+            "ai_inference"        — everything else, INCLUDING reasoning from
+                                    training-data memory, topic inference, and
+                                    schedule-derived classification.
+
+          You are being called as a fallback for books that already failed
+          direct catalog lookups (LCCN, ISBN against LC and Open Library).
+          DEFAULT to "ai_inference". Use a catalog value only when you can
+          cite the specific record. Overclaims will be downgraded by the
+          parser with a visible note appended.
+
+          "source" prose may freely mention "LC schedule" etc.; the structural
+          authority field is what gets logged and displayed as a prefix.
+
 
 ---
 ## SECTION LCC — The Call Number Field
