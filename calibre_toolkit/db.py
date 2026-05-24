@@ -9,6 +9,10 @@ import json
 from pathlib import Path
 from dataclasses import dataclass, field
 
+from .logging_config import get_logger
+
+_log = get_logger(__name__)
+
 
 @dataclass
 class BookDetails:
@@ -236,7 +240,8 @@ class CalibreDB:
                 "SELECT id FROM custom_columns WHERE label = ?", [label]
             ).fetchone()
         if row is None:
-            print(f"Warning: custom column '{column}' not found in database.")
+            _log.warning("custom column '%s' not found in database; "
+                         "mark_mqg_complete is a no-op", column)
             return
         col_id = row[0]
         table = f"custom_column_{col_id}"

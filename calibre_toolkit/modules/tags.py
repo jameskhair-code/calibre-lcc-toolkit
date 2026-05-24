@@ -15,6 +15,7 @@ from rich.prompt import Prompt
 
 from ..ai import AIClient, TagsSuggestion, TagOperation
 from ..db import CalibreDB
+from ..logging_config import audit_log
 from ..tag_scanner import scan_tags, PATTERN_GROUP_LABELS
 
 console = Console()
@@ -257,6 +258,14 @@ def _apply_batch(db: CalibreDB, suggestions: list[TagsSuggestion]) -> list[int]:
             try:
                 db.apply_tags(s.book_id, s.proposed_tags)
                 applied.append(s.book_id)
+                audit_log(
+                    book_id=s.book_id,
+                    field="tags",
+                    new_value=s.proposed_tags,
+                    confidence=s.confidence,
+                    source="ai",
+                    step="tags-enrich",
+                )
             except RuntimeError as e:
                 console.print(f"[red]Error on book {s.book_id}: {e}[/red]")
     console.print(f"[green]Applied {len(applied)}/{len(suggestions)} tag sets.[/green]")

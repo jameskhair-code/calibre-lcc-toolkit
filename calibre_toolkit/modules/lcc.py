@@ -23,10 +23,12 @@ from rich.prompt import Prompt
 
 from ..ai import AIClient, LccSuggestion
 from ..db import CalibreDB
+from ..logging_config import audit_log, get_logger
 from ..services.lc_catalog import CatalogHit, lookup_book
 
 
 console = Console()
+_log = get_logger(__name__)
 
 # ── Canonical CSV loading ─────────────────────────────────────────────────────
 
@@ -381,6 +383,21 @@ def _apply_suggestion(db: CalibreDB, v: ValidatedSuggestion, columns: dict[str, 
             continue
         fields[label] = v.final_fields[field_name]
     db.apply_custom_fields(v.book_id, fields)
+
+    # Audit each field individually so a later analysis can grep by field.
+    source = v.suggestion.source or "ai"
+    confidence = v.suggestion.confidence
+    for label, value in fields.items():
+        audit_log(
+            book_id=v.book_id,
+            field=label,
+            new_value=value,
+            confidence=confidence,
+            source=source,
+            step="lcc-enrich",
+        )
+    _log.debug("applied LCC suggestion for book %s (conf=%s, source=%s)",
+               v.book_id, confidence, source)
 
 
 # ── Audit display ─────────────────────────────────────────────────────────────

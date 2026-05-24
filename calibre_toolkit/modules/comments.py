@@ -18,6 +18,7 @@ from rich.prompt import Prompt
 
 from ..ai import AIClient, CommentsSuggestion
 from ..db import CalibreDB
+from ..logging_config import audit_log
 
 if TYPE_CHECKING:
     from ..db import BookDetails
@@ -315,6 +316,15 @@ def _apply_batch(db: CalibreDB, suggestions: list[CommentsSuggestion]) -> list[i
             try:
                 db.apply_comments(s.book_id, s.html)
                 applied.append(s.book_id)
+                audit_log(
+                    book_id=s.book_id,
+                    field="comments",
+                    new_value=s.html[:200],
+                    confidence=s.confidence,
+                    source="ai",
+                    step="comments-enrich",
+                    must_read_score=s.must_read_score,
+                )
             except RuntimeError as e:
                 console.print(f"[red]Error on book {s.book_id}: {e}[/red]")
     console.print(f"[green]Applied {len(applied)}/{len(suggestions)} comments.[/green]")
