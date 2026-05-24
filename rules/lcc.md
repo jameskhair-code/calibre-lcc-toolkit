@@ -594,6 +594,10 @@ PATH-05: Do not use bullet separators, semicolons, or " > " in the sentence.
 ## SECTION CONF — Confidence Levels
 ---
 
+See rules/confidence.md (CONF-T-HIGH/MEDIUM/LOW) for the canonical tier
+definitions shared across steps. The rules below map LCC-specific evidence
+onto those tiers.
+
 CONF-01: "high" — catalog-confirmed for the same edition.
            Strong typical signals:
              - ISBN match in Library of Congress catalog.
