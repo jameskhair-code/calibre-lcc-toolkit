@@ -21,6 +21,8 @@
     "fetch_ebook_metadata_path": "",
     "_comment_fetch": "Leave blank to auto-detect from calibredb_path. On Windows set to e.g. C:\\Program Files\\Calibre2\\fetch-ebook-metadata.exe",
     "lookup_timeout_seconds": 45,
+    "max_workers": 4,
+    "_comment_workers": "Concurrent fetch-ebook-metadata calls during MQG-02. Each call is mostly network I/O so threading gives real speedup; 3–5 is a sane range. Drop to 1 to serialise.",
     "sufficient_types": ["isbn"],
     "_comment_sufficient": "A book is considered already sufficient if it has at least one of these identifier types. Sufficient books skip the live lookup.",
     "mqg_complete_requires": ["grrating", "grvotes"],

@@ -267,6 +267,7 @@ def enrich_identifiers(
     timeout = id_cfg.get("lookup_timeout_seconds", 45)
     sufficient_types = id_cfg.get("sufficient_types", ["isbn"])
     mqg_complete_requires = id_cfg.get("mqg_complete_requires", [])
+    max_workers = int(id_cfg.get("max_workers", 4))
     mqg_column = cfg.get("mqg", {}).get("identifiers_column")
     mqg_manual_column = cfg.get("mqg", {}).get("identifiers_manual_column")
 
@@ -295,6 +296,7 @@ def enrich_identifiers(
         sufficient_types=sufficient_types,
         mqg_complete_requires=mqg_complete_requires,
         force_lookup=force_lookup,
+        max_workers=max_workers,
     )
 
 
