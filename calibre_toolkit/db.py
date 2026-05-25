@@ -510,6 +510,26 @@ class CalibreDB:
             ).fetchall()
         return [row[0] for row in rows]
 
+    def get_tags_for_books(self, book_ids: list[int]) -> set[str]:
+        """Return the set of tag names carried by at least one of the given books.
+
+        Used by `tags-cleanup --search` (item 18) to scope vocabulary
+        operations to a subset of the library without losing the
+        library-wide frequency signal that the scanner and AI pass
+        rely on. One SQL round-trip regardless of book count.
+        """
+        if not book_ids:
+            return set()
+        ph = ",".join("?" * len(book_ids))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT DISTINCT t.name FROM tags t "
+                f"JOIN books_tags_link btl ON btl.tag = t.id "
+                f"WHERE btl.book IN ({ph})",
+                book_ids,
+            ).fetchall()
+        return {row[0] for row in rows}
+
     def apply_tags(self, book_id: int, tags: list[str]) -> None:
         """Replace all tags on a book via calibredb (comma-separated list)."""
         tags_str = ",".join(tags)

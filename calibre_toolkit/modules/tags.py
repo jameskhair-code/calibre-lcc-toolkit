@@ -375,8 +375,16 @@ def run_tags_cleanup(
     min_books: int = 1,
     dry_run: bool = False,
     skip_ai: bool = False,
+    search_query: str | None = None,
 ) -> None:
-    """Two-layer tag cleanup: deterministic scanner first, then AI semantic pass."""
+    """Two-layer tag cleanup: deterministic scanner first, then AI semantic pass.
+
+    When `search_query` is provided, the scanner and AI pass still see
+    the full library vocabulary (frequency counts are only meaningful
+    library-wide), but the application loop skips operations that
+    touch no book matching the search. This lets a user normalise
+    vocabulary for a batch without polluting books outside that batch.
+    """
 
     # ── 1. Read all tags ──────────────────────────────────────────────────────
     with console.status("[cyan]Reading all tags in library…"):
@@ -457,6 +465,38 @@ def run_tags_cleanup(
         )
         return
 
+    # ── 3b. Scope filter (item 18) ────────────────────────────────────────────
+    # Library-wide path: search_query is None → no filtering, all_ops applied.
+    # Scoped path: ops whose source_tags do not appear on any in-scope book
+    # are silently dropped before display, so the user only reviews work
+    # that will actually touch their batch.
+    if search_query:
+        total_before = len(all_ops)
+        with console.status(f"[cyan]Resolving scope:[/] {search_query}"):
+            try:
+                scope_books = db.search(search_query)
+            except RuntimeError as e:
+                console.print(Panel(
+                    str(e), title="[red]Scope search failed[/red]", border_style="red",
+                ))
+                raise typer.Exit(1)
+            scope_book_ids = [b.id for b in scope_books]
+            scope_tags = db.get_tags_for_books(scope_book_ids)
+
+        all_ops = [op for op in all_ops if _op_touches_scope(op, scope_tags)]
+        console.print(
+            f"[dim]Scope:[/dim] [bold]{search_query}[/bold]  "
+            f"[dim]matched[/dim] [bold]{len(scope_book_ids)}[/bold] [dim]book(s);[/dim] "
+            f"[bold]{len(all_ops)}[/bold] [dim]of[/dim] [bold]{total_before}[/bold] "
+            f"[dim]op(s) in scope ([bold]{total_before - len(all_ops)}[/bold] skipped).[/dim]"
+        )
+        if not all_ops:
+            console.print(
+                "\n[green]No cleanup operations affect books in scope — "
+                "nothing to do.[/green]"
+            )
+            return
+
     # ── 4. Group operations by pattern_group and display ──────────────────────
     grouped = _group_ops(all_ops)
 
@@ -496,7 +536,19 @@ def run_tags_cleanup(
         return
 
     # ── 6. Apply ──────────────────────────────────────────────────────────────
-    _apply_operations(db, to_apply)
+    _apply_operations(db, to_apply, ai=ai)
+
+
+def _op_touches_scope(op: TagOperation, scope_tags: set[str]) -> bool:
+    """True when at least one of the op's source tags is held by an in-scope book.
+
+    Used by the `tags-cleanup --search` scope filter. Comparison is
+    case-sensitive — tag names in Calibre's tags table are stored
+    case-sensitively and the scanner/AI ops preserve that casing, so
+    a case-insensitive compare would over-match (e.g. lowercase
+    'fiction' surviving when only 'Fiction' is on a scope book).
+    """
+    return any(src in scope_tags for src in op.source_tags)
 
 
 def _group_ops(ops: list[TagOperation]) -> dict[str, list[TagOperation]]:
@@ -626,12 +678,20 @@ def _review_ops_individually(ops: list[TagOperation]) -> list[TagOperation]:
     return approved
 
 
-def _apply_operations(db: CalibreDB, ops: list[TagOperation]) -> None:
+def _apply_operations(
+    db: CalibreDB,
+    ops: list[TagOperation],
+    ai: AIClient | None = None,
+) -> None:
     """Execute approved operations via direct SQLite tag-table writes.
 
     Each op touches the tags / books_tags_link tables directly — no
     per-book subprocess calls. One SQL statement per source tag regardless
     of how many books carry it.
+
+    `ai` is accepted (default None) only so the end-of-run token-usage
+    summary can be printed when the AI semantic pass ran. Pre-v1.4 the
+    function referenced an undefined `ai` symbol — fixed alongside item 18.
     """
     total_affected = 0
     errors: list[str] = []

@@ -559,6 +559,14 @@ def tags_cleanup(
         bool,
         typer.Option("--skip-ai", help="Run scanner only; do not call AI for semantic pass"),
     ] = False,
+    search: Annotated[
+        Optional[str],
+        typer.Option("--search",
+                     help='Restrict applied operations to those touching books matching this '
+                          'Calibre search string. The scanner and AI pass still see the full '
+                          'library vocabulary; only the apply step is scoped. '
+                          'Example: --search "#metadata_queue:true".'),
+    ] = None,
     ai_provider: Annotated[
         Optional[str],
         typer.Option("--ai-provider", help="Override AI provider for this run"),
@@ -587,11 +595,20 @@ def tags_cleanup(
     taxonomy, date lookups) default to "all"; everything else defaults
     to "review".
 
+    Use --search to restrict the apply step to a specific subset of the
+    library — handy for cleaning up vocabulary inside a batch (e.g. the
+    metadata queue) without touching the rest of the library. Frequency
+    counts and AI synonym judgements still use the full vocabulary so the
+    cleanup remains as accurate as a library-wide run.
+
     Examples:
 
         calibre-toolkit tags-cleanup --dry-run
 
         calibre-toolkit tags-cleanup --skip-ai    # rule-based only
+
+        calibre-toolkit tags-cleanup --search "#metadata_queue:true"
+                                                  # scope to metadata queue
 
         calibre-toolkit tags-cleanup --min-books 2
     """
@@ -613,6 +630,8 @@ def tags_cleanup(
                 ("Dry run — no writes" if dry_run else "Interactive review", "bold"),
                 ("\nLayers: ", "dim"),
                 ("Scanner only" if skip_ai else "Scanner + AI", "bold"),
+                ("\nScope:  ", "dim"),
+                (search if search else "Whole library", "bold"),
             ),
             border_style="cyan",
         )
@@ -623,6 +642,7 @@ def tags_cleanup(
         min_books=min_books,
         dry_run=dry_run,
         skip_ai=skip_ai,
+        search_query=search,
     )
 
 
