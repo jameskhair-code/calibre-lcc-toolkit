@@ -11,6 +11,15 @@ from typing import TYPE_CHECKING
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 from rich.text import Text
 from rich import box
@@ -231,13 +240,30 @@ def run_comments_enrichment(
             lcc_summary_map = db.get_custom_column_batch([b.id for b in books], lcc_summary_column)
 
     # ── 4. AI generation ───────────────────────────────────────────────────────
-    with console.status(
-        f"[cyan]Generating comments for {len(books)} book(s) "
-        f"in batches of {batch_size}…[/cyan]"
-    ):
+    total_batches = (len(books) + batch_size - 1) // batch_size
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn(
+            f"[cyan]Generating comments for {len(books)} book(s) "
+            f"(batches of {batch_size})"
+        ),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+        console=console,
+        transient=True,
+    )
+    with progress:
+        task = progress.add_task("comments", total=total_batches)
         try:
             suggestions = ai.suggest_comments(
-                books, details_map, lcc_summary_map, batch_size=batch_size
+                books, details_map, lcc_summary_map, batch_size=batch_size,
+                progress_callback=lambda completed, total, failed: progress.update(
+                    task, completed=completed
+                ),
             )
         except RuntimeError as e:
             console.print(Panel(str(e), title="[red]AI generation failed[/red]", border_style="red"))
