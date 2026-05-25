@@ -63,6 +63,31 @@ client can't solve the challenge.
 | Hitting LC's `/item/{lccn}/?fo=json` instead of `/books/?q=` | Same Cloudflare zone, same protection. |
 | Using `lx2.loc.gov` (SRU) instead of `www.loc.gov` | Subdomain is also protected. SSL handshake timeouts in our test runs. |
 
+### Side observation — per-machine TLS interception
+
+During item 14 testing the SRU error flavour shifted from `urlopen
+timed out` to `SSL: CERTIFICATE_VERIFY_FAILED — self-signed certificate
+in certificate chain`. That specific error means a TLS-intercepting
+agent on the user's own machine (corporate antivirus SSL inspection
+like Avast/Kaspersky/ESET, or a proxy stack like Cisco AnyConnect /
+Zscaler / Netskope) is sitting between the toolkit and LC, presenting
+its own root certificate that Python's SSL stack correctly rejects.
+
+This is **separate from the Cloudflare situation** — it's per-user,
+per-machine, and only affects the user observing the error. Two
+options if a future user hits this:
+
+1. Whitelist `lx2.loc.gov` / `www.loc.gov` in the local TLS-inspection
+   product. Most enterprise products allow exclusions.
+2. Point Python at the local interceptor's CA bundle via the
+   `SSL_CERT_FILE` env var. Not recommended without IT consent — it
+   tells Python to trust whatever the local agent presents.
+
+This observation lives here so a future debugging session has the
+context, not because the toolkit needs to do anything about it. The
+Cloudflare blocker hits everyone; the SSL one hits only users with
+TLS inspection enabled.
+
 ---
 
 ## What might work (each its own can of worms)
