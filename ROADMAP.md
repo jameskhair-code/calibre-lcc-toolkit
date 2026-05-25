@@ -524,17 +524,18 @@ progress over time.
 
 ### 20. Progress bars with ETA across long-running operations
 
-**Problem.** Identifier lookups and tags-cleanup AI batches show only
-`[5/50] Looking up…` with no ETA. On a 50-book batch users don't know whether to
-wait or interrupt.
+**Problem.** The `lcc-enrich` and `comments-enrich` AI batch passes show only a
+spinner with no ETA. On a 50-book batch users don't know whether to wait or
+interrupt.
 
 **Approach.** Switch to `rich.progress.Progress` with `TimeElapsed`,
-`TimeRemaining`, and `MofNComplete` columns. The pattern already exists in the
-tags-cleanup AI batching pass (`_run_batches_concurrent`); port it to the identifier
-loop, lcc-enrich batch, and comments-enrich batch.
+`TimeRemaining`, and `MofNComplete` columns. The pattern already exists in
+`identifiers.py:277–290` (item 6, parallelised step 02) and in `tags.py` /
+`authors.py` via the tags-cleanup AI batching pass; port it to the remaining
+two step modules.
 
-**Touch points.** `calibre_toolkit/modules/identifiers.py`;
-`calibre_toolkit/modules/tags.py`; `calibre_toolkit/modules/lcc.py`.
+**Touch points.** `calibre_toolkit/modules/lcc.py`;
+`calibre_toolkit/modules/comments.py`.
 
 **Risk.** Low. Display-only.
 
