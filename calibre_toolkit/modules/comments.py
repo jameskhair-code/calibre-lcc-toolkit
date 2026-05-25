@@ -105,6 +105,13 @@ def _build_review_table(suggestions: list[CommentsSuggestion]) -> Table:
             preview.append("\n")
         if s.notes:
             preview.append(f"↳ {s.notes}", style="dim italic")
+        # Surface HTML validation warnings inline in the table so a
+        # reviewer flipping through tiers sees them without drilling in.
+        if s.html_warnings:
+            preview.append(f"\n[!] HTML: {s.html_warnings[0]}", style="bold red")
+            extra = len(s.html_warnings) - 1
+            if extra > 0:
+                preview.append(f" (+{extra} more)", style="red")
 
         table.add_row(str(i), Text(icon, style=style), score_text, book_text, preview)
 
@@ -138,6 +145,14 @@ def _print_full_suggestion(s: CommentsSuggestion, label: str | None = None) -> N
         console.print(f"  [bold cyan]Must-Read[/bold cyan]")
         rationale = f" — {s.must_read_rationale}" if s.must_read_rationale else ""
         console.print(f"  [{score_style}]{s.must_read_score} / 10[/{score_style}]{rationale}")
+        console.print()
+
+    # HTML validation warnings (item 14). Loud red so the reviewer notices
+    # before applying. Empty list = no warnings = no output.
+    if s.html_warnings:
+        console.print(f"  [bold red]⚠ HTML validation:[/bold red]")
+        for w in s.html_warnings:
+            console.print(f"    [red]- {w}[/red]")
         console.print()
 
 

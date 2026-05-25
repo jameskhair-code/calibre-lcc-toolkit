@@ -8,9 +8,11 @@ file portion of the prompt.
 """
 
 from __future__ import annotations
+import html
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Literal
 
@@ -271,6 +273,10 @@ class CommentsSuggestion:
     confidence: Literal["high", "medium", "low"]
     notes: str = ""
     parse_error: str = ""
+    # Structural HTML warnings from validate_comments_html (item 14).
+    # Empty list = well-formed. Non-empty = surfaced during review;
+    # the user decides whether to apply.
+    html_warnings: list[str] = field(default_factory=list)
 
     @property
     def authors_display(self) -> str:
@@ -903,18 +909,124 @@ def _format_comments_html(
     score: int | None = None,
     rationale: str = "",
 ) -> str:
+    """Wrap AI-returned prose in `<h3>`/`<p>` tags for the Calibre comments
+    field.
+
+    AI text is HTML-escaped before insertion (item 14). A stray `<` or even
+    a `<script>` tag from a misbehaving response now lands as visible text
+    (`&lt;script&gt;…`) instead of being interpreted as HTML by Calibre's
+    rendering layer. The section labels and our own tag wrappers are
+    trusted strings; only the AI-supplied prose is escaped.
+    """
     parts = []
     for key, label in _COMMENTS_SECTION_KEYS:
         text = (sections.get(key) or "").strip()
         if not text:
             continue
-        parts.append(f"<h3>{label}</h3>\n<p>{text}</p>")
+        parts.append(f"<h3>{html.escape(label)}</h3>\n<p>{html.escape(text)}</p>")
     if score is not None:
-        rationale_html = f" — {rationale}" if rationale else ""
+        rationale_html = f" — {html.escape(rationale)}" if rationale else ""
         parts.append(
             f"<h3>Must-Read</h3>\n<p><strong>{score} / 10</strong>{rationale_html}</p>"
         )
     return "\n".join(parts)
+
+
+# ── HTML validation ──────────────────────────────────────────────────────────
+#
+# Defence in depth: after the AI text is escape()-ed and wrapped, run a
+# structural validator over the assembled string. The validator catches
+# any tags that slipped through (e.g. if a future refactor removes the
+# escape call), unbalanced wrappers (bug in our own template code), or
+# disallowed elements (`<script>`, `<iframe>`, etc. should never appear).
+#
+# A failed validation does not auto-discard the suggestion — the comments
+# step surfaces the warning during review so the user can decide. The
+# assertion is that *with* escaping, validation should always pass; if it
+# starts failing, that's a regression worth seeing.
+
+_ALLOWED_HTML_TAGS: frozenset[str] = frozenset({"h3", "p", "strong"})
+
+# Void elements — no closing tag expected. We don't currently emit any,
+# but listing them documents the validator's contract.
+_VOID_HTML_TAGS: frozenset[str] = frozenset({"br", "hr", "img"})
+
+
+class _CommentsHTMLValidator(HTMLParser):
+    """Structural validator for our assembled comments HTML.
+
+    Records warnings rather than raising — the caller decides what to do.
+    Allow-listed tags pass through cleanly; anything else (including any
+    attribute on an otherwise-allowed tag) is flagged. The point isn't to
+    sanitise arbitrary HTML — only to verify that our own template plus
+    escaped AI text produces exactly the tag shape we expect.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.warnings: list[str] = []
+        self._open_tags: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in _VOID_HTML_TAGS:
+            return
+        if tag not in _ALLOWED_HTML_TAGS:
+            self.warnings.append(
+                f"unexpected tag <{tag}> (allowed: {sorted(_ALLOWED_HTML_TAGS)})"
+            )
+            return
+        if attrs:
+            attr_names = ", ".join(name for name, _ in attrs)
+            self.warnings.append(
+                f"<{tag}> carries attributes ({attr_names}); none are expected"
+            )
+        self._open_tags.append(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _VOID_HTML_TAGS:
+            return
+        if not self._open_tags:
+            self.warnings.append(f"unmatched closing </{tag}> with no open tags")
+            return
+        expected = self._open_tags.pop()
+        if expected != tag:
+            self.warnings.append(
+                f"mismatched closing </{tag}> (expected </{expected}>)"
+            )
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        # Self-closing form (`<br/>`). Treat as a void tag.
+        if tag in _VOID_HTML_TAGS:
+            return
+        self.handle_starttag(tag, attrs)
+        if tag in self._open_tags:
+            self._open_tags.remove(tag)
+
+    def finish(self) -> list[str]:
+        if self._open_tags:
+            self.warnings.append(
+                f"unclosed tag(s) at end of input: {self._open_tags}"
+            )
+        return self.warnings
+
+
+def validate_comments_html(html_text: str) -> list[str]:
+    """Return a list of structural-warning strings about the assembled
+    comments HTML. An empty list means the HTML is well-formed.
+
+    Defensive: catches any HTMLParser internal error and reports it as a
+    single warning rather than propagating. A validator that itself
+    crashes must not break the comments pipeline.
+    """
+    if not html_text:
+        return []
+    validator = _CommentsHTMLValidator()
+    try:
+        validator.feed(html_text)
+        validator.close()
+    except Exception as e:  # pragma: no cover — HTMLParser is robust
+        return [f"HTML parser raised {type(e).__name__}: {e}"]
+    return validator.finish()
 
 
 def _coerce_score(value) -> int | None:
@@ -950,6 +1062,7 @@ def _transform_comments_items(
         book_type = item.book_type if item.book_type in ("fiction", "nonfiction") else ""
         score = _coerce_score(item.must_read_score)
         rationale = (item.must_read_rationale or "").strip()
+        rendered_html = _format_comments_html(sections, score, rationale)
         suggestions.append(CommentsSuggestion(
             book_id=item.id,
             title=book.title,
@@ -958,9 +1071,10 @@ def _transform_comments_items(
             sections=sections,
             must_read_score=score if score is not None else -1,
             must_read_rationale=rationale,
-            html=_format_comments_html(sections, score, rationale),
+            html=rendered_html,
             confidence=item.confidence,
             notes=(item.notes or "").strip(),
+            html_warnings=validate_comments_html(rendered_html),
         ))
     return suggestions
 
