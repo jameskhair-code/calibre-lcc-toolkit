@@ -597,6 +597,24 @@ milestone item when ready to scope.
   when LC is unreachable?") may have shifted. Worth re-asking once a
   full library run shows the new hit rate in practice.
 
+- **Compose catalog hits with description-grounded summaries.**
+  Surfaced during the PR #18 smoke test. When `_build_catalog_suggestion`
+  produces an OL-catalog hit, it currently writes a terse template
+  summary like `"Classified by Open Library under PR - English
+  Literature."` — accurate but thin compared to the AI-with-description
+  prose the AI fallback path produces (e.g. *"Reframes Cold War
+  history around Soviet and American interventions..."*). The two
+  paths produce complementary information: catalog hits give the
+  trustworthy structural fields (call number, class letters), AI
+  with description gives the rich one-sentence subject summary.
+  Combine them: when we have a catalog hit AND a Google Books
+  description, still run the AI but only ask it for the `lcc_summary`
+  prose, keeping the catalog-derived `lcc` / primary / secondary
+  fields. Costs one extra small AI call per catalog-hit book but
+  gives the best of both. Touch points: `_build_catalog_suggestion`
+  in `modules/lcc.py`; possibly a new lightweight `suggest_lcc_summary`
+  method on `AIClient`.
+
 ---
 
 ## Process notes
