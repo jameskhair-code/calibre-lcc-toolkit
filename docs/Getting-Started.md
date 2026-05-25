@@ -66,6 +66,69 @@ You can also pass a literal Anthropic model ID (e.g. `claude-sonnet-4-6` or any 
 
 ---
 
+## Step 2a — Google Books API key (optional but recommended)
+
+Step 03 (`lcc-enrich`) pre-fetches a short publisher description for each book and includes it in the AI prompt. This grounds the AI's `lcc_summary` in real source material instead of training-data memory — eliminating a class of subtle hallucinations on obscure books (e.g. the AI inventing the setting of *The Comfort of Strangers* as Venice when the novel deliberately leaves the city unnamed).
+
+The cascade tries **Google Books** first, then falls back to **Open Library**. Google Books has much broader coverage and longer descriptions, but its API now returns HTTP 429 for any unauthenticated request — you need a (free) API key for it to participate at all. Without a key, only Open Library is queried; descriptions are still fetched for books OL has, but hit rate is significantly lower.
+
+### Get a key (one-time, ~3 minutes)
+
+1. Sign in to https://console.cloud.google.com/ and either create a new project (any name — e.g. `calibre`) or pick an existing one.
+2. Enable the Books API for that project: https://console.cloud.google.com/apis/library/books.googleapis.com — click **Enable**.
+3. Go to **APIs & Services → Credentials** → **+ Create Credentials → API key**.
+4. The dialog shows your new key (`AIzaSy...`). Before closing, click **Edit API key** and:
+   - **API restrictions** → **Restrict key** → check only **Books API** → **OK** → **Save**. (Restricts what the key can do if it leaks. The Books API is free, so even if leaked, the worst that happens is a stranger uses your free quota.)
+   - **Application restrictions** → leave as **None** (this tool runs from a terminal, not a website or mobile app).
+5. Copy the key.
+
+### Store the key
+
+You have two options. Pick one:
+
+**Option A — In `config.json` (simplest, recommended for a single-user setup):**
+
+Edit `config.json`, find the `description` block, and paste the key:
+
+```json
+"description": {
+  "google_books_api_key": "AIzaSy...your-key-here...",
+  "request_timeout_seconds": 10,
+  "max_retries": 3
+},
+```
+
+`config.json` is gitignored by default, so the key will not be committed.
+
+**Option B — As a permanent environment variable** (better if you want the key available to other tools too):
+
+Windows PowerShell, one time:
+```powershell
+[System.Environment]::SetEnvironmentVariable("GOOGLE_BOOKS_API_KEY", "AIzaSy...your-key-here...", "User")
+```
+Close and reopen PowerShell. Verify with `$env:GOOGLE_BOOKS_API_KEY`.
+
+macOS / Linux — add this line to `~/.zshrc` or `~/.bashrc`:
+```bash
+export GOOGLE_BOOKS_API_KEY="AIzaSy...your-key-here..."
+```
+
+The env var wins over the config-file value when both are set, so you can override per-session for testing.
+
+### Verify
+
+```bash
+py -c "from calibre_toolkit.services.book_description import fetch_description; r = fetch_description('9780394720241'); print(r.source if r else 'None')"
+```
+
+Expected output: `Google Books`. If you see `None` or `Open Library`, the key isn't being read — recheck the steps above.
+
+### Skipping this step
+
+If you skip the key, the toolkit prints a one-line `WARNING` at the start of every `lcc-enrich` run noting that Google Books is disabled and Open Library will be the only description source. Nothing fails; the AI just sees a smaller set of descriptions and falls back to training-data inference more often.
+
+---
+
 ## Step 3 — Create Calibre Custom Columns
 
 The toolkit expects 14 custom columns to exist in your Calibre library. Close Calibre, then run:
