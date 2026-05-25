@@ -277,7 +277,30 @@ class _CatalogStats:
     tried_lccn: int = 0
     tried_isbn: int = 0
     hits: int = 0
-    ol_hits: int = 0
+    # Per-source breakdown — surfaced in the post-lookup diagnostic so the
+    # impact of the v1.3 ISBN cross-reference work (item 12) is visible.
+    direct_hits: int = 0       # LCCN or direct LC ISBN.
+    cascade_hits: int = 0      # LC ISBN via OL edition cascade (sibling ISBN).
+    sru_hits: int = 0          # LC SRU title+author fallback.
+    ol_hits: int = 0           # OL community-sourced LCC, medium confidence.
+
+
+def _classify_hit_source(source: str) -> str:
+    """Bucket a CatalogHit.source string into one of: lccn, isbn, cascade,
+    sru, ol, other."""
+    if not source:
+        return "other"
+    if source.startswith("Open Library"):
+        return "ol"
+    if "edition cascade" in source:
+        return "cascade"
+    if source.startswith("LC SRU"):
+        return "sru"
+    if "LCCN" in source:
+        return "lccn"
+    if source.startswith("LC catalog"):
+        return "isbn"
+    return "other"
 
 
 def _catalog_lookup_batch(
@@ -313,7 +336,16 @@ def _catalog_lookup_batch(
     hits: dict[int, CatalogHit] = {}
     with ThreadPoolExecutor(max_workers=_CATALOG_LOOKUP_WORKERS) as ex:
         futures = {
-            ex.submit(lookup_book, id_map.get(b.id, {}), timeout, max_retries): b.id
+            ex.submit(
+                lookup_book,
+                id_map.get(b.id, {}),
+                # Title + primary author are passed in so the SRU
+                # fallback (item 12) can run when every ISBN path misses.
+                b.title or "",
+                (b.authors[0] if b.authors else ""),
+                timeout,
+                max_retries,
+            ): b.id
             for b in books
         }
         for fut in as_completed(futures):
@@ -322,10 +354,19 @@ def _catalog_lookup_batch(
                 hit = fut.result()
             except Exception:
                 hit = None
-            if hit and not hit.source.startswith("Open Library"):
-                hits[bid] = hit
+            if not hit:
+                continue
+            hits[bid] = hit
+            bucket = _classify_hit_source(hit.source)
+            if bucket == "ol":
+                stats.ol_hits += 1
+            elif bucket == "cascade":
+                stats.cascade_hits += 1
+            elif bucket == "sru":
+                stats.sru_hits += 1
+            else:
+                stats.direct_hits += 1
     stats.hits = len(hits)
-    stats.ol_hits = 0  # OL hits are routed through AI for summary quality
     return hits, stats
 
 
@@ -613,12 +654,24 @@ def run_lcc_enrichment(
             ai_books.append(b)
 
     # One-line diagnostic so misses are explainable rather than mysterious.
-    ol_note = f" ({cat_stats.ol_hits} via Open Library)" if cat_stats.ol_hits else ""
+    # Per-source breakdown of where the hits came from (item 12 added the
+    # cascade / SRU / OL paths; surfacing them lets the user see their
+    # impact at a glance).
+    source_parts: list[str] = []
+    if cat_stats.direct_hits:
+        source_parts.append(f"{cat_stats.direct_hits} direct LC")
+    if cat_stats.cascade_hits:
+        source_parts.append(f"{cat_stats.cascade_hits} via OL edition cascade")
+    if cat_stats.sru_hits:
+        source_parts.append(f"{cat_stats.sru_hits} via LC SRU title+author")
+    if cat_stats.ol_hits:
+        source_parts.append(f"{cat_stats.ol_hits} via Open Library")
+    source_note = f" ({', '.join(source_parts)})" if source_parts else ""
     cat_breakdown = (
         f"[dim]Catalog lookup: {cat_stats.tried_lccn} tried by LCCN, "
         f"{cat_stats.tried_isbn} by ISBN, "
         f"{cat_stats.no_identifiers} had no usable identifier — "
-        f"{cat_stats.hits} hit(s){ol_note}.[/dim]"
+        f"{cat_stats.hits} hit(s){source_note}.[/dim]"
     )
     if catalog_suggestions:
         console.print(

@@ -1,0 +1,23 @@
+{
+  "entries": [
+    {
+      "key": "/books/OL1001M",
+      "title": "Confederates (UK paperback)",
+      "isbn_13": ["9781504026758"],
+      "languages": [{"key": "/languages/eng"}]
+    },
+    {
+      "key": "/books/OL1002M",
+      "title": "Confederates (US first edition)",
+      "isbn_10": ["0671254839"],
+      "isbn_13": ["9780671254834"],
+      "languages": [{"key": "/languages/eng"}]
+    },
+    {
+      "key": "/books/OL1003M",
+      "title": "Konfederierte (German translation)",
+      "isbn_13": ["9783000000007"],
+      "languages": [{"key": "/languages/ger"}]
+    }
+  ]
+}
