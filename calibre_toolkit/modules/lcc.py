@@ -532,6 +532,7 @@ def run_lcc_enrichment(
     catalog_max_retries: int = 3,
     description_timeout: float = _CATALOG_LOOKUP_TIMEOUT,
     description_max_retries: int = 3,
+    google_books_api_key: str | None = None,
 ) -> None:
     """Full MQG-03 LCC enrichment flow for a Calibre search string.
 
@@ -662,6 +663,7 @@ def run_lcc_enrichment(
                     isbn_by_book,
                     timeout=description_timeout,
                     max_retries=description_max_retries,
+                    google_books_api_key=google_books_api_key,
                 )
             sources: dict[str, int] = {}
             for d in description_map.values():

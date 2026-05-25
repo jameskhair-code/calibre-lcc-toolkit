@@ -18,6 +18,18 @@ from calibre_toolkit.services import book_description as bd
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 
+# Tests that exercise Google Books need the per-session "disabled" guard
+# reset between cases so one test's 429 doesn't bleed into the next.
+@pytest.fixture(autouse=True)
+def _reset_google_books_state(monkeypatch):
+    bd.reset_google_books_state()
+    # Always provide an API key during tests so the "no key -> skip" path
+    # doesn't disable Google Books unintentionally. Tests that exercise
+    # the missing-key path override this with monkeypatch.delenv.
+    monkeypatch.setenv("GOOGLE_BOOKS_API_KEY", "test-key")
+    yield
+    bd.reset_google_books_state()
+
 
 def _load_fixture(name: str) -> dict:
     return json.loads((_FIXTURES / name).read_text(encoding="utf-8"))
@@ -119,6 +131,67 @@ def test_fetch_from_google_books_missing_description_returns_none():
 
 def test_fetch_from_google_books_empty_isbn_returns_none():
     assert bd.fetch_from_google_books("") is None
+
+
+def test_fetch_from_google_books_skips_when_no_api_key(monkeypatch):
+    """No API key + no env var -> skip without making an HTTP call.
+    Google's anonymous quota is zero, so calling without a key is wasted."""
+    monkeypatch.delenv("GOOGLE_BOOKS_API_KEY", raising=False)
+    with patch("calibre_toolkit.services.book_description.urllib.request.urlopen") as mock_url:
+        result = bd.fetch_from_google_books("9780394720241", api_key=None)
+    assert result is None
+    assert mock_url.call_count == 0
+    # First miss should also flip the session-level disabled flag.
+    assert bd._google_books_is_disabled()
+
+
+def test_fetch_from_google_books_disabled_after_429():
+    """A single 429 disables Google Books for the rest of the session so a
+    50-book batch costs one wasted call rather than fifty."""
+    err = urllib.error.HTTPError(
+        url="x", code=429, msg="Too Many Requests", hdrs=None, fp=io.BytesIO(b""),
+    )
+    with patch("calibre_toolkit.services.book_description.urllib.request.urlopen",
+               side_effect=err):
+        first = bd.fetch_from_google_books("9780394720241", max_retries=1)
+    assert first is None
+    assert bd._google_books_is_disabled()
+    # Subsequent call: no HTTP traffic.
+    with patch("calibre_toolkit.services.book_description.urllib.request.urlopen") as mock_url:
+        second = bd.fetch_from_google_books("9781504026758", max_retries=1)
+    assert second is None
+    assert mock_url.call_count == 0
+
+
+def test_fetch_from_google_books_uses_explicit_api_key_over_env(monkeypatch):
+    """Passing api_key=... wins over the env var so callers can route
+    different commands to different keys if they ever need to."""
+    monkeypatch.setenv("GOOGLE_BOOKS_API_KEY", "env-key")
+    captured_urls: list[str] = []
+
+    def _capture(req, *a, **kw):
+        captured_urls.append(req.full_url)
+        return _http_response(_load_fixture("google_books_empty.json"))
+
+    with patch("calibre_toolkit.services.book_description.urllib.request.urlopen",
+               side_effect=_capture):
+        bd.fetch_from_google_books("9780394720241", api_key="explicit-key")
+    assert any("key=explicit-key" in u for u in captured_urls)
+    assert not any("key=env-key" in u for u in captured_urls)
+
+
+def test_fetch_from_google_books_uses_env_var_when_no_explicit_key(monkeypatch):
+    monkeypatch.setenv("GOOGLE_BOOKS_API_KEY", "env-key")
+    captured_urls: list[str] = []
+
+    def _capture(req, *a, **kw):
+        captured_urls.append(req.full_url)
+        return _http_response(_load_fixture("google_books_empty.json"))
+
+    with patch("calibre_toolkit.services.book_description.urllib.request.urlopen",
+               side_effect=_capture):
+        bd.fetch_from_google_books("9780394720241")
+    assert any("key=env-key" in u for u in captured_urls)
 
 
 # ── Open Library ─────────────────────────────────────────────────────────────

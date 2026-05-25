@@ -47,6 +47,8 @@
 
   "description": {
     "_comment": "MQG-03 book-description pre-fetch (Google Books -> Open Library). Falls back to `catalog` values when this block is absent. Graceful degradation: any miss leaves the AI to summarise from training data as before.",
+    "_comment_google_books_api_key": "Google Books has zero anonymous quota — every unauthenticated request returns HTTP 429. Set GOOGLE_BOOKS_API_KEY in your environment (preferred) or paste a key here. Without a key, only Open Library is queried. Get a key at https://console.cloud.google.com/apis/credentials (enable the 'Books API' for your project; keys are free).",
+    "google_books_api_key": "",
     "request_timeout_seconds": 10,
     "max_retries": 3
   },

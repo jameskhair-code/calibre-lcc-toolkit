@@ -10,14 +10,20 @@ than from training data.
 
 Source order (first hit wins):
 
-  1. Google Books — `volumes?q=isbn:<isbn>`
-     Returns `items[0].volumeInfo.description` plus `categories`. No API
-     key needed for basic ISBN lookups.
+  1. Google Books — `volumes?q=isbn:<isbn>[&key=...]`
+     Returns `items[0].volumeInfo.description` plus `categories`.
+     Google's anonymous quota is currently zero — every unauthenticated
+     request returns HTTP 429. An API key is required for Google Books
+     to participate at all. The key is read from the
+     `GOOGLE_BOOKS_API_KEY` environment variable (preferred) or
+     `description.google_books_api_key` in config.json. When no key is
+     available, Google Books is skipped entirely so we don't waste
+     network round trips.
 
   2. Open Library — `api/books?bibkeys=ISBN:<isbn>&jscmd=data&format=json`
-     Returns a `description` (sometimes a string, sometimes
-     `{"value": "..."}`) and `subjects`. Used when Google Books has no
-     description for the ISBN.
+     No key required; community-sourced descriptions and subjects.
+     Used as the primary path when no Google Books key is available,
+     and as fallback when Google Books has no description for an ISBN.
 
 Both lookups are best-effort: any network failure, missing field, or
 parse error returns None so the LCC step degrades cleanly to its
@@ -30,6 +36,8 @@ See ROADMAP.md item 11.
 from __future__ import annotations
 
 import json
+import os
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -58,6 +66,14 @@ class _TransientHTTPError(Exception):
     """Internal sentinel — a network/HTTP error worth retrying."""
 
 
+class _QuotaExceededError(Exception):
+    """Internal sentinel — Google Books returned HTTP 429 (no quota).
+
+    Not retried because the quota is per-day, not per-request. The caller
+    catches this and disables Google Books for the rest of the session.
+    """
+
+
 @dataclass
 class BookDescription:
     """A publisher / community-sourced description for a single ISBN."""
@@ -65,6 +81,44 @@ class BookDescription:
     source: str                   # "Google Books" or "Open Library".
     categories: list[str]         # Subject categories from the source.
     isbn: str = ""                # The ISBN we used (for traceability).
+
+
+# ── Google Books session state ───────────────────────────────────────────────
+#
+# Once the API returns 429 for an unauthenticated request (or for one with
+# an invalid key), every subsequent call in the same process will return
+# the same 429 — Google's quota is per-day. Caching that "disabled" state
+# means a 50-book batch costs one wasted call rather than fifty.
+
+_google_books_state_lock = threading.Lock()
+_google_books_disabled: bool = False
+_google_books_disabled_reason: str = ""
+
+
+def _disable_google_books(reason: str) -> None:
+    global _google_books_disabled, _google_books_disabled_reason
+    with _google_books_state_lock:
+        if not _google_books_disabled:
+            _google_books_disabled = True
+            _google_books_disabled_reason = reason
+            _log.warning(
+                "Google Books disabled for the rest of this session: %s. "
+                "Open Library will be used for description lookups.",
+                reason,
+            )
+
+
+def reset_google_books_state() -> None:
+    """Test-only helper: re-enable Google Books between unit tests."""
+    global _google_books_disabled, _google_books_disabled_reason
+    with _google_books_state_lock:
+        _google_books_disabled = False
+        _google_books_disabled_reason = ""
+
+
+def _google_books_is_disabled() -> bool:
+    with _google_books_state_lock:
+        return _google_books_disabled
 
 
 # ── HTTP helper ──────────────────────────────────────────────────────────────
@@ -79,7 +133,9 @@ def _http_get_json(
 
     Mirrors the LC/OL helper in services/lc_catalog.py — 5xx and connection
     errors retry with exponential backoff; 4xx and JSON parse errors return
-    None immediately.
+    None immediately. HTTP 429 is raised as _QuotaExceededError without a
+    retry so the caller can permanently disable the offending source for
+    the session.
     """
 
     def _attempt() -> Optional[dict]:
@@ -90,6 +146,8 @@ def _http_get_json(
                     return None
                 data = resp.read()
         except urllib.error.HTTPError as e:
+            if e.code == 429:
+                raise _QuotaExceededError(f"HTTP 429 from {url}") from e
             if 500 <= e.code < 600:
                 raise _TransientHTTPError(f"HTTP {e.code} from {url}") from e
             return None
@@ -161,18 +219,49 @@ def _clean_description(raw: str) -> str:
 # ── Google Books ──────────────────────────────────────────────────────────────
 
 
+def _resolve_google_books_api_key(explicit: Optional[str] = None) -> str:
+    """Pick the Google Books API key from (in order): explicit argument,
+    `GOOGLE_BOOKS_API_KEY` env var. Empty string when none is set."""
+    if explicit:
+        return explicit.strip()
+    return (os.environ.get("GOOGLE_BOOKS_API_KEY") or "").strip()
+
+
 def fetch_from_google_books(
     isbn: str,
     timeout: float = _DEFAULT_TIMEOUT,
     max_retries: int = _DEFAULT_MAX_RETRIES,
+    api_key: Optional[str] = None,
 ) -> Optional[BookDescription]:
-    """Look up a description on Google Books by ISBN."""
+    """Look up a description on Google Books by ISBN.
+
+    Google's public quota for anonymous requests is currently zero, so a
+    key is required. When no key is available — or once we've hit 429
+    earlier in this session — this function short-circuits to None
+    without making an HTTP call.
+    """
     cleaned = _normalise_isbn(isbn)
     if not cleaned:
         return None
-    params = urllib.parse.urlencode({"q": f"isbn:{cleaned}"})
+    if _google_books_is_disabled():
+        return None
+    key = _resolve_google_books_api_key(api_key)
+    if not key:
+        # First call only — disable for the rest of the session so we don't
+        # spam this warning. The caller (modules/lcc.py) also surfaces a
+        # one-line note when the key is absent.
+        _disable_google_books(
+            "no GOOGLE_BOOKS_API_KEY set "
+            "(env var or description.google_books_api_key in config.json)"
+        )
+        return None
+    params = urllib.parse.urlencode({"q": f"isbn:{cleaned}", "key": key})
     url = f"https://www.googleapis.com/books/v1/volumes?{params}"
-    data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
+    try:
+        data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
+    except _QuotaExceededError as e:
+        _disable_google_books(f"HTTP 429 from API ({e}); quota exhausted or key invalid")
+        return None
     if not data:
         _log.debug("Google Books: no response or network failure for ISBN %s", cleaned)
         return None
@@ -294,6 +383,7 @@ def fetch_description(
     isbn: str,
     timeout: float = _DEFAULT_TIMEOUT,
     max_retries: int = _DEFAULT_MAX_RETRIES,
+    google_books_api_key: Optional[str] = None,
 ) -> Optional[BookDescription]:
     """Try Google Books, then Open Library. Return None if both miss.
 
@@ -305,7 +395,10 @@ def fetch_description(
     if not cleaned:
         return None
     try:
-        google = fetch_from_google_books(cleaned, timeout=timeout, max_retries=max_retries)
+        google = fetch_from_google_books(
+            cleaned, timeout=timeout, max_retries=max_retries,
+            api_key=google_books_api_key,
+        )
         if google:
             return google
     except Exception as e:
@@ -324,6 +417,7 @@ def fetch_descriptions_batch(
     timeout: float = _DEFAULT_TIMEOUT,
     max_retries: int = _DEFAULT_MAX_RETRIES,
     max_workers: int = 8,
+    google_books_api_key: Optional[str] = None,
 ) -> dict[int, BookDescription]:
     """Fetch descriptions for many books in parallel.
 
@@ -337,7 +431,9 @@ def fetch_descriptions_batch(
     out: dict[int, BookDescription] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futures = {
-            ex.submit(fetch_description, isbn, timeout, max_retries): bid
+            ex.submit(
+                fetch_description, isbn, timeout, max_retries, google_books_api_key,
+            ): bid
             for bid, isbn in isbn_by_book_id.items()
             if _normalise_isbn(isbn)
         }
