@@ -343,6 +343,10 @@ SCORE-05: When confidence is "low" (see CONF), score conservatively —
 ## SECTION CONF — Confidence Levels
 ---
 
+See rules/confidence.md (CONF-T-HIGH/MEDIUM/LOW) for the canonical tier
+definitions shared across steps. The rules below map comments-specific
+evidence onto those tiers.
+
 CONF-01: "high" — Specific, verifiable information from multiple sources.
           All required sections can be written with concrete, accurate
           content. Author, title, plot/argument, reception are all clear.

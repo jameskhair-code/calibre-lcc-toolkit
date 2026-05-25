@@ -273,6 +273,10 @@ GEN-07: "notes" — one short sentence describing the primary source used
 ## SECTION CONF — Confidence Calibration
 ---
 
+See rules/confidence.md (CONF-T-HIGH/MEDIUM/LOW) for the canonical tier
+definitions shared across steps. The rules below map tag-specific evidence
+onto those tiers.
+
 CONF-01: Return "high" when ALL of the following hold:
            - lcc_secondary_class is present and unambiguous
            - Form tag selection is obvious (not a judgment call)

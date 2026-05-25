@@ -39,6 +39,7 @@ _log = get_logger(__name__)
 
 # Rules file lives alongside the package root
 _RULES_DIR = Path(__file__).parent.parent / "rules"
+_PROMPTS_DIR = _RULES_DIR / "prompts"
 
 
 def _load_rules(rules_file: str) -> str:
@@ -47,6 +48,22 @@ def _load_rules(rules_file: str) -> str:
         raise FileNotFoundError(
             f"Rules file not found: {path}\n"
             "Expected rules/ directory alongside the calibre_toolkit package."
+        )
+    return path.read_text(encoding="utf-8")
+
+
+def _load_prompt(prompt_file: str) -> str:
+    """Load a prompt fragment from rules/prompts/.
+
+    Externalized so that prompt prose can be edited without touching code
+    and stays in sync with the rules files it sits beside. See item 10 in
+    ROADMAP.md.
+    """
+    path = _PROMPTS_DIR / prompt_file
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Prompt fragment not found: {path}\n"
+            "Expected rules/prompts/ directory alongside the calibre_toolkit package."
         )
     return path.read_text(encoding="utf-8")
 
@@ -282,46 +299,17 @@ class CleanupSuggestion:
 
 
 # ── Prompts ─────────────────────────────────────────────────────────────────
-
-_PROMPT_PREAMBLE = """\
-You are a metadata librarian specialising in literary fiction and award-winning books.
-Your job is to clean book titles and author names for a Calibre library called
-"Collection – Literary Awards and Nominees".
-
-Apply the rules below exactly. When no rule applies, leave the field unchanged.
-"""
-
-_PROMPT_OUTPUT_FORMAT = """\
-
----
-## OUTPUT FORMAT
-
-Respond with a JSON array, one object per book, in the SAME ORDER as the input.
-Each object must have exactly these keys:
-{
-  "id": <integer>,
-  "title": "<cleaned title>",
-  "authors": ["<First Last>", ...],
-  "confidence": "high" | "medium" | "low",
-  "notes": "<one sentence explaining what was changed and why>"
-}
-
-Notes guidance:
-- If you made changes: describe specifically what you changed and which rule applies.
-  Good: "Removed generic subtitle per T-SUB-02."
-  Good: "Lowercased preposition 'with' per title case rules."
-  Good: "Removed series parenthetical '(The Way Book 1)' per T-SER-02."
-- If you made NO changes: write "Already correctly formatted."
-- NEVER write "No changes needed" if you actually changed the title or authors.
-- Keep notes to one clear sentence.
-
-Return ONLY the JSON array. No markdown fences, no explanation outside the array.
-"""
+#
+# Preambles and output-format blocks live in rules/prompts/*.md alongside the
+# step rules. ai.py composes them at call time so prose edits never require a
+# code change. See ROADMAP.md item 10.
 
 
 def _build_system_prompt(rules_file: str = "author_title.md") -> str:
+    preamble = _load_prompt("author_title_preamble.md")
     rules = _load_rules(rules_file)
-    return _PROMPT_PREAMBLE + "\n" + rules + "\n" + _PROMPT_OUTPUT_FORMAT
+    output_format = _load_prompt("author_title_output_format.md")
+    return preamble + "\n" + rules + "\n" + output_format
 
 
 def _build_user_message(books: list[Book]) -> str:
@@ -611,7 +599,7 @@ class AIClient:
         )
         try:
             obj = self._call_with_validation(
-                user_msg, _TAGS_REVIEW_SYSTEM_PROMPT,
+                user_msg, _build_tags_review_system_prompt(),
                 validate_tags_review, max_tokens=1024,
             )
         except SchemaViolation as e:
@@ -721,51 +709,12 @@ class AIClient:
 
 # ── LCC prompt + parsing ─────────────────────────────────────────────────────
 
-_LCC_PROMPT_PREAMBLE = """\
-You are a metadata librarian propagating Library of Congress Classification (LCC)
-values into a personal Calibre library called "Collection – Literary Awards
-and Nominees".
-
-For each book, propose four LCC fields plus confidence, source, and notes.
-Apply the rules below exactly. Prefer catalog evidence over invention.
-"""
-
-_LCC_PROMPT_OUTPUT_FORMAT = """\
-
----
-## OUTPUT FORMAT
-
-Respond with a JSON array, one object per book, in the SAME ORDER as the input.
-Each object must have exactly these keys:
-{
-  "id": <integer>,
-  "lcc": "<LCC call number, or empty string>",
-  "lcc_primary_class": "<exact canonical drop-down string from PRI-02>",
-  "lcc_secondary_class": "<exact canonical drop-down string from SEC-05>",
-  "lcc_summary": "<one-sentence subject summary per PATH section — plain prose, 20–40 words>",
-  "confidence": "high" | "medium" | "low",
-  "source_authority": "lc_catalog" | "worldcat_consensus" | "open_library" | "ai_inference",
-  "source": "<short phrase describing the strongest evidence used>",
-  "notes": "<one short sentence; reasoning or caveat>"
-}
-
-source_authority semantics — see SRC-06 in the rules:
-  - "lc_catalog"         only if you can cite a specific LC record (LCCN or ISBN).
-  - "worldcat_consensus" only if you can cite multiple library catalog records.
-  - "open_library"       only if you can cite an OL bibkey/work.
-  - "ai_inference"       otherwise — including all reasoning from training data,
-                         topic inference, or schedule-derived classification.
-
-You are being called as a fallback for books that already failed direct catalog
-lookups. Return "ai_inference" unless you can cite a specific catalog record.
-
-Return ONLY the JSON array. No markdown fences, no commentary outside the array.
-"""
-
 
 def _build_lcc_system_prompt() -> str:
+    preamble = _load_prompt("lcc_preamble.md")
     rules = _load_rules("lcc.md")
-    return _LCC_PROMPT_PREAMBLE + "\n" + rules + "\n" + _LCC_PROMPT_OUTPUT_FORMAT
+    output_format = _load_prompt("lcc_output_format.md")
+    return preamble + "\n" + rules + "\n" + output_format
 
 
 def _build_lcc_user_message(books: list[Book], current_map: dict[int, dict[str, str]]) -> str:
@@ -870,49 +819,19 @@ _COMMENTS_SECTION_KEYS = [
     ("why_read_it",                  "Why Read It"),
 ]
 
-_COMMENTS_PROMPT_PREAMBLE = """\
-You are a metadata librarian generating book descriptions for a personal Calibre
-library called "Collection – Literary Awards and Nominees". The reader profile
-and structural rules below define what to write and how. Apply them to every book.
-"""
-
-_COMMENTS_OUTPUT_FORMAT = """\
-
----
-## OUTPUT FORMAT
-
-Respond with a JSON array, one object per book, in the SAME ORDER as the input.
-Each object must have exactly these keys:
-{
-  "id": <integer>,
-  "book_type": "fiction" | "nonfiction",
-  "the_book":              "<plain prose — non-fiction only; empty string for fiction>",
-  "the_argument":          "<plain prose — non-fiction only; empty string for fiction>",
-  "the_story":             "<plain prose — fiction only; empty string for non-fiction>",
-  "what_its_really_about": "<plain prose — fiction only; empty string for non-fiction>",
-  "something_you_might_not_know": "<plain prose, or empty string if nothing noteworthy>",
-  "why_read_it":           "<plain prose — no HTML tags>",
-  "must_read_score":       <integer 0–10>,
-  "must_read_rationale":   "<1–2 sentences>",
-  "confidence":            "high" | "medium" | "low",
-  "notes":                 "<one short sentence — main caveat or key evidence>"
-}
-
-Return ONLY the JSON array. No markdown fences, no commentary outside the array.
-"""
-
-
 def _build_comments_system_prompt() -> str:
+    preamble = _load_prompt("comments_preamble.md")
     reader_profile = _load_rules("reader_profile.md")
     comments_rules = _load_rules("comments.md")
+    output_format = _load_prompt("comments_output_format.md")
 
     return (
-        _COMMENTS_PROMPT_PREAMBLE
+        preamble
         + "\n\n## READER PROFILE\n\n"
         + reader_profile
         + "\n\n## STRUCTURAL RULES\n\n"
         + comments_rules
-        + _COMMENTS_OUTPUT_FORMAT
+        + output_format
     )
 
 
@@ -1017,36 +936,12 @@ def _parse_comments_response(raw: str, books: list[Book]) -> list[CommentsSugges
 
 # ── Tags prompt + parsing ─────────────────────────────────────────────────────
 
-_TAGS_PROMPT_PREAMBLE = """\
-You are a metadata librarian generating subject tags for a personal Calibre
-library called "Collection – Literary Awards and Nominees". Tags are the
-primary search surface — accuracy and consistency matter more than
-comprehensiveness. Apply the rules below exactly.
-"""
-
-_TAGS_OUTPUT_FORMAT = """\
-
----
-## OUTPUT FORMAT
-
-Respond with a JSON array, one object per book, in the SAME ORDER as the input.
-Each object must have exactly these keys:
-{
-  "id": <integer>,
-  "tags": ["Tag One", "Tag Two", ...],
-  "confidence": "high" | "medium" | "low",
-  "notes": "<one short sentence>"
-}
-
-"tags" is a flat array of 4–8 plain strings. No category prefixes, no nesting.
-No commas within any tag string.
-Return ONLY the JSON array. No markdown fences, no commentary outside the array.
-"""
-
 
 def _build_tags_system_prompt() -> str:
+    preamble = _load_prompt("tags_preamble.md")
     rules = _load_rules("tags.md")
-    return _TAGS_PROMPT_PREAMBLE + "\n" + rules + _TAGS_OUTPUT_FORMAT
+    output_format = _load_prompt("tags_output_format.md")
+    return preamble + "\n" + rules + output_format
 
 
 def _build_tags_user_message(
@@ -1072,13 +967,7 @@ def _build_tags_user_message(
 
 
 def _build_tag_cleanup_system_prompt() -> str:
-    preamble = (
-        "You are a metadata librarian normalizing the tag vocabulary of a "
-        "personal Calibre library called “Collection – Literary Awards and "
-        "Nominees”. Below is the current list of all tags with how many books "
-        "use each. Apply the rules that follow exactly.\n\n"
-    )
-    return preamble + _load_rules("tags_cleanup.md")
+    return _load_prompt("tag_cleanup_preamble.md") + _load_rules("tags_cleanup.md")
 
 
 def _build_tag_cleanup_user_message(tags: list[tuple[str, int]]) -> str:
@@ -1122,42 +1011,9 @@ def _parse_tag_cleanup_response(
 
 # ── Tags Review prompt + parsing ─────────────────────────────────────────────
 
-_TAGS_REVIEW_SYSTEM_PROMPT = """\
-You are a metadata librarian assessing subject tags for a personal Calibre library
-called "Collection – Literary Awards and Nominees".
 
-Given a single book's full metadata — title, authors, description, current tags,
-and Library of Congress classification — assess whether the current tags are
-complete and accurate, then propose the ideal final tag set.
-
-Tag rules:
-- 4–8 flat tags per book. No prefixes, no nesting, no category labels.
-- Four implicit categories (use the values, not the category names as prefixes):
-  • Form     — Novel, Biography, Memoir, Short Stories, Poetry, Nonfiction, etc.
-  • Subject  — What the book is about (Military History, Cold War, Immigration, etc.)
-  • Period   — Historical period if central (World War II, Victorian Era, etc.)
-  • Geography — Region if central (United States, Russia, Sub-Saharan Africa, etc.)
-- Preserve sub-genre specificity: "Space Opera" ≠ "Science Fiction";
-  "Literary Fiction" ≠ "Fiction"; "Historical Mystery" ≠ "Mystery"
-- Avoid over-general tags that add no value ("Book", "Read", "Literature")
-- Assessment values:
-  • "complete"           — current tags are accurate and sufficient; no change needed
-  • "needs_additions"    — good base but missing important tags; keep current + add
-  • "needs_corrections"  — current tags have inaccurate or noisy entries to replace
-
----
-## OUTPUT FORMAT
-
-Respond with a single JSON object (NOT an array):
-{
-  "assessment": "complete" | "needs_additions" | "needs_corrections",
-  "proposed_tags": ["Tag1", "Tag2", ...],
-  "confidence": "high" | "medium" | "low",
-  "notes": "<one sentence: what changed and why, or confirming completeness>"
-}
-
-Return ONLY the JSON object. No markdown fences, no commentary.
-"""
+def _build_tags_review_system_prompt() -> str:
+    return _load_prompt("tags_review_system.md")
 
 
 def _build_tags_review_user_message(
