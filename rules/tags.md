@@ -29,7 +29,17 @@ SCOPE-03: Evidence in strict priority order — stop when you have enough signal
                 when secondary is absent or too generic (e.g. "PS - Individual authors")
              4. current_tags — review and reuse accurate ones;
                 normalize form but preserve meaning
-             5. Title and authors — last resort when LCC data is absent;
+             5. existing_comments_excerpt — when provided, a short
+                excerpt of the book's current Calibre comments field
+                (from step 04). Use as a coherence signal: if the
+                prose names a specific period (Cold War, World War II,
+                Vietnam War, etc.) or geography that LCC data does
+                not surface, it is fair evidence for a corresponding
+                Period or Geography tag. Do NOT use the excerpt as a
+                primary source of subject tags — the prose may be
+                stale or thin — but treat it as a tie-breaker when
+                LCC is ambiguous.
+             6. Title and authors — last resort when LCC data is absent;
                 document in notes that tags are title-derived
 
 SCOPE-04: Do not repeat the LCC hierarchy verbatim as tags. Translate it

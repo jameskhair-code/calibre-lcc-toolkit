@@ -203,6 +203,9 @@ class TagsSuggestion:
     confidence: Literal["high", "medium", "low"]
     notes: str = ""
     parse_error: str = ""
+    # Cross-step coherence warnings (item 16). Populated by the
+    # tags module after the AI returns; surfaced inline during review.
+    coherence_warnings: list[str] = field(default_factory=list)
 
     @property
     def authors_display(self) -> str:
@@ -277,6 +280,9 @@ class CommentsSuggestion:
     # Empty list = well-formed. Non-empty = surfaced during review;
     # the user decides whether to apply.
     html_warnings: list[str] = field(default_factory=list)
+    # Cross-step coherence warnings (item 16). Populated by the
+    # comments module after the AI returns; surfaced inline during review.
+    coherence_warnings: list[str] = field(default_factory=list)
 
     @property
     def authors_display(self) -> str:
@@ -676,16 +682,18 @@ class AIClient:
         books: list[Book],
         tags_map: dict[int, list[str]],
         context_map: dict[int, dict[str, str]] | None = None,
+        comments_excerpt_map: dict[int, str] | None = None,
         batch_size: int = 20,
         progress_callback: Callable[[int, int, int], None] | None = None,
     ) -> list[TagsSuggestion]:
         if not books:
             return []
         ctx = context_map or {}
+        excerpts = comments_excerpt_map or {}
         batches = [books[i : i + batch_size] for i in range(0, len(books), batch_size)]
 
         def _run(batch):
-            return self._process_tags_batch(batch, tags_map, ctx)
+            return self._process_tags_batch(batch, tags_map, ctx, excerpts)
 
         return self._run_batches_concurrent(_run, batches, progress_callback)
 
@@ -694,9 +702,12 @@ class AIClient:
         books: list[Book],
         tags_map: dict[int, list[str]],
         context_map: dict[int, dict[str, str]],
+        comments_excerpt_map: dict[int, str],
     ) -> list[TagsSuggestion]:
         system_prompt = _build_tags_system_prompt()
-        user_msg = _build_tags_user_message(books, tags_map, context_map)
+        user_msg = _build_tags_user_message(
+            books, tags_map, context_map, comments_excerpt_map,
+        )
         items = self._call_with_validation(
             user_msg, system_prompt, validate_tags, max_tokens=8192,
         )
@@ -1097,7 +1108,9 @@ def _build_tags_user_message(
     books: list[Book],
     tags_map: dict[int, list[str]],
     context_map: dict[int, dict[str, str]],
+    comments_excerpt_map: dict[int, str] | None = None,
 ) -> str:
+    excerpts = comments_excerpt_map or {}
     payload = []
     for b in books:
         item: dict = {"id": b.id, "title": b.title, "authors": b.authors}
@@ -1111,6 +1124,11 @@ def _build_tags_user_message(
         current = tags_map.get(b.id, [])
         if current:
             item["current_tags"] = current
+        # Coherence signal from step 04 — see rules/tags.md SCOPE-03
+        # for how this fits the evidence priority order.
+        excerpt = excerpts.get(b.id, "")
+        if excerpt:
+            item["existing_comments_excerpt"] = excerpt
         payload.append(item)
     return json.dumps(payload, ensure_ascii=False, indent=2)
 

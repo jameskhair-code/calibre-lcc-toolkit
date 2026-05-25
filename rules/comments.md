@@ -409,3 +409,16 @@ GEN-08: Use the LCC summary, when provided, as a disambiguator and as a
          signal of subject and genre. It is not a source for plot detail
          but it helps confirm you have the right book and the right
          category.
+
+GEN-09: Current tags, when provided, are a coherence signal — not a
+         constraint on what to write. If the tags include a specific
+         period ("Cold War", "World War II") or geography ("Soviet
+         Union", "Vietnam"), the prose should be consistent with that
+         period/region when the book genuinely involves it. Conversely,
+         if you would naturally name a period in the prose (e.g. the
+         book is a Cold War espionage novel), that period belongs in
+         the tags too — the tags step will see the same prose and pick
+         it up. Do NOT pad the prose to match noise tags ("Fiction",
+         "Literary", "General") that the tags step will drop, and do
+         NOT omit accurate content just because a tag is missing —
+         the tags step will catch the gap. Coherence, not capitulation.

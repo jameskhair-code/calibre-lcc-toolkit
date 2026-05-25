@@ -17,6 +17,7 @@ from rich import box
 from rich.prompt import Prompt
 
 from ..ai import AIClient, CommentsSuggestion
+from ..coherence import check_comments_coherence
 from ..usage import format_summary
 from ..db import CalibreDB
 from ..logging_config import audit_log
@@ -112,6 +113,17 @@ def _build_review_table(suggestions: list[CommentsSuggestion]) -> Table:
             extra = len(s.html_warnings) - 1
             if extra > 0:
                 preview.append(f" (+{extra} more)", style="red")
+        # Cross-step coherence warnings (item 16). Same surfacing pattern
+        # as html_warnings — visible at the table tier so reviewers can
+        # spot prose/tags drift without opening each book.
+        if s.coherence_warnings:
+            preview.append(
+                f"\n[!] Coherence: {s.coherence_warnings[0]}",
+                style="bold red",
+            )
+            extra = len(s.coherence_warnings) - 1
+            if extra > 0:
+                preview.append(f" (+{extra} more)", style="red")
 
         table.add_row(str(i), Text(icon, style=style), score_text, book_text, preview)
 
@@ -152,6 +164,13 @@ def _print_full_suggestion(s: CommentsSuggestion, label: str | None = None) -> N
     if s.html_warnings:
         console.print(f"  [bold red]⚠ HTML validation:[/bold red]")
         for w in s.html_warnings:
+            console.print(f"    [red]- {w}[/red]")
+        console.print()
+
+    # Cross-step coherence warnings (item 16).
+    if s.coherence_warnings:
+        console.print("  [bold red]⚠ Cross-step coherence:[/bold red]")
+        for w in s.coherence_warnings:
             console.print(f"    [red]- {w}[/red]")
         console.print()
 
@@ -227,6 +246,16 @@ def run_comments_enrichment(
     if not suggestions:
         console.print("[yellow]AI returned no suggestions.[/yellow]")
         raise typer.Exit(1)
+
+    # Cross-step coherence check (item 16). For each suggestion, see if
+    # the AI prose names a period the book is not currently tagged for.
+    # The current tags come from the book's existing metadata; they may
+    # change in a later tags-enrich run, but at write time these are
+    # what's on the shelf.
+    for s in suggestions:
+        details = details_map.get(s.book_id)
+        current_tags = details.tags if details else []
+        s.coherence_warnings = check_comments_coherence(s.html, current_tags)
 
     high   = [s for s in suggestions if s.confidence == "high"]
     medium = [s for s in suggestions if s.confidence == "medium"]

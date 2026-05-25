@@ -14,10 +14,18 @@ from rich import box
 from rich.prompt import Prompt
 
 from ..ai import AIClient, TagsSuggestion, TagOperation
+from ..coherence import check_tags_coherence
 from ..db import CalibreDB
 from ..logging_config import audit_log
 from ..tag_scanner import scan_tags, PATTERN_GROUP_LABELS
 from ..usage import format_summary
+
+
+# Cap for the comments excerpt fed into the tags prompt. ~400 chars
+# is enough to surface period/geography mentions without bloating
+# the user message — the AI does not need the full prose, just the
+# coherence signal.
+_COMMENTS_EXCERPT_MAX_CHARS = 400
 
 console = Console()
 
@@ -26,6 +34,24 @@ _CONF_DISPLAY = {
     "medium": ("◐", "yellow"),
     "low":    ("○", "red"),
 }
+
+
+def _excerpt_from_comments(html_text: str) -> str:
+    """Strip HTML and trim a book's existing comments to a short excerpt.
+
+    Used as a coherence signal for the tags prompt and the coherence
+    checker (item 16). Returns an empty string when the source is
+    empty — callers treat empty as "no signal."
+    """
+    if not html_text:
+        return ""
+    import re
+    plain = re.sub(r"<[^>]+>", " ", html_text)
+    # Collapse runs of whitespace so the excerpt is dense.
+    plain = re.sub(r"\s+", " ", plain).strip()
+    if len(plain) <= _COMMENTS_EXCERPT_MAX_CHARS:
+        return plain
+    return plain[:_COMMENTS_EXCERPT_MAX_CHARS].rstrip() + "…"
 
 
 def _build_review_table(suggestions: list[TagsSuggestion]) -> Table:
@@ -81,6 +107,14 @@ def _format_tags_diff(s: TagsSuggestion) -> Text:
     if not parts:
         t.append("(no change)", style="dim")
 
+    # Coherence warnings (item 16). Surface inline so a reviewer flipping
+    # through tiers sees them without drilling in.
+    if s.coherence_warnings:
+        t.append(f"\n[!] {s.coherence_warnings[0]}", style="bold red")
+        extra = len(s.coherence_warnings) - 1
+        if extra > 0:
+            t.append(f" (+{extra} more)", style="red")
+
     return t
 
 
@@ -125,10 +159,18 @@ def run_tags_enrichment(
     else:
         console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
 
-    # ── 2. Read current tags and LCC context ──────────────────────────────────
+    # ── 2. Read current tags, LCC context, and existing comments ──────────────
+    # Switched from get_tags_batch to get_book_details_batch so we can
+    # also feed an existing-comments excerpt into the tags prompt
+    # (item 16 — coherence signal). One round-trip, same query path.
     book_ids = [b.id for b in books]
-    with console.status("[cyan]Reading current tags and LCC context…"):
-        tags_map = db.get_tags_batch(book_ids)
+    with console.status("[cyan]Reading current tags, LCC context, and existing comments…"):
+        details_map = db.get_book_details_batch(book_ids)
+        tags_map = {bid: details_map[bid].tags for bid in book_ids}
+        comments_excerpt_map = {
+            bid: _excerpt_from_comments(details_map[bid].existing_comments)
+            for bid in book_ids
+        }
         context_map: dict[int, dict[str, str]] = {bid: {} for bid in book_ids}
         for col_key, col_label in [
             ("lcc_summary",        lcc_summary_column),
@@ -146,10 +188,19 @@ def run_tags_enrichment(
         f"in batches of {batch_size}…[/cyan]"
     ):
         try:
-            suggestions = ai.suggest_tags(books, tags_map, context_map, batch_size=batch_size)
+            suggestions = ai.suggest_tags(
+                books, tags_map, context_map,
+                comments_excerpt_map=comments_excerpt_map,
+                batch_size=batch_size,
+            )
         except RuntimeError as e:
             console.print(Panel(str(e), title="[red]AI generation failed[/red]", border_style="red"))
             raise typer.Exit(1)
+
+    # ── 3b. Cross-step coherence check (item 16) ─────────────────────────────
+    for s in suggestions:
+        excerpt = comments_excerpt_map.get(s.book_id, "")
+        s.coherence_warnings = check_tags_coherence(s.proposed_tags, excerpt)
 
     if not suggestions:
         console.print("[yellow]AI returned no suggestions.[/yellow]")
@@ -298,6 +349,10 @@ def _prompt_and_apply(
             console.print(f"  Removed:  [red]{', '.join(s.removed)}[/red]")
         if s.notes:
             console.print(f"  [dim]{s.notes}[/dim]")
+        if s.coherence_warnings:
+            console.print("  [bold red]⚠ Coherence:[/bold red]")
+            for w in s.coherence_warnings:
+                console.print(f"    [red]- {w}[/red]")
 
         default = "n" if s.confidence == "low" else "y"
         choice = Prompt.ask(
