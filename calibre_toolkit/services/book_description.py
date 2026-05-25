@@ -161,16 +161,23 @@ def fetch_from_google_books(
     url = f"https://www.googleapis.com/books/v1/volumes?{params}"
     data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
     if not data:
+        _log.debug("Google Books: no response or network failure for ISBN %s", cleaned)
         return None
     items = data.get("items") or []
     if not items:
+        _log.debug("Google Books: ISBN %s — 0 items in response", cleaned)
         return None
     vol = (items[0] or {}).get("volumeInfo") or {}
     raw = vol.get("description") or ""
     text = _clean_description(raw if isinstance(raw, str) else "")
     if not text:
+        _log.debug("Google Books: ISBN %s — item found but no description field", cleaned)
         return None
     categories = [c for c in (vol.get("categories") or []) if isinstance(c, str)]
+    _log.debug(
+        "Google Books: ISBN %s — hit (%d chars, %d categories)",
+        cleaned, len(text), len(categories),
+    )
     return BookDescription(
         text=text,
         source="Google Books",
@@ -242,12 +249,24 @@ def fetch_from_open_library(
     url = f"https://openlibrary.org/api/books?{params}"
     data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
     if not data:
+        _log.debug("Open Library: no response or network failure for ISBN %s", cleaned)
         return None
     record = data.get(f"ISBN:{cleaned}") or {}
+    if not record:
+        _log.debug("Open Library: ISBN %s — no record in response", cleaned)
+        return None
     text = _clean_description(_ol_extract_description(record))
     if not text:
+        _log.debug(
+            "Open Library: ISBN %s — record found but no description / excerpts / notes",
+            cleaned,
+        )
         return None
     categories = _ol_extract_categories(record)
+    _log.debug(
+        "Open Library: ISBN %s — hit (%d chars, %d subjects)",
+        cleaned, len(text), len(categories),
+    )
     return BookDescription(
         text=text,
         source="Open Library",
