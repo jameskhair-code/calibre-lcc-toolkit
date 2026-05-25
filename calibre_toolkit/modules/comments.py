@@ -233,6 +233,8 @@ def run_comments_enrichment(
             f"\n[dim]Dry-run complete — {len(suggestions)} book(s) shown. "
             "No changes written.[/dim]"
         )
+        if ai.usage.call_count > 0:
+            console.print(f"[dim]{format_summary(ai.usage, step_label='comments-enrich')}[/dim]")
         return
 
     console.print(_build_review_table(suggestions))

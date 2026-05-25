@@ -802,6 +802,9 @@ def run_lcc_enrichment(
         console.print("[bold cyan]── Dry-run: comparing AI proposals to current values ──[/bold cyan]\n")
         console.print(_build_audit_table(validated, current_map))
         _print_audit_summary(validated, current_map)
+        # Token telemetry even in dry-run: the AI call already cost real money.
+        if ai.usage.call_count > 0:
+            console.print(f"[dim]{format_summary(ai.usage, step_label='lcc-enrich')}[/dim]")
         return
 
     applied_ids: list[int] = []

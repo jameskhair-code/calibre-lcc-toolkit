@@ -175,6 +175,8 @@ def run_tags_enrichment(
             f"\n[dim]Dry-run complete — {len(suggestions)} book(s) shown, "
             f"{changed} would change. No writes.[/dim]"
         )
+        if ai.usage.call_count > 0:
+            console.print(f"[dim]{format_summary(ai.usage, step_label='tags-enrich')}[/dim]")
         return
 
     console.print(_build_review_table(suggestions))
@@ -412,6 +414,8 @@ def run_tags_cleanup(
 
     if dry_run:
         console.print("\n[dim]Dry-run — no changes written.[/dim]")
+        if ai is not None and ai.usage.call_count > 0:
+            console.print(f"[dim]{format_summary(ai.usage, step_label='tags-cleanup')}[/dim]")
         return
 
     # ── 5. Per-group bulk approval ────────────────────────────────────────────
