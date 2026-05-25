@@ -1,8 +1,14 @@
-"""Tests for services.lc_catalog response parsers.
+"""Tests for services.lc_catalog (Open Library-only after v1.3 LC removal).
 
-The HTTP layer is stubbed out via monkeypatch — fixtures are recorded JSON
-responses from LC and Open Library, so the suite never touches the network.
+The HTTP layer is stubbed via monkeypatch — fixtures are recorded JSON
+responses, so the suite never touches the network.
+
+Historical LC tests (lookup_by_lccn, lookup_by_isbn, SRU, MARCXML
+parsing) were removed when those code paths were deleted; see
+docs/LC-Cloudflare-Investigation.md for the rationale.
 """
+
+from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -12,12 +18,13 @@ import pytest
 from calibre_toolkit.services import lc_catalog
 from calibre_toolkit.services.lc_catalog import (
     CatalogHit,
-    _normalise_lccn,
+    _ol_sibling_isbns_for_work,
+    _ol_work_key_for_isbn,
     _pick_lcc_call_number,
     lookup_book,
-    lookup_by_isbn,
     lookup_by_isbn_openlibrary,
-    lookup_by_lccn,
+    lookup_by_isbn_with_edition_cascade,
+    reset_work_editions_cache,
 )
 
 
@@ -25,14 +32,25 @@ def _load_fixture(fixtures_dir: Path, name: str) -> dict:
     return json.loads((fixtures_dir / name).read_text(encoding="utf-8"))
 
 
+@pytest.fixture(autouse=True)
+def _reset_caches():
+    """Cache state must not leak between tests."""
+    reset_work_editions_cache()
+    yield
+    reset_work_editions_cache()
+
+
 @pytest.fixture
 def stub_http(monkeypatch, fixtures_dir):
-    """Patch _http_get_json so each URL substring returns a fixture file."""
+    """Patch _http_get_json so each URL substring returns a fixture file
+    (or an inline dict, for ad-hoc test data)."""
     routes: dict[str, dict | None] = {}
 
-    def add_route(url_substring: str, fixture: str | None):
+    def add_route(url_substring: str, fixture: str | dict | None):
         if fixture is None:
             routes[url_substring] = None
+        elif isinstance(fixture, dict):
+            routes[url_substring] = fixture
         else:
             routes[url_substring] = _load_fixture(fixtures_dir, fixture)
 
@@ -46,181 +64,282 @@ def stub_http(monkeypatch, fixtures_dir):
     return add_route
 
 
-class TestNormaliseLccn:
-    @pytest.mark.parametrize("inp,want", [
-        ("2024-012345", "2024012345"),
-        (" n2024012345 ", "n2024012345"),
-        ("87 - 12345", "87-12345".replace("-", "")),
-        ("", ""),
-    ])
-    def test_strips_whitespace_and_hyphens(self, inp, want):
-        assert _normalise_lccn(inp) == want
+# ── _pick_lcc_call_number ───────────────────────────────────────────────────
 
 
 class TestPickCallNumber:
-    def test_picks_lcc_pattern_over_other(self):
-        # LC records can carry Dewey and other notes; we only want LCC.
-        assert _pick_lcc_call_number(
-            ["823.914", "PR6059.S5 R4 1989", "MARC holding note"]
-        ) == "PR6059.S5 R4 1989"
+    @pytest.mark.parametrize("inp,want", [
+        (["PR9619.3.K46 C66 1979"], "PR9619.3.K46 C66 1979"),
+        (["PS3563.O8749"], "PS3563.O8749"),
+        (["DK189 .W67 2003"], "DK189 .W67 2003"),
+    ])
+    def test_picks_lcc_shaped_strings(self, inp, want):
+        assert _pick_lcc_call_number(inp) == want
 
-    def test_empty_returns_none(self):
+    def test_skips_non_lcc_strings(self):
+        # Pure-decimal Dewey, plain narrative notes, etc. should be
+        # skipped in favour of LCC.
+        result = _pick_lcc_call_number(["813.54", "Includes index.", "PR9619.3.K46"])
+        assert result == "PR9619.3.K46"
+
+    def test_returns_none_for_empty_list(self):
         assert _pick_lcc_call_number([]) is None
 
-    def test_non_string_skipped(self):
-        assert _pick_lcc_call_number([None, 123, "PS3563.O8749 B4 1987"]) == \
-            "PS3563.O8749 B4 1987"
+    def test_returns_none_when_nothing_lcc_shaped(self):
+        assert _pick_lcc_call_number(["813.54", "not a call number"]) is None
 
-    def test_no_lcc_returns_none(self):
-        # Pure Dewey list → None
-        assert _pick_lcc_call_number(["823.914", "12 / DEW"]) is None
-
-
-class TestLookupByLccn:
-    def test_hit_returns_catalog_hit(self, stub_http):
-        stub_http("/item/2024012345", "lc_item_hit.json")
-        hit = lookup_by_lccn("2024-012345")
-        assert isinstance(hit, CatalogHit)
-        assert hit.call_number == "PS3563.O8749 B4 1987"
-        assert hit.raw_lccn == "2024012345"
-        assert "LC catalog" in hit.source
-
-    def test_miss_returns_none(self, stub_http):
-        stub_http("/item/", "lc_item_no_call_number.json")
-        assert lookup_by_lccn("0000000000") is None
-
-    def test_empty_lccn_returns_none(self, stub_http):
-        assert lookup_by_lccn("") is None
-
-    def test_http_failure_returns_none(self, stub_http):
-        stub_http("/item/", None)
-        assert lookup_by_lccn("2024012345") is None
+    def test_strips_leading_non_letters(self):
+        # Some records prefix the call number with brackets.
+        assert _pick_lcc_call_number(["[PR6063.C4 C66]"]) == "PR6063.C4 C66"
 
 
-class TestLookupByIsbn:
-    def test_hit_returns_catalog_hit(self, stub_http):
-        stub_http("/books/", "lc_books_hit.json")
-        hit = lookup_by_isbn("9780571258246")
-        assert hit is not None
-        assert hit.call_number == "PR6059.S5 R4 1989"
-
-    def test_empty_results_returns_none(self, stub_http):
-        stub_http("/books/", "lc_books_empty.json")
-        assert lookup_by_isbn("0000000000") is None
-
-    def test_isbn_with_hyphens_normalised(self, stub_http):
-        stub_http("/books/", "lc_books_hit.json")
-        assert lookup_by_isbn("978-0-571-25824-6") is not None
+# ── Open Library direct ISBN lookup ─────────────────────────────────────────
 
 
-class TestLookupByOpenLibrary:
-    def test_hit_returns_catalog_hit(self, stub_http):
-        stub_http("openlibrary.org", "openlibrary_hit.json")
+class TestOpenLibraryDirect:
+    def test_returns_hit_when_classifications_present(self, stub_http):
+        stub_http("openlibrary.org/api/books?", "openlibrary_hit.json")
+        # Fixture is keyed by ISBN 9780571258246.
         hit = lookup_by_isbn_openlibrary("9780571258246")
         assert hit is not None
         assert hit.call_number == "PR6059.S5 N48 2005"
         assert "Open Library" in hit.source
 
-    def test_missing_classifications_returns_none(self, stub_http, fixtures_dir, monkeypatch):
-        # Empty response → record exists but no LC classifications.
-        monkeypatch.setattr(lc_catalog, "_http_get_json",
-                            lambda url, timeout=10, max_retries=3: {"ISBN:9780000000000": {}})
+    def test_returns_none_when_no_classifications(self, stub_http):
+        stub_http("openlibrary.org/api/books?", {"ISBN:9780000000000": {}})
         assert lookup_by_isbn_openlibrary("9780000000000") is None
+
+    def test_returns_none_when_isbn_empty(self):
+        assert lookup_by_isbn_openlibrary("") is None
+        assert lookup_by_isbn_openlibrary("   ") is None
+
+    def test_strips_isbn_hyphens_in_request(self, stub_http):
+        stub_http("openlibrary.org/api/books?", "openlibrary_hit.json")
+        # The fixture key is "ISBN:9780571258246"; hyphenated input
+        # must reach the same record.
+        hit = lookup_by_isbn_openlibrary("978-0-571-25824-6")
+        assert hit is not None
+
+
+# ── OL work-key resolution ──────────────────────────────────────────────────
+
+
+class TestWorkKey:
+    def test_returns_work_key_when_present(self, stub_http):
+        stub_http("openlibrary.org/isbn/9781504026758.json",
+                  "ol_isbn_lookup_with_work.json")
+        assert _ol_work_key_for_isbn("9781504026758") == "/works/OL999W"
+
+    def test_returns_none_when_no_work_field(self, stub_http):
+        stub_http("openlibrary.org/isbn/9780000000001.json",
+                  "ol_isbn_lookup_no_work.json")
+        assert _ol_work_key_for_isbn("9780000000001") is None
+
+    def test_returns_none_on_empty_isbn(self):
+        assert _ol_work_key_for_isbn("") is None
+        assert _ol_work_key_for_isbn("   ") is None
+
+    def test_returns_none_when_http_fails(self, stub_http):
+        assert _ol_work_key_for_isbn("9780000000001") is None
+
+    def test_strips_isbn_hyphens(self, stub_http):
+        stub_http("9781504026758", "ol_isbn_lookup_with_work.json")
+        assert _ol_work_key_for_isbn("978-1-504-02675-8") == "/works/OL999W"
+
+
+# ── OL sibling ISBN enumeration ─────────────────────────────────────────────
+
+
+class TestSiblingIsbns:
+    def test_returns_siblings_excluding_seed(self, stub_http):
+        stub_http("/works/OL999W/editions.json", "ol_work_editions.json")
+        siblings = _ol_sibling_isbns_for_work("/works/OL999W", "9781504026758")
+        assert "9781504026758" not in siblings
+        assert "9780671254834" in siblings
+        assert "0671254839" in siblings
+        # English-language editions ranked ahead of the German.
+        assert siblings.index("9780671254834") < siblings.index("9783000000007")
+
+    def test_returns_empty_when_no_entries(self, stub_http):
+        stub_http("/works/OL999W/editions.json", "ol_work_editions_empty.json")
+        assert _ol_sibling_isbns_for_work("/works/OL999W", "9781504026758") == []
+
+    def test_returns_empty_when_work_key_invalid(self):
+        assert _ol_sibling_isbns_for_work("", "9780000000001") == []
+        assert _ol_sibling_isbns_for_work("not-a-key", "9780000000001") == []
+
+    def test_caps_at_max_isbns(self, stub_http):
+        many_entries = {
+            "entries": [
+                {
+                    "isbn_13": [f"978000000{i:04d}"],
+                    "languages": [{"key": "/languages/eng"}],
+                }
+                for i in range(50)
+            ]
+        }
+        stub_http("/works/OL_BIG/editions.json", many_entries)
+        siblings = _ol_sibling_isbns_for_work(
+            "/works/OL_BIG", excluded_isbn="9780000000099", max_isbns=5,
+        )
+        assert len(siblings) == 5
+
+    def test_default_cap_is_10(self):
+        """Item 12a / probe outcome: cap raised from 3 → 10 after the
+        deeper walk proved it lifts hit rate from 27% → 76% on books
+        with ISBNs. Lower it again only with new evidence."""
+        from calibre_toolkit.services.lc_catalog import _EDITION_CASCADE_MAX_ISBNS
+        assert _EDITION_CASCADE_MAX_ISBNS == 10
+
+
+# ── Work-editions cache ─────────────────────────────────────────────────────
+
+
+class TestWorkEditionsCache:
+    def test_repeated_calls_for_same_work_hit_http_once(self, monkeypatch, fixtures_dir):
+        """Several books in the same series share an OL work; the cache
+        means we only fetch the editions list once per process."""
+        call_count = 0
+        editions = _load_fixture(fixtures_dir, "ol_work_editions.json")
+
+        def counting_get(url, timeout=10.0, max_retries=3):
+            nonlocal call_count
+            if "/works/OL999W/editions.json" in url:
+                call_count += 1
+                return editions
+            return None
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", counting_get)
+
+        # First call populates the cache.
+        siblings_1 = _ol_sibling_isbns_for_work("/works/OL999W", "9781504026758")
+        # Subsequent calls (potentially from another book in the series
+        # mapping to the same work) re-use it.
+        siblings_2 = _ol_sibling_isbns_for_work("/works/OL999W", "9781504026758")
+        siblings_3 = _ol_sibling_isbns_for_work("/works/OL999W", "9780671254834")
+        assert call_count == 1
+        assert siblings_1 == siblings_2
+        # Different exclusion still works from cached entries.
+        assert "9780671254834" not in siblings_3
+        assert "9781504026758" in siblings_3
+
+    def test_reset_clears_cache(self, monkeypatch, fixtures_dir):
+        editions = _load_fixture(fixtures_dir, "ol_work_editions.json")
+        call_count = 0
+
+        def counting_get(url, timeout=10.0, max_retries=3):
+            nonlocal call_count
+            if "editions.json" in url:
+                call_count += 1
+                return editions
+            return None
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", counting_get)
+
+        _ol_sibling_isbns_for_work("/works/OL999W", "9781504026758")
+        assert call_count == 1
+        reset_work_editions_cache()
+        _ol_sibling_isbns_for_work("/works/OL999W", "9781504026758")
+        assert call_count == 2
+
+
+# ── End-to-end edition cascade ──────────────────────────────────────────────
+
+
+class TestEditionCascade:
+    def test_returns_hit_when_sibling_isbn_has_classifications(self, stub_http):
+        stub_http("openlibrary.org/isbn/9781504026758.json",
+                  "ol_isbn_lookup_with_work.json")
+        stub_http("/works/OL999W/editions.json", "ol_work_editions.json")
+        # The US sibling 9780671254834 has classifications. Inline so
+        # the key on the response matches what the cascade asks for.
+        stub_http(
+            "openlibrary.org/api/books?bibkeys=ISBN%3A9780671254834",
+            {"ISBN:9780671254834": {
+                "classifications": {"lc_classifications": ["PR9619.3.K46 C66"]},
+            }},
+        )
+
+        hit = lookup_by_isbn_with_edition_cascade("9781504026758")
+        assert hit is not None
+        assert "edition cascade" in hit.source
+        assert "9780671254834" in hit.source
+
+    def test_returns_none_when_no_sibling_hits(self, stub_http):
+        stub_http("openlibrary.org/isbn/9781504026758.json",
+                  "ol_isbn_lookup_with_work.json")
+        stub_http("/works/OL999W/editions.json", "ol_work_editions.json")
+        # No OL-direct fixture wired → every sibling lookup returns None.
+        hit = lookup_by_isbn_with_edition_cascade("9781504026758")
+        assert hit is None
+
+    def test_returns_none_when_no_work_key(self, stub_http):
+        stub_http("openlibrary.org/isbn/9780000000001.json",
+                  "ol_isbn_lookup_no_work.json")
+        assert lookup_by_isbn_with_edition_cascade("9780000000001") is None
+
+    def test_returns_none_on_empty_isbn(self):
+        assert lookup_by_isbn_with_edition_cascade("") is None
+
+
+# ── lookup_book end-to-end cascade ──────────────────────────────────────────
 
 
 class TestLookupBookCascade:
-    """lookup_book should walk LCCN → LC-ISBN → OL-ISBN in order."""
+    """After the v1.3 LC removal, lookup_book walks two paths:
+       1. OL direct ISBN
+       2. OL edition cascade (sibling ISBN walk)."""
 
-    def test_prefers_lccn(self, stub_http):
-        # All three sources are wired — LCCN wins.
-        stub_http("/item/", "lc_item_hit.json")
-        stub_http("/books/", "lc_books_hit.json")
-        stub_http("openlibrary.org", "openlibrary_hit.json")
-        hit = lookup_book({"lccn": "2024012345", "isbn": "9780571258246"})
-        assert hit is not None
-        assert hit.call_number == "PS3563.O8749 B4 1987"
-        assert "LCCN" in hit.source
-
-    def test_falls_through_to_isbn(self, stub_http):
-        stub_http("/books/", "lc_books_hit.json")
-        stub_http("openlibrary.org", "openlibrary_hit.json")
+    def test_direct_ol_isbn_wins_when_present(self, stub_http):
+        stub_http("openlibrary.org/api/books?", "openlibrary_hit.json")
+        # work / editions routes left unwired — they must not be consulted.
         hit = lookup_book({"isbn": "9780571258246"})
         assert hit is not None
-        assert hit.call_number == "PR6059.S5 R4 1989"  # LC wins over OL
+        assert hit.source.startswith("Open Library")
+        assert "edition cascade" not in hit.source
 
-    def test_falls_through_to_openlibrary(self, stub_http):
-        stub_http("openlibrary.org", "openlibrary_hit.json")
-        # LC misses (no route set → fake_get returns None for those URLs)
-        hit = lookup_book({"isbn": "9780571258246"})
+    def test_falls_through_to_edition_cascade(self, stub_http):
+        """Direct OL lookup misses (the requested ISBN isn't in OL's data)
+        but the work cascade finds a sibling that does."""
+        # Direct OL lookup for the seed ISBN: empty response. URL is
+        # built with urlencode which produces %3A for the colon.
+        stub_http(
+            "openlibrary.org/api/books?bibkeys=ISBN%3A9781504026758",
+            {"ISBN:9781504026758": {}},
+        )
+        # OL knows the work and its editions.
+        stub_http("openlibrary.org/isbn/9781504026758.json",
+                  "ol_isbn_lookup_with_work.json")
+        stub_http("/works/OL999W/editions.json", "ol_work_editions.json")
+        # The US sibling 9780671254834 has classifications.
+        stub_http(
+            "openlibrary.org/api/books?bibkeys=ISBN%3A9780671254834",
+            {"ISBN:9780671254834": {
+                "classifications": {"lc_classifications": ["PR9619.3.K46 C66"]},
+            }},
+        )
+
+        hit = lookup_book({"isbn": "9781504026758"})
         assert hit is not None
-        assert "Open Library" in hit.source
+        assert "edition cascade" in hit.source
 
-    def test_no_identifiers_returns_none(self, stub_http):
+    def test_returns_none_when_every_path_misses(self, stub_http):
+        stub_http("openlibrary.org/api/books?",
+                  {"ISBN:9780000000001": {}})
+        stub_http("openlibrary.org/isbn/", "ol_isbn_lookup_no_work.json")
+        assert lookup_book({"isbn": "9780000000001"}) is None
+
+    def test_returns_none_when_no_identifiers(self):
         assert lookup_book({}) is None
+        assert lookup_book({}, title="X", author="Y") is None
 
-    def test_all_misses_returns_none(self, stub_http):
-        # No routes wired → every call returns None
-        assert lookup_book({"isbn": "9780000000000"}) is None
-
-
-class TestHttpRetryBehaviour:
-    """The _http_get_json layer should retry transient (5xx, network) failures
-    but treat 4xx as a permanent miss to avoid hammering bad URLs."""
-
-    def test_5xx_triggers_retry_then_succeeds(self, monkeypatch):
-        import urllib.error
-        from calibre_toolkit.services import lc_catalog as lc
-        import calibre_toolkit.retry as rmod
-
-        # No real sleeps during the test.
-        monkeypatch.setattr(rmod.time, "sleep", lambda _s: None)
-
-        attempts = {"n": 0}
-
-        def fake_urlopen(req, timeout):
-            attempts["n"] += 1
-            if attempts["n"] < 3:
-                raise urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, None)
-            class _Resp:
-                status = 200
-                def read(self): return b'{"ok": true}'
-                def __enter__(self): return self
-                def __exit__(self, *a): return False
-            return _Resp()
-
-        monkeypatch.setattr(lc.urllib.request, "urlopen", fake_urlopen)
-        result = lc._http_get_json("https://example.test/", timeout=1.0, max_retries=5)
-        assert result == {"ok": True}
-        assert attempts["n"] == 3
-
-    def test_4xx_returns_none_without_retry(self, monkeypatch):
-        import urllib.error
-        from calibre_toolkit.services import lc_catalog as lc
-
-        attempts = {"n": 0}
-
-        def fake_urlopen(req, timeout):
-            attempts["n"] += 1
-            raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
-
-        monkeypatch.setattr(lc.urllib.request, "urlopen", fake_urlopen)
-        result = lc._http_get_json("https://example.test/", timeout=1.0, max_retries=5)
-        assert result is None
-        assert attempts["n"] == 1
-
-    def test_network_error_retried_until_exhausted(self, monkeypatch):
-        import urllib.error
-        from calibre_toolkit.services import lc_catalog as lc
-        import calibre_toolkit.retry as rmod
-        monkeypatch.setattr(rmod.time, "sleep", lambda _s: None)
-
-        attempts = {"n": 0}
-
-        def fake_urlopen(req, timeout):
-            attempts["n"] += 1
-            raise urllib.error.URLError("DNS fail")
-
-        monkeypatch.setattr(lc.urllib.request, "urlopen", fake_urlopen)
-        result = lc._http_get_json("https://example.test/", timeout=1.0, max_retries=3)
-        assert result is None
-        assert attempts["n"] == 3
+    def test_title_and_author_accepted_for_signature_stability(self, stub_http):
+        """The pre-v1.3 cascade fed title/author into LC SRU. SRU is
+        gone, but the params remain accepted so callers don't break."""
+        stub_http("openlibrary.org/api/books?", "openlibrary_hit.json")
+        hit = lookup_book(
+            {"isbn": "9780571258246"},
+            title="Never Let Me Go",
+            author="Kazuo Ishiguro",
+        )
+        assert hit is not None

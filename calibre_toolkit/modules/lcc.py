@@ -278,29 +278,22 @@ class _CatalogStats:
     tried_lccn: int = 0
     tried_isbn: int = 0
     hits: int = 0
-    # Per-source breakdown — surfaced in the post-lookup diagnostic so the
-    # impact of the v1.3 ISBN cross-reference work (item 12) is visible.
-    direct_hits: int = 0       # LCCN or direct LC ISBN.
-    cascade_hits: int = 0      # LC ISBN via OL edition cascade (sibling ISBN).
-    sru_hits: int = 0          # LC SRU title+author fallback.
-    ol_hits: int = 0           # OL community-sourced LCC, medium confidence.
+    # Per-source breakdown — surfaced in the post-lookup diagnostic.
+    # Two paths remain after the v1.3 LC removal: direct OL ISBN
+    # lookup and the OL edition cascade (sibling ISBN walk).
+    ol_direct_hits: int = 0
+    ol_cascade_hits: int = 0
 
 
 def _classify_hit_source(source: str) -> str:
-    """Bucket a CatalogHit.source string into one of: lccn, isbn, cascade,
-    sru, ol, other."""
+    """Bucket a CatalogHit.source string into one of: ol_direct,
+    ol_cascade, other."""
     if not source:
         return "other"
-    if source.startswith("Open Library"):
-        return "ol"
     if "edition cascade" in source:
-        return "cascade"
-    if source.startswith("LC SRU"):
-        return "sru"
-    if "LCCN" in source:
-        return "lccn"
-    if source.startswith("LC catalog"):
-        return "isbn"
+        return "ol_cascade"
+    if source.startswith("Open Library"):
+        return "ol_direct"
     return "other"
 
 
@@ -359,14 +352,10 @@ def _catalog_lookup_batch(
                 continue
             hits[bid] = hit
             bucket = _classify_hit_source(hit.source)
-            if bucket == "ol":
-                stats.ol_hits += 1
-            elif bucket == "cascade":
-                stats.cascade_hits += 1
-            elif bucket == "sru":
-                stats.sru_hits += 1
+            if bucket == "ol_cascade":
+                stats.ol_cascade_hits += 1
             else:
-                stats.direct_hits += 1
+                stats.ol_direct_hits += 1
     stats.hits = len(hits)
     return hits, stats
 
@@ -378,17 +367,15 @@ def _build_catalog_suggestion(
 ) -> LccSuggestion:
     """Build an LccSuggestion directly from a catalog hit. Bypasses the AI.
 
-    LC catalog hits are high-confidence; Open Library hits are medium (LC
-    classification data there is community-sourced and less authoritative).
+    Every catalog hit currently comes from Open Library (direct or via
+    the edition cascade) — community-sourced LC classification data,
+    rated medium confidence. The LC direct paths were removed in v1.3
+    after Cloudflare made them unreachable; see
+    docs/LC-Cloudflare-Investigation.md.
     """
     primary, secondary = _derive_classes(hit.call_number)
     summary_class = secondary or primary or "Library of Congress Classification"
-    summary = f"Classified by Library of Congress catalog under {summary_class}."
-
-    is_ol = hit.source.startswith("Open Library")
-    confidence = "medium" if is_ol else "high"
-    notes = "Open Library classification; AI bypassed." if is_ol else "Catalog-derived; AI bypassed."
-    authority = "open_library" if is_ol else "lc_catalog"
+    summary = f"Classified by Open Library under {summary_class}."
 
     proposed = {
         "lcc": hit.call_number,
@@ -402,10 +389,10 @@ def _build_catalog_suggestion(
         authors=book.authors,
         current=current,
         proposed=proposed,
-        confidence=confidence,
+        confidence="medium",
         source=hit.source,
-        notes=notes,
-        source_authority=authority,
+        notes="Open Library classification; AI bypassed.",
+        source_authority="open_library",
     )
 
 
@@ -655,18 +642,13 @@ def run_lcc_enrichment(
             ai_books.append(b)
 
     # One-line diagnostic so misses are explainable rather than mysterious.
-    # Per-source breakdown of where the hits came from (item 12 added the
-    # cascade / SRU / OL paths; surfacing them lets the user see their
-    # impact at a glance).
+    # Two source paths remain after the v1.3 LC removal: direct OL ISBN
+    # lookup and the OL edition cascade.
     source_parts: list[str] = []
-    if cat_stats.direct_hits:
-        source_parts.append(f"{cat_stats.direct_hits} direct LC")
-    if cat_stats.cascade_hits:
-        source_parts.append(f"{cat_stats.cascade_hits} via OL edition cascade")
-    if cat_stats.sru_hits:
-        source_parts.append(f"{cat_stats.sru_hits} via LC SRU title+author")
-    if cat_stats.ol_hits:
-        source_parts.append(f"{cat_stats.ol_hits} via Open Library")
+    if cat_stats.ol_direct_hits:
+        source_parts.append(f"{cat_stats.ol_direct_hits} direct OL ISBN")
+    if cat_stats.ol_cascade_hits:
+        source_parts.append(f"{cat_stats.ol_cascade_hits} via OL edition cascade")
     source_note = f" ({', '.join(source_parts)})" if source_parts else ""
     cat_breakdown = (
         f"[dim]Catalog lookup: {cat_stats.tried_lccn} tried by LCCN, "
