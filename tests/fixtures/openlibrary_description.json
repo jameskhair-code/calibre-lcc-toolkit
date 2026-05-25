@@ -1,0 +1,13 @@
+{
+  "ISBN:9780394720241": {
+    "title": "The Power Broker: Robert Moses and the Fall of New York",
+    "subjects": [
+      {"name": "Politicians", "url": "https://openlibrary.org/subjects/politicians"},
+      "Biography",
+      {"name": "New York (N.Y.). Triborough Bridge and Tunnel Authority"}
+    ],
+    "excerpts": [
+      {"text": "Robert Moses, the public official who shaped modern New York…", "comment": "From the prologue"}
+    ]
+  }
+}

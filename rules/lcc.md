@@ -589,6 +589,29 @@ PATH-04: When lcc is empty, derive the summary from the best available subject
 PATH-05: Do not use bullet separators, semicolons, or " > " in the sentence.
            It is plain prose. Commas are allowed within the sentence.
 
+PATH-06: When a `description` field is provided on the book input (pre-fetched
+           from Google Books or Open Library), it is authoritative source
+           material — summarise from it rather than supplementing from
+           training data.
+           - Use the description to confirm the book's identity and pick the
+             specific subject details for lcc_summary.
+           - Do not introduce facts (dates, names, plot specifics, geographic
+             setting) that are not stated or directly implied by the
+             description, title, or authors.
+           - The description may also be useful for picking the secondary
+             class — for biographies and histories, the description usually
+             names the time period and geography explicitly.
+           - If the description appears to describe a different work than the
+             title/authors imply (identity mismatch), flag "low" confidence
+             and note the mismatch.
+           - `description_source` records where the description came from
+             ("Google Books" or "Open Library"); `description_categories` is
+             a short list of subject hints from the same source — useful but
+             not authoritative for LCC.
+           - When no `description` is provided, fall back to PATH-04
+             (training-data inference at "low" or "medium" confidence as
+             appropriate).
+
 
 ---
 ## SECTION CONF — Confidence Levels

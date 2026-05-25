@@ -45,6 +45,12 @@
     "max_retries": 3
   },
 
+  "description": {
+    "_comment": "MQG-03 book-description pre-fetch (Google Books -> Open Library). Falls back to `catalog` values when this block is absent. Graceful degradation: any miss leaves the AI to summarise from training data as before.",
+    "request_timeout_seconds": 10,
+    "max_retries": 3
+  },
+
   "lcc": {
     "_comment": "MQG-03 LCC enrichment — custom column labels (with leading #).",
     "lcc_column": "#lcc",

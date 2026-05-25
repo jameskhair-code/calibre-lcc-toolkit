@@ -24,6 +24,7 @@ from rich.prompt import Prompt
 from ..ai import AIClient, LccSuggestion
 from ..db import CalibreDB
 from ..logging_config import audit_log, get_logger
+from ..services.book_description import BookDescription, fetch_descriptions_batch
 from ..services.lc_catalog import CatalogHit, lookup_book
 
 
@@ -529,6 +530,8 @@ def run_lcc_enrichment(
     dry_run: bool = False,
     catalog_timeout: float = _CATALOG_LOOKUP_TIMEOUT,
     catalog_max_retries: int = 3,
+    description_timeout: float = _CATALOG_LOOKUP_TIMEOUT,
+    description_max_retries: int = 3,
 ) -> None:
     """Full MQG-03 LCC enrichment flow for a Calibre search string.
 
@@ -629,7 +632,57 @@ def run_lcc_enrichment(
         )
         console.print(cat_breakdown)
 
-    # ── 3b. AI lookup for the remainder ───────────────────────────────────────
+    # ── 3b. Pre-fetch publisher descriptions for AI-bound books (item 11) ─────
+    # Eliminates lcc_summary hallucination on obscure books by giving the AI
+    # an authoritative source to summarise. Graceful degradation: any books
+    # without an ISBN, or whose descriptions cannot be fetched, simply do
+    # not appear in `description_map` and the AI falls back to its prior
+    # training-data behaviour for those rows.
+    description_map: dict[int, BookDescription] = {}
+    if ai_books:
+        isbn_by_book: dict[int, str] = {}
+        for b in ai_books:
+            ids = db.get_identifiers(b.id)
+            isbn = (
+                ids.get("isbn")
+                or ids.get("isbn13")
+                or ids.get("isbn10")
+                or ids.get("ISBN")
+                or ""
+            )
+            if isbn:
+                isbn_by_book[b.id] = isbn
+
+        if isbn_by_book:
+            with console.status(
+                f"[cyan]Pre-fetching descriptions for {len(isbn_by_book)} book(s) "
+                "(Google Books → Open Library)…[/cyan]"
+            ):
+                description_map = fetch_descriptions_batch(
+                    isbn_by_book,
+                    timeout=description_timeout,
+                    max_retries=description_max_retries,
+                )
+            sources: dict[str, int] = {}
+            for d in description_map.values():
+                sources[d.source] = sources.get(d.source, 0) + 1
+            no_isbn = len(ai_books) - len(isbn_by_book)
+            missed = len(isbn_by_book) - len(description_map)
+            src_breakdown = ", ".join(
+                f"{n} via {name}" for name, n in sorted(sources.items())
+            ) or "none"
+            console.print(
+                f"[dim]Descriptions: {len(description_map)}/{len(ai_books)} fetched "
+                f"({src_breakdown}); {missed} no description available; "
+                f"{no_isbn} had no ISBN.[/dim]"
+            )
+        else:
+            console.print(
+                "[dim]No ISBNs available — skipping description pre-fetch; "
+                "AI will fall back to training data.[/dim]"
+            )
+
+    # ── 3c. AI lookup for the remainder ───────────────────────────────────────
     ai_suggestions: list[LccSuggestion] = []
     if ai_books:
         with console.status(
@@ -637,7 +690,10 @@ def run_lcc_enrichment(
             f"in batches of {batch_size}…[/cyan]"
         ):
             try:
-                ai_suggestions = ai.suggest_lcc(ai_books, current_map, batch_size=batch_size)
+                ai_suggestions = ai.suggest_lcc(
+                    ai_books, current_map, batch_size=batch_size,
+                    description_map=description_map,
+                )
             except RuntimeError as e:
                 console.print(Panel(str(e), title="[red]AI lookup failed[/red]", border_style="red"))
                 raise typer.Exit(1)
