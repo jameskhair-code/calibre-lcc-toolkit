@@ -2,6 +2,82 @@
 
 ---
 
+## v1.3 — Catalog Depth & AI Correctness
+
+Items 10–15 from ROADMAP.md. Six PRs (#10, #11, #12, #13–docs, #14, #15, #16), test suite from 193 → 382 hermetic tests.
+
+### Items shipped
+
+**10. Externalize hardcoded prompts + unify confidence taxonomy** (PR #10)
+- Every AI step's preamble and output-format block moved out of `ai.py` and into `rules/prompts/*.md`. Prose edits no longer require a code change.
+- New `rules/confidence.md` defines the canonical `high` / `medium` / `low` tier semantics; each step's `SECTION CONF` references the shared file while keeping its step-specific evidence calibration.
+- Guard test catches any future regression that reintroduces an inline preamble constant.
+
+**11. Pre-fetch book descriptions for step 03** (PR #11)
+- New `calibre_toolkit/services/book_description.py` — Google Books primary, Open Library fallback, both gated through the shared retry helper. HTML is stripped, length capped at 1500 chars on a sentence boundary, MARC artifacts rejected via an 80-char floor.
+- Step 03 (`lcc-enrich`) pre-fetches a description for every AI-bound book and passes it into the prompt as authoritative source material; `rules/lcc.md` PATH-06 instructs the AI to summarise from it instead of supplementing with training-data memory.
+- Google Books support requires an API key (their quota for anonymous requests is now zero); `description.google_books_api_key` in `config.json` or `GOOGLE_BOOKS_API_KEY` env var. Without a key, only Open Library is queried — a one-line `WARNING` notes the degraded mode. Setup walkthrough in `docs/Getting-Started.md` Step 2a.
+- Graceful degradation: any miss surfaces as `None` and the AI falls back to its prior training-data behaviour for that row.
+
+**12. ISBN cross-reference for non-US editions** (PR #12)
+- Three new lookup paths in `services/lc_catalog.py`:
+  - **OL edition cascade** — resolve seed ISBN to an OL work key, fetch sibling ISBNs of the same work (English-first, capped at 3 to keep worst-case cost predictable on a slow-LC day), retry LC ISBN lookup against each. Catches UK ISBNs whose US sibling is in LC.
+  - **LC SRU title+author search** — last resort when no ISBN path hits anything. MARCXML 050 datafield parsing via stdlib `xml.etree`.
+  - **Open Library direct ISBN** re-enabled (was filtered out before item 11 provided a real description pipeline). Marked medium confidence with `source_authority="open_library"`.
+- The unified `lookup_book()` now walks: LCCN → LC ISBN → OL edition cascade → LC SRU title+author → OL ISBN.
+- `_CatalogStats` tracks per-source hit counts; the post-lookup diagnostic line surfaces the breakdown so the impact of each path is visible.
+
+**12a. LC Cloudflare investigation (documentation only)** (PR #13)
+- Smoke-testing item 12 revealed LC's public APIs are now behind Cloudflare's JavaScript challenge. Python `urllib` cannot solve it, so every LC HTTP request from the toolkit has been failing silently throughout v1.3 — item 8's honest-source-attribution work means we never lied about it (every fallback correctly resolved to `[AI]`), but the LC pipeline is dormant.
+- New `docs/LC-Cloudflare-Investigation.md` captures: what was tested, why simple workarounds (UA spoofing, alternate subdomains) fail, the realistic workaround options (`cloudscraper` / `curl_cffi` / bulk MARC / OAI-PMH / OL-only) with pros and cons, a provenance table for every LCC field, and a pro/con discussion on whether the AI-generated call-number field is worth keeping in its current form when LC is unreachable.
+- New roadmap item **12a. Restore LC catalog reachability (Cloudflare workaround)** added to ROADMAP.md.
+
+**13. Token usage & cost telemetry** (PR #14)
+- New `calibre_toolkit/usage.py` — `TokenUsage` dataclass with cache-hit-rate property, threadsafe `UsageAggregate`, price table keyed by family prefix (Sonnet/Opus/Haiku 4.x + 3.5), `format_summary()` for the end-of-step panel, persistent JSONL log at `~/.calibre-toolkit/usage.jsonl`.
+- Every AI call captures `usage.input_tokens` / `usage.output_tokens` / `cache_creation_input_tokens` / `cache_read_input_tokens`. Each step prints a summary at end of run (both apply mode and dry-run):
+  ```
+  lcc-enrich · Tokens used: 7,700 input + 3,900 output  (cache: 78,991 read / 4,200 write — 86.9% hit rate)  ≈ $0.12  · 2 API call(s)
+  ```
+- The cache hit-rate metric directly validates the prompt-caching claim in `ai.py:4–7` — successive batches in the same run pay near-zero for the (large) rules file portion of the prompt.
+- TUI displays cumulative spend in the left panel; reads from the persistent log on every refresh.
+
+**14. HTML output validation for comments** (PR #15)
+- `_format_comments_html` now `html.escape()`s every AI-supplied string before wrapping. A stray `<script>` tag from a misbehaving response now lands as visible text (`&lt;script&gt;…`) rather than executable HTML in Calibre's comments field.
+- New `validate_comments_html()` stdlib-based structural validator confirms the assembled output uses only allow-listed tags (`<h3>`, `<p>`, `<strong>`), no attributes, properly balanced. Catches future regressions if escaping is ever removed.
+- `CommentsSuggestion.html_warnings` surfaces validator findings inline in the review table and in `_print_full_suggestion`. Failed validation doesn't auto-discard; the user decides.
+
+**15. Unicode & encoding robustness** (PR #16)
+- `normalize_text` now strips combining marks **only** when the base character is in the Latin script. Pre-v1.3 it silently demoted Russian Достоевский to Достоевскии (turning a word into a non-word), Ukrainian/Belarusian ў, Greek polytonic accents, and Arabic/Hebrew vowel marks. Behaviour now:
+  - Latin diacritics still strip (`café → cafe`, `Müller → Muller`, `Straße → Strasse`) — unchanged.
+  - Cyrillic, Greek, Arabic, Hebrew, CJK, emoji: preserved intact.
+- `db.apply_identifiers` previously documented that `:` was filtered from values but the code only checked `,`. Keys weren't sanitised at all. New `_sanitize_identifier()` helper rejects empty entries, the reserved `calibre` key, commas and colons in either side, whitespace inside keys, control characters (`Cc`), and invisible-format characters (`Cf` — zero-width joiner, RTL/LTR marks) in values. Keys are lowercased on the way in.
+
+### Pricing data (for token telemetry)
+
+Anthropic public list prices captured as of January 2026:
+
+| Family | Input | Output | Cache read | Cache write |
+|---|---|---|---|---|
+| Opus 4.x   | $15.00 | $75.00 | $1.50 | $18.75 |
+| Sonnet 4.x | $3.00  | $15.00 | $0.30 | $3.75  |
+| Haiku 4.x  | $0.80  | $4.00  | $0.08 | $1.00  |
+
+USD per million tokens. Unknown models report token counts but omit the dollar estimate. Keyed by family prefix so a new minor version inherits pricing until a deliberate update.
+
+### Known limitations after v1.3
+
+See `ROADMAP.md` for the planned work that addresses each:
+
+- **LC catalog is currently unreachable from Python** because of Cloudflare bot protection (`docs/LC-Cloudflare-Investigation.md`). Tracked as item 12a. Until resolved, every `lcc-enrich` row resolves to `[AI]` source. Item 8's attribution work means this is visible, not hidden.
+- **The `lcc` call-number field is AI-generated** when LC is unreachable. The class letters are usually correct (and they drive the code-derived primary/secondary class fields, which remain reliable), but the specific Cutter and year are educated guesses. Whether to truncate the field to just the supportable portion is captured as an open product question in the investigation doc.
+- **Description coverage depends on Google Books / Open Library reaching the book.** For obscure or very-recent ISBNs, both can miss; the AI then falls back to training-data summaries for those rows (with attribution still honest).
+
+---
+
+> **Note on v1.1 and v1.2:** These milestones shipped without per-version CHANGELOG entries. See `git log v1.0.0..main` for the full history; the key v1.1/v1.2 deliverables are summarised in ROADMAP.md (items 1–9) and the v1.0.0 "Known limitations" section below — most of which v1.1/v1.2 already addressed (onboarding wizard, structured logging, test suite + CI, external-call retry discipline, parallel step 02, Pydantic response validation, honest source attribution, model alias layer).
+
+---
+
 ## v1.0.0 — Calibre Metadata Toolkit
 
 Complete rewrite from the original PowerShell-based toolkit. The new toolkit is a Python CLI using Typer, Rich, and direct Calibre integration (SQLite reads + calibredb writes).
