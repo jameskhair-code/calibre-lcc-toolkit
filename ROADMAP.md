@@ -615,6 +615,18 @@ milestone item when ready to scope.
   in `modules/lcc.py`; possibly a new lightweight `suggest_lcc_summary`
   method on `AIClient`.
 
+- **Migrate top-level CLI commands into `commands/`.** Item 17
+  introduced `calibre_toolkit/commands/audit.py` because the
+  `audit-confidence` command did not fit naturally alongside the
+  existing top-level modules (`ai.py`, `cli.py`, `coherence.py`).
+  The other commands' implementations currently live as functions
+  inside `modules/` (e.g. `run_comments_enrichment` in
+  `modules/comments.py`) called from inline `@app.command()`
+  handlers in `cli.py`. For consistency, the inline handlers
+  should be extracted into `commands/<step>.py` and the `modules/`
+  files renamed or merged accordingly. Low-risk pure refactor;
+  worth doing in a single PR to keep the diff coherent.
+
 ---
 
 ## Process notes

@@ -69,3 +69,23 @@ onto the concrete evidence types available to that step:
 
 When the step rules conflict with this file, this file wins on the meaning
 of the tier; the step rules win on which evidence maps to which tier.
+
+
+---
+## CALIBRATION — MEASURING WHETHER THESE TIERS HOLD UP
+---
+
+The tier definitions above are aspirational unless verified. To check
+whether high-confidence really is more accurate than medium for a given
+step, sample applied writes from the persistent audit log and rate them:
+
+    calibre-toolkit audit-confidence
+    calibre-toolkit audit-confidence --step comments-enrich --sample-size 30
+
+Results are appended one session per line to
+`~/.calibre-toolkit/calibration.jsonl` and tiers below the configured
+strict-precision threshold (default 70%) are flagged in the session
+summary. When a tier is consistently flagged across sessions, the
+corresponding step rules file CONF section needs revision — either the
+tier definition is too generous, or the evidence-to-tier mapping is
+out of calibration.

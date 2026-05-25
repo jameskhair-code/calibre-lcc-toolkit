@@ -345,7 +345,10 @@ SCORE-05: When confidence is "low" (see CONF), score conservatively —
 
 See rules/confidence.md (CONF-T-HIGH/MEDIUM/LOW) for the canonical tier
 definitions shared across steps. The rules below map comments-specific
-evidence onto those tiers.
+evidence onto those tiers. To verify the mapping holds up against your
+own library, run `calibre-toolkit audit-confidence --step comments-enrich`
+and review the precision table that prints at the end; persistent results
+live in `~/.calibre-toolkit/calibration.jsonl`.
 
 CONF-01: "high" — Specific, verifiable information from multiple sources.
           All required sections can be written with concrete, accurate

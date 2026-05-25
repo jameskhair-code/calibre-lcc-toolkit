@@ -930,6 +930,112 @@ def tags_review(
     )
 
 
+@app.command(name="audit-confidence")
+def audit_confidence(
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    sample_size: Annotated[
+        int,
+        typer.Option("--sample-size", "-n",
+                     help="Max records to sample per (step, tier) group"),
+    ] = 20,
+    step: Annotated[
+        Optional[str],
+        typer.Option("--step",
+                     help='Comma-separated step filter (e.g. "comments-enrich,tags-enrich"). '
+                          'Default: all steps in the audit log.'),
+    ] = None,
+    threshold: Annotated[
+        float,
+        typer.Option("--threshold",
+                     help="Strict-precision floor; tiers below this are flagged"),
+    ] = 0.7,
+    audit_log: Annotated[
+        Optional[Path],
+        typer.Option("--audit-log",
+                     help="Override audit log path (default: $CALIBRE_TOOLKIT_AUDIT_LOG "
+                          "or ~/.calibre-toolkit/audit.log)"),
+    ] = None,
+    output: Annotated[
+        Optional[Path],
+        typer.Option("--output", "-o",
+                     help="Where to append the calibration session record "
+                          "(default: ~/.calibre-toolkit/calibration.jsonl)"),
+    ] = None,
+    seed: Annotated[
+        Optional[int],
+        typer.Option("--seed", help="Random seed for reproducible sampling"),
+    ] = None,
+):
+    """
+    Measure how well confidence tiers predict accuracy.
+
+    Samples applied AI writes from ~/.calibre-toolkit/audit.log, prompts
+    you to rate each as correct / minor / wrong, and computes per-tier
+    strict and lenient precision. Tiers whose strict precision falls
+    below --threshold are flagged for rule review.
+
+    The command is purely observational — it does not change any field
+    in Calibre. Results are appended to ~/.calibre-toolkit/calibration.jsonl
+    as one JSONL line per session.
+
+    Examples:
+
+        calibre-toolkit audit-confidence
+
+        calibre-toolkit audit-confidence --step comments-enrich --sample-size 30
+
+        calibre-toolkit audit-confidence --step tags-enrich,lcc-enrich --threshold 0.8
+    """
+    from .commands.audit import run_audit_confidence
+
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+
+    if audit_log is not None:
+        audit_log_path = audit_log
+    else:
+        env = os.environ.get("CALIBRE_TOOLKIT_AUDIT_LOG")
+        audit_log_path = Path(env).expanduser() if env else (
+            Path.home() / ".calibre-toolkit" / "audit.log"
+        )
+    output_path = output or (Path.home() / ".calibre-toolkit" / "calibration.jsonl")
+
+    steps_filter: Optional[list[str]] = None
+    if step:
+        steps_filter = [s.strip() for s in step.split(",") if s.strip()]
+
+    console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — audit-confidence\n\n",
+                ("Audit log: ", "dim"),
+                (str(audit_log_path), "bold"),
+                ("\nOutput:    ", "dim"),
+                (str(output_path), "bold"),
+                ("\nSample:    ", "dim"),
+                (f"{sample_size} per (step, tier)", "bold"),
+                ("\nThreshold: ", "dim"),
+                (f"{threshold:.0%} strict precision", "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_audit_confidence(
+        db=db,
+        audit_log_path=audit_log_path,
+        output_path=output_path,
+        sample_size=sample_size,
+        threshold=threshold,
+        steps_filter=steps_filter,
+        seed=seed,
+    )
+
+
 @app.command()
 def menu(
     config: Annotated[
