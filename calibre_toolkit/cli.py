@@ -402,6 +402,28 @@ def lcc_enrich(
     )
 
     catalog_cfg = cfg.get("catalog", {})
+    # `description` block is optional; it falls back to `catalog`'s discipline
+    # so existing config.json files keep working without edits.
+    description_cfg = cfg.get("description", {})
+    description_timeout = float(
+        description_cfg.get(
+            "request_timeout_seconds",
+            catalog_cfg.get("request_timeout_seconds", 10.0),
+        )
+    )
+    description_max_retries = int(
+        description_cfg.get(
+            "max_retries",
+            catalog_cfg.get("max_retries", 3),
+        )
+    )
+    # Google Books requires an API key; env var wins over config (so a user
+    # can rotate the key without touching config.json). Empty string is
+    # treated as "no key" — the service short-circuits to Open Library.
+    google_books_api_key = (
+        os.environ.get("GOOGLE_BOOKS_API_KEY")
+        or description_cfg.get("google_books_api_key", "")
+    ) or None
     run_lcc_enrichment(
         db=db,
         ai=ai,
@@ -416,6 +438,9 @@ def lcc_enrich(
         dry_run=dry_run,
         catalog_timeout=float(catalog_cfg.get("request_timeout_seconds", 10.0)),
         catalog_max_retries=int(catalog_cfg.get("max_retries", 3)),
+        description_timeout=description_timeout,
+        description_max_retries=description_max_retries,
+        google_books_api_key=google_books_api_key,
     )
 
 

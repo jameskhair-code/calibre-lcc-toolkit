@@ -12,12 +12,15 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Literal
+from typing import TYPE_CHECKING, Callable, Literal
 
 from .db import Book, BookDetails
 from .logging_config import get_logger
 from .models import resolve_model
 from .normalize import normalize_text
+
+if TYPE_CHECKING:
+    from .services.book_description import BookDescription
 from .schemas import (
     CleanupItem,
     CommentsItem,
@@ -557,13 +560,14 @@ class AIClient:
         current_map: dict[int, dict[str, str]],
         batch_size: int = 10,
         progress_callback: Callable[[int, int, int], None] | None = None,
+        description_map: dict[int, "BookDescription"] | None = None,
     ) -> list[LccSuggestion]:
         if not books:
             return []
         batches = [books[i : i + batch_size] for i in range(0, len(books), batch_size)]
 
         def _run(batch):
-            return self._process_lcc_batch(batch, current_map)
+            return self._process_lcc_batch(batch, current_map, description_map or {})
 
         return self._run_batches_concurrent(_run, batches, progress_callback)
 
@@ -571,9 +575,10 @@ class AIClient:
         self,
         books: list[Book],
         current_map: dict[int, dict[str, str]],
+        description_map: dict[int, "BookDescription"] | None = None,
     ) -> list[LccSuggestion]:
         system_prompt = _build_lcc_system_prompt()
-        user_msg = _build_lcc_user_message(books, current_map)
+        user_msg = _build_lcc_user_message(books, current_map, description_map or {})
         items = self._call_with_validation(
             user_msg, system_prompt, validate_lcc, max_tokens=8192,
         )
@@ -717,11 +722,16 @@ def _build_lcc_system_prompt() -> str:
     return preamble + "\n" + rules + "\n" + output_format
 
 
-def _build_lcc_user_message(books: list[Book], current_map: dict[int, dict[str, str]]) -> str:
+def _build_lcc_user_message(
+    books: list[Book],
+    current_map: dict[int, dict[str, str]],
+    description_map: dict[int, "BookDescription"] | None = None,
+) -> str:
+    description_map = description_map or {}
     payload = []
     for b in books:
         current = current_map.get(b.id, {})
-        item = {
+        item: dict = {
             "id": b.id,
             "title": b.title,
             "authors": b.authors,
@@ -729,6 +739,14 @@ def _build_lcc_user_message(books: list[Book], current_map: dict[int, dict[str, 
         if any(current.get(k) for k in ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_summary")):
             item["current"] = {k: current.get(k, "") for k in
                                ("lcc", "lcc_primary_class", "lcc_secondary_class", "lcc_summary")}
+        # Pre-fetched description (item 11). When present, the prompt
+        # instructs the model to summarise from it instead of training data.
+        desc = description_map.get(b.id)
+        if desc is not None and desc.text:
+            item["description"] = desc.text
+            item["description_source"] = desc.source
+            if desc.categories:
+                item["description_categories"] = desc.categories
         payload.append(item)
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
