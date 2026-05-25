@@ -6,6 +6,7 @@ All writes go through calibredb CLI to avoid corrupting the DB while Calibre is 
 import sqlite3
 import subprocess
 import json
+import unicodedata
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -37,6 +38,51 @@ class Book:
     @property
     def authors_display(self) -> str:
         return " & ".join(self.authors)
+
+
+# ── Identifier sanitization (item 15) ────────────────────────────────────────
+#
+# calibredb encodes identifiers as a comma-separated list of `type:value`
+# pairs. Any unescaped comma or colon in either side breaks the encoding —
+# silently, in ways that take a manual database inspection to diagnose.
+# This helper rejects everything that would corrupt the field, including:
+#
+#   - empty keys or values (after trimming whitespace)
+#   - the reserved key "calibre" (Calibre uses it internally)
+#   - comma or colon in either side
+#   - any whitespace inside the key (identifier types are conventionally
+#     lowercase alphanumeric — e.g. "isbn", "goodreads", "amazon")
+#   - any control character (Cc) in the value, including newlines and NUL
+#
+# Returns the cleaned (key, value) pair when the entry is safe to write,
+# or None when it should be dropped.
+
+_FORBIDDEN_IN_IDENTIFIER = frozenset((",", ":"))
+
+
+def _sanitize_identifier(key: str, value: str) -> tuple[str, str] | None:
+    if not isinstance(key, str) or not isinstance(value, str):
+        return None
+    k = key.strip().lower()
+    v = value.strip()
+    if not k or not v:
+        return None
+    if k in ("", "calibre"):
+        return None
+    if any(c in k for c in _FORBIDDEN_IN_IDENTIFIER):
+        return None
+    if any(c.isspace() for c in k):
+        return None
+    if any(c in v for c in _FORBIDDEN_IN_IDENTIFIER):
+        return None
+    # Control category = Cc (proper control chars including newline, NUL,
+    # ESC). Cf would include zero-width joiners and bidi marks — those
+    # are not control chars in the strict sense but are still toxic for
+    # identifier values (invisible characters silently break exact-match
+    # searches downstream), so we reject them too.
+    if any(unicodedata.category(c) in ("Cc", "Cf") for c in v):
+        return None
+    return k, v
 
 
 class CalibreDB:
@@ -575,12 +621,16 @@ class CalibreDB:
         """Write a complete set of identifiers to Calibre via calibredb set_metadata.
 
         REPLACES all existing identifiers — caller must merge current + new before calling.
-        Values containing ',' or ':' are skipped to avoid corrupting the field string.
+        Entries that fail _sanitize_identifier are silently dropped to avoid
+        corrupting the identifiers field string at the calibredb boundary.
+        See item 15 — pre-v1.3 only the value's comma was checked even though
+        the docstring claimed colons were filtered too.
         """
-        safe = {
-            k: v for k, v in merged.items()
-            if v and "," not in v and k not in ("", "calibre")
-        }
+        safe: dict[str, str] = {}
+        for k, v in merged.items():
+            cleaned = _sanitize_identifier(k, v)
+            if cleaned is not None:
+                safe[cleaned[0]] = cleaned[1]
         id_str = ",".join(f"{k}:{v}" for k, v in safe.items())
         cmd = [
             self.calibredb_path,
