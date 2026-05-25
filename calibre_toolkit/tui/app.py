@@ -242,7 +242,9 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
             description=(
                 "Normalise tag vocabulary across the entire library — "
                 "LCSH chains, BISAC codes, encoding noise, taxonomy variants. "
-                "Deterministic scanner first, optional AI semantic pass second."
+                "Deterministic scanner first, optional AI semantic pass second. "
+                "Library-wide variants apply across the full library; "
+                "metadata-queue variants only apply changes to books in the queue."
             ),
             mqg_column=None,  # library-wide — no per-book progress column
             actions=[
@@ -255,6 +257,16 @@ def _build_steps(cfg: dict) -> list[MenuItem]:
                     "Full cleanup — scanner + AI",
                     ["tags-cleanup"],
                     "Scanner then AI semantic pass — takes a few minutes",
+                ),
+                StepAction(
+                    "Scanner only — metadata queue",
+                    ["tags-cleanup", "--skip-ai", "--search", "#metadata_queue:true"],
+                    "Deterministic rules; apply only to books in the metadata queue",
+                ),
+                StepAction(
+                    "Full cleanup — metadata queue",
+                    ["tags-cleanup", "--search", "#metadata_queue:true"],
+                    "Scanner + AI; apply only to books in the metadata queue",
                 ),
             ],
         ),
