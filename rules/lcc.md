@@ -619,7 +619,10 @@ PATH-06: When a `description` field is provided on the book input (pre-fetched
 
 See rules/confidence.md (CONF-T-HIGH/MEDIUM/LOW) for the canonical tier
 definitions shared across steps. The rules below map LCC-specific evidence
-onto those tiers.
+onto those tiers. To verify the mapping holds up against your own library,
+run `calibre-toolkit audit-confidence --step lcc-enrich` and review the
+precision table that prints at the end; persistent results live in
+`~/.calibre-toolkit/calibration.jsonl`.
 
 CONF-01: "high" — catalog-confirmed for the same edition.
            Strong typical signals:
