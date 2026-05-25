@@ -7,7 +7,10 @@
       {"name": "New York (N.Y.). Triborough Bridge and Tunnel Authority"}
     ],
     "excerpts": [
-      {"text": "Robert Moses, the public official who shaped modern New York…", "comment": "From the prologue"}
+      {
+        "text": "Robert Moses, the public official who shaped modern New York more than any other person, built parkways and parks, bridges and beaches, public housing and public works that transformed the metropolis.",
+        "comment": "From the prologue"
+      }
     ]
   }
 }

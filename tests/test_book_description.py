@@ -45,11 +45,15 @@ def test_normalise_isbn_strips_hyphens_and_spaces():
 
 
 def test_clean_description_strips_html_and_collapses_whitespace():
-    raw = "Line one.<br>Line two.<b>Bold</b>   spaced."
+    # Long enough to clear the _MIN_DESCRIPTION_CHARS quality gate.
+    raw = (
+        "Line one.<br>Line two.<b>Bold</b>   spaced. "
+        "More content that brings this comfortably past the eighty-character floor for real prose."
+    )
     cleaned = bd._clean_description(raw)
     assert "<" not in cleaned and ">" not in cleaned
     assert "  " not in cleaned
-    assert cleaned == "Line one. Line two. Bold spaced."
+    assert "Line one. Line two. Bold spaced." in cleaned
 
 
 def test_clean_description_truncates_long_input_at_sentence_boundary():
@@ -63,6 +67,18 @@ def test_clean_description_truncates_long_input_at_sentence_boundary():
 def test_clean_description_empty_returns_empty():
     assert bd._clean_description("") == ""
     assert bd._clean_description(None) == ""  # type: ignore[arg-type]
+
+
+def test_clean_description_rejects_short_text_as_quality_gate():
+    """Anything under _MIN_DESCRIPTION_CHARS is almost certainly a MARC
+    artifact like "Bibliography: p. [1173]-1177. Includes index." and is
+    rejected so the AI does not try to summarise from it."""
+    assert bd._clean_description("Bibliography: p. [1173]-1177. Includes index.") == ""
+    assert bd._clean_description("Includes index.") == ""
+    # Exactly at the floor: rejected.
+    assert bd._clean_description("x" * (bd._MIN_DESCRIPTION_CHARS - 1)) == ""
+    # Just over: accepted.
+    assert bd._clean_description("x" * bd._MIN_DESCRIPTION_CHARS) != ""
 
 
 # ── Google Books ─────────────────────────────────────────────────────────────
@@ -122,16 +138,50 @@ def test_fetch_from_open_library_uses_excerpts_when_no_description():
 
 
 def test_fetch_from_open_library_handles_typed_description():
+    long_text = (
+        "A typed-shape description with enough content to clear the quality "
+        "gate and represent a real prose summary of the book under review."
+    )
     payload = {
         "ISBN:9780000000001": {
-            "description": {"type": "/type/text", "value": "A typed-shape description."}
+            "description": {"type": "/type/text", "value": long_text}
         }
     }
     with patch("calibre_toolkit.services.book_description.urllib.request.urlopen",
                return_value=_http_response(payload)):
         result = bd.fetch_from_open_library("9780000000001")
     assert result is not None
-    assert result.text == "A typed-shape description."
+    assert result.text == long_text
+
+
+def test_fetch_from_open_library_ignores_notes_field():
+    """OL's `notes` field is a MARC cataloging artifact (e.g. "Bibliography:
+    p. X-Y. Includes index.") and must not be treated as a description."""
+    payload = {
+        "ISBN:9780000000001": {
+            "title": "X",
+            "notes": "Bibliography: p. [1173]-1177. Includes index.",
+        }
+    }
+    with patch("calibre_toolkit.services.book_description.urllib.request.urlopen",
+               return_value=_http_response(payload)):
+        result = bd.fetch_from_open_library("9780000000001")
+    assert result is None
+
+
+def test_fetch_from_open_library_rejects_short_excerpt():
+    """An excerpt under the quality-gate floor is treated as a miss so the
+    AI does not summarise from a stub."""
+    payload = {
+        "ISBN:9780000000001": {
+            "title": "X",
+            "excerpts": [{"text": "Too short."}],
+        }
+    }
+    with patch("calibre_toolkit.services.book_description.urllib.request.urlopen",
+               return_value=_http_response(payload)):
+        result = bd.fetch_from_open_library("9780000000001")
+    assert result is None
 
 
 def test_fetch_from_open_library_no_description_returns_none():

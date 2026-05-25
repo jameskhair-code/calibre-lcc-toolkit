@@ -45,6 +45,10 @@ _USER_AGENT = "calibre-lcc-toolkit/1.0 (personal library; +https://github.com/)"
 _DEFAULT_TIMEOUT = 10.0
 _DEFAULT_MAX_RETRIES = 3
 _MAX_DESCRIPTION_CHARS = 1500  # Cap to keep prompt size predictable.
+_MIN_DESCRIPTION_CHARS = 80    # Floor below which a "description" is almost
+                               # always a MARC artifact (e.g. "Bibliography:
+                               # p. [1173]-1177. Includes index.") rather
+                               # than real description content.
 _MAX_CATEGORIES = 6
 
 _log = get_logger(__name__)
@@ -124,16 +128,25 @@ _WHITESPACE_RE = re.compile(r"\s+")
 
 
 def _clean_description(raw: str) -> str:
-    """Strip HTML tags, collapse whitespace, and cap length.
+    """Strip HTML tags, collapse whitespace, cap length, and quality-gate.
 
     Google Books descriptions occasionally contain inline `<br>`, `<b>`,
     or `<i>` markup. We feed plain text to the AI so the prompt stays
     deterministic and predictable.
+
+    Quality gate: anything under `_MIN_DESCRIPTION_CHARS` after cleanup
+    is returned as an empty string. Very short "descriptions" on the
+    public catalog APIs are almost always MARC artifacts ("Includes
+    bibliographical references and index.") rather than real prose, and
+    summarising from them would be worse than falling back to AI
+    training data.
     """
     if not raw:
         return ""
     no_html = _HTML_TAG_RE.sub(" ", raw)
     collapsed = _WHITESPACE_RE.sub(" ", no_html).strip()
+    if len(collapsed) < _MIN_DESCRIPTION_CHARS:
+        return ""
     if len(collapsed) > _MAX_DESCRIPTION_CHARS:
         # Truncate at the last sentence boundary inside the cap so we never
         # split mid-word.
@@ -191,7 +204,12 @@ def fetch_from_google_books(
 
 def _ol_extract_description(record: dict) -> str:
     """OL returns description in two shapes depending on source: a plain
-    string, or {"type": "/type/text", "value": "..."}. Handle both."""
+    string, or {"type": "/type/text", "value": "..."}. Excerpts are
+    accepted as a fallback. `notes` is intentionally NOT consulted — on
+    OL it almost always contains MARC cataloging boilerplate (e.g.
+    "Bibliography: p. [1173]-1177. Includes index.") that would mislead
+    the AI rather than help it.
+    """
     raw = record.get("description")
     if isinstance(raw, str):
         return raw
@@ -199,8 +217,9 @@ def _ol_extract_description(record: dict) -> str:
         v = raw.get("value")
         if isinstance(v, str):
             return v
-    # The `/api/books?jscmd=data` shape uses "excerpts" / "notes" / "subtitle"
-    # rather than `description`. Fall back through them in order.
+    # Excerpts are usually a short snippet of the book itself; safer than
+    # MARC notes but should still be quality-gated by the length floor in
+    # the caller.
     excerpts = record.get("excerpts") or []
     if isinstance(excerpts, list) and excerpts:
         first = excerpts[0]
@@ -208,13 +227,6 @@ def _ol_extract_description(record: dict) -> str:
             text = first.get("text") or first.get("comment") or ""
             if isinstance(text, str):
                 return text
-    notes = record.get("notes")
-    if isinstance(notes, str):
-        return notes
-    if isinstance(notes, dict):
-        v = notes.get("value")
-        if isinstance(v, str):
-            return v
     return ""
 
 
