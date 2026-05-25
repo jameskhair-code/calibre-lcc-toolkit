@@ -2,6 +2,54 @@
 
 ---
 
+## v1.4 — Coherence, Calibration & Scope
+
+Items 16–18 from ROADMAP.md. Three PRs (#19, #20, #21), test suite from 359 → 415 hermetic tests.
+
+The v1.4 theme is making the AI pipeline's outputs verifiable end-to-end: cross-step coherence (item 16) stops two AI steps from contradicting each other, the calibration measurement loop (item 17) closes the long-standing feedback gap between confidence-tier definitions and observed accuracy, and tags-cleanup scoping (item 18) lets vocabulary normalisation operate on a batch without leaking into the rest of the library.
+
+### Items shipped
+
+**16. Cross-step context sharing for tags and comments** (PR #19)
+- `tags-mqg` and `comments-enrich` previously ran independently — each AI call saw the book's source metadata but nothing about what the *other* step had produced or proposed. The two outputs could disagree (period tag asserts WWII; comments prose summarises the book as Cold War) and the user would only catch it during review.
+- Step 02 (`comments-enrich`) now receives a compact excerpt of the book's current tags in its prompt; step 04 (`tags-mqg`) receives a compact excerpt of the comments. Both excerpts are token-capped and only included when non-empty.
+- New `calibre_toolkit/coherence.py` provides two narrow checkers:
+  - `check_comments_coherence(comments_html, current_tags)` — flags periods named in AI prose that no current tag supports.
+  - `check_tags_coherence(proposed_tags, comments_excerpt)` — flags period tags the AI proposed that the existing prose doesn't mention.
+  - The map is intentionally small — false positives kill trust faster than false negatives, so subject coherence is left out. Word-boundary HTML-stripped case-insensitive matching, with WWII / World War II aliasing.
+- `CommentsSuggestion` and `TagsSuggestion` each gain a `coherence_warnings: list[str]` field, mirroring the `html_warnings` pattern from item 14. The first warning surfaces in the review table (red, with "+N more" overflow), the full list in the per-book review pane. Failed coherence doesn't auto-discard; the user decides.
+
+**17. Confidence calibration measurement loop** (PR #20)
+- Confidence-tier definitions in `rules/lcc.md`, `rules/comments.md`, and `rules/tags.md` were aspirational pre-v1.4: a "high" suggestion was *asserted* to be more accurate than "medium," but nothing verified the claim and there was no feedback loop from applied writes back to the tier definitions. The rules could drift out of calibration silently.
+- New `calibre-toolkit audit-confidence` command closes the loop. It samples applied AI writes from the persistent audit log (`~/.calibre-toolkit/audit.log`, in place since item 4), prompts the user to rate each as correct / minor / wrong, and computes per-tier strict and lenient precision. Tiers whose strict precision falls below a configurable threshold (default 70%) are flagged for rule review at the end of the session.
+- Sampling is stratified random per `(step, confidence-tier)`. Without stratification high-tier dominates volume in any real audit log, which is exactly the bias the audit is trying to measure around.
+- Purely observational. No production code path is touched — the command reads the audit log and queries Calibre for the current field value to compare against what the AI wrote. Manual overrides (current ≠ AI value) are surfaced inline as a hint to the rater. Results persist one session per line to `~/.calibre-toolkit/calibration.jsonl`.
+- CLI:
+  ```
+  calibre-toolkit audit-confidence [--sample-size 20] [--step ...]
+                                   [--threshold 0.7] [--seed N]
+                                   [--audit-log PATH] [--output PATH]
+  ```
+- Establishes a new `calibre_toolkit/commands/` subpackage as the first occupant. ROADMAP.md "Beyond v1.5" gains a parking-lot entry to migrate the other top-level commands into `commands/` for consistency in a future PR — the architectural debt is tracked rather than left implicit.
+
+**18. Scope `tags-cleanup` to a search query** (PR #21)
+- `tags-cleanup` was always library-wide: the scanner read the full tag vocabulary, the AI semantic pass received it, and every operation applied to every book carrying the source tag. Correct when normalising the whole library at once, wrong when processing a 50-book batch where vocabulary changes were only ever motivated by what's in the queue.
+- New `--search` flag accepts any Calibre search query (e.g. `"#metadata_queue:true"`, `"tag:Booker"`). When set, the scanner and AI pass still see the full library vocabulary — frequency counts and semantic-synonym judgements are only meaningful library-wide — but the *application* step filters out ops whose source tags don't appear on any in-scope book. A one-line scope header surfaces what was kept vs. skipped.
+- New DB helper `CalibreDB.get_tags_for_books(book_ids)` resolves the scope's tag set in a single SQL round-trip regardless of book count.
+- Tag-name comparison is case-sensitive by design — Calibre stores tag names case-sensitively and a case-insensitive compare would over-match (e.g. lowercase `fiction` on a scope book would falsely keep an op that targets the canonical `Fiction`). Locked in by a dedicated test.
+- TUI: the Tags Cleanup step gains two new buttons alongside the existing library-wide pair — "Scanner only — metadata queue" and "Full cleanup — metadata queue", both passing `--search "#metadata_queue:true"`.
+- **Bug fix folded in:** `_apply_operations` referenced an unbound `ai` symbol at the end-of-run usage summary block — a v1.3-era oversight flagged in PR #19's description that would `NameError` any `tags-cleanup` apply path. Fixed by threading `ai: AIClient | None = None` through from `run_tags_cleanup`.
+
+### Known limitations after v1.4
+
+See `ROADMAP.md` for what's planned next:
+
+- **Calibration ground truth requires user effort.** The new `audit-confidence` loop produces real data only after the user grades a sample. The first run on a fresh library is also the most valuable but also the highest-friction; no shortcut around that.
+- **Coherence checking is period-only.** Subject coherence (the harder case — the AI proposes "Cold War history" tags while the prose summarises a memoir) is deliberately out of scope for v1.4 because false positives there would burn trust faster than the true positives recover it. Listed in the v1.5+ parking lot.
+- **The catalog-hit summary still reads like a template** ("Classified by Open Library under PR - English Literature.") while the AI-fallback path with item 11's description prefetch produces rich prose. Combining the two paths — catalog truth on structural fields, description-grounded prose on the summary — is captured in the v1.5+ parking lot as `catalog-hit + description-summary`.
+
+---
+
 ## v1.3 — Catalog Depth & AI Correctness
 
 Items 10–15 from ROADMAP.md. Six PRs (#10, #11, #12, #13–docs, #14, #15, #16), test suite from 193 → 382 hermetic tests.
