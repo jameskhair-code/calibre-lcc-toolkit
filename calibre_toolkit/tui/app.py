@@ -470,6 +470,10 @@ class CalibreToolkitApp(App):
         with Horizontal():
             with Vertical(id="left"):
                 yield ListView(*items, id="step-list")
+                # Cumulative token-spend line (item 13). Populated on every
+                # _load_stats refresh from the persistent usage.jsonl. Sits
+                # below the step list so it doesn't crowd navigation.
+                yield Static("", id="left-cost")
             with Vertical(id="right"):
                 yield Static("", id="r-number")
                 yield Static("", id="r-name")
@@ -495,9 +499,21 @@ class CalibreToolkitApp(App):
             if step.mqg_column:
                 done = self._db.count_column_true(step.mqg_column)
                 stats[step.key] = (done, total)
-        self.call_from_thread(self._apply_stats, stats, total)
+        # Cumulative cost across every prior session — read from the
+        # persisted usage log (item 13). Best-effort; failures yield None
+        # and the subtitle just omits the cost suffix.
+        from ..usage import replay_usage_log
+        usage_aggregate = replay_usage_log()
+        cost = usage_aggregate.cost_estimate_usd()
+        self.call_from_thread(self._apply_stats, stats, total, cost, usage_aggregate.call_count)
 
-    def _apply_stats(self, stats: dict, total: int) -> None:
+    def _apply_stats(
+        self,
+        stats: dict,
+        total: int,
+        cumulative_cost: float | None = None,
+        call_count: int = 0,
+    ) -> None:
         self._total_books = total
         self._stats = stats
         for step in self._steps_only():
@@ -507,7 +523,25 @@ class CalibreToolkitApp(App):
             widget._total = tot
             widget.refresh()
         self._update_right(self._selected_idx)
-        self.sub_title = f"Calibre Toolkit  ·  {total:,} books"
+        subtitle = f"Calibre Toolkit  ·  {total:,} books"
+        if cumulative_cost is not None and call_count > 0:
+            subtitle += f"  ·  ≈ ${cumulative_cost:.2f} spent ({call_count:,} AI calls)"
+        self.sub_title = subtitle
+
+        # Visible cost line in the left panel — the subtitle only appears in
+        # the terminal title bar, which is easy to miss. This puts the
+        # number where the user is actually looking.
+        cost_widget = self.query_one("#left-cost", Static)
+        if call_count > 0:
+            cost_str = (
+                f"≈ ${cumulative_cost:.2f}" if cumulative_cost is not None else "n/a"
+            )
+            cost_widget.update(
+                f"[dim]── Spend so far ──[/dim]\n"
+                f"[bold]{cost_str}[/bold]  [dim]({call_count:,} AI call{'s' if call_count != 1 else ''})[/dim]"
+            )
+        else:
+            cost_widget.update("")
 
     def action_refresh_stats(self) -> None:
         self._load_stats()

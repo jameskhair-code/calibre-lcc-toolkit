@@ -17,6 +17,7 @@ from ..ai import AIClient, TagsSuggestion, TagOperation
 from ..db import CalibreDB
 from ..logging_config import audit_log
 from ..tag_scanner import scan_tags, PATTERN_GROUP_LABELS
+from ..usage import format_summary
 
 console = Console()
 
@@ -174,6 +175,8 @@ def run_tags_enrichment(
             f"\n[dim]Dry-run complete — {len(suggestions)} book(s) shown, "
             f"{changed} would change. No writes.[/dim]"
         )
+        if ai.usage.call_count > 0:
+            console.print(f"[dim]{format_summary(ai.usage, step_label='tags-enrich')}[/dim]")
         return
 
     console.print(_build_review_table(suggestions))
@@ -249,6 +252,9 @@ def run_tags_enrichment(
         + (f", [yellow]{len(manual_ids)}[/yellow] flagged for manual" if manual_ids else "")
         + "."
     )
+
+    if ai.usage.call_count > 0:
+        console.print(f"[dim]{format_summary(ai.usage, step_label='tags-enrich')}[/dim]")
 
 
 def _apply_batch(db: CalibreDB, suggestions: list[TagsSuggestion]) -> list[int]:
@@ -408,6 +414,8 @@ def run_tags_cleanup(
 
     if dry_run:
         console.print("\n[dim]Dry-run — no changes written.[/dim]")
+        if ai is not None and ai.usage.call_count > 0:
+            console.print(f"[dim]{format_summary(ai.usage, step_label='tags-cleanup')}[/dim]")
         return
 
     # ── 5. Per-group bulk approval ────────────────────────────────────────────
@@ -599,6 +607,9 @@ def _apply_operations(db: CalibreDB, ops: list[TagOperation]) -> None:
         f"\n[bold green]Done![/bold green] "
         f"{len(ops)} operation(s), {total_affected} book-tag link(s) changed."
     )
+
+    if ai is not None and ai.usage.call_count > 0:
+        console.print(f"[dim]{format_summary(ai.usage, step_label='tags-cleanup')}[/dim]")
     if errors:
         console.print(f"[red]{len(errors)} error(s) during apply:[/red]")
         for err in errors[:10]:

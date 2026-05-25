@@ -18,6 +18,7 @@ from .db import Book, BookDetails
 from .logging_config import get_logger
 from .models import resolve_model
 from .normalize import normalize_text
+from .usage import UsageAggregate, log_usage, parse_usage
 
 if TYPE_CHECKING:
     from .services.book_description import BookDescription
@@ -422,6 +423,7 @@ class AIClient:
         max_concurrency: int = 5,
         request_timeout_seconds: float = 120.0,
         max_retries: int = 3,
+        step_label: str = "",
     ):
         self.api_key = api_key
         resolved = resolve_model(model)
@@ -430,9 +432,16 @@ class AIClient:
         self.max_concurrency = max_concurrency
         self.request_timeout_seconds = request_timeout_seconds
         self.max_retries = max_retries
+        # step_label is stamped onto every persisted usage record so a
+        # later replay can attribute spend to lcc-enrich / comments-enrich /
+        # tags-enrich / etc. without inference.
+        self.step_label = step_label
         self._client = None
         # Populated by the last suggest_* call so callers can surface failures.
         self.last_failures: list[BatchFailure] = []
+        # Token telemetry (item 13). Accumulates across every _call in this
+        # AIClient's lifetime. Read at end-of-step for the summary panel.
+        self.usage = UsageAggregate()
 
     def _anthropic(self):
         if self._client is None:
@@ -493,6 +502,14 @@ class AIClient:
             ],
             messages=[{"role": "user", "content": user_msg}],
         )
+        # Token telemetry (item 13). Anthropic returns a `usage` block on
+        # every successful response. We accumulate into the aggregate so
+        # the step module can print a summary at end of run, and we
+        # persist one JSONL event so the TUI's overview panel can show
+        # cumulative cost across sessions.
+        usage = parse_usage(getattr(response, "usage", None))
+        self.usage.record(usage, self.model)
+        log_usage(usage, self.model, step=self.step_label)
         return response.content[0].text.strip()
 
     def _run_batches_concurrent(
