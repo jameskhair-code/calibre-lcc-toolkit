@@ -268,9 +268,13 @@ def lookup_by_isbn_openlibrary(
 # the LC ISBN lookup against them. See ROADMAP item 12.
 #
 # Bounded by `_EDITION_CASCADE_MAX_ISBNS` so a work with 50 reprints does
-# not produce 50 HTTP round trips.
+# not produce 50 HTTP round trips. The English-first ordering means the
+# first few siblings almost always include the US first-edition ISBN —
+# which is what LC actually holds. 3 sibling tries captures essentially
+# all the hit-rate benefit while keeping worst-case cost predictable
+# when LC is slow or unreachable.
 
-_EDITION_CASCADE_MAX_ISBNS = 8
+_EDITION_CASCADE_MAX_ISBNS = 3
 
 
 def _ol_work_key_for_isbn(

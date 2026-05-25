@@ -140,6 +140,16 @@ class TestSiblingIsbns:
         assert _ol_sibling_isbns_for_work("", "9780000000001") == []
         assert _ol_sibling_isbns_for_work("not-a-key", "9780000000001") == []
 
+    def test_default_cap_is_conservative(self):
+        """Default cap is intentionally low — on a slow-LC day the cascade's
+        per-book cost is dominated by sibling LC retries, so the default
+        must be kept modest. Bump it only with measured hit-rate evidence."""
+        from calibre_toolkit.services.lc_catalog import _EDITION_CASCADE_MAX_ISBNS
+        assert _EDITION_CASCADE_MAX_ISBNS <= 5, (
+            "Raise this consciously: each additional sibling ISBN costs up "
+            "to (max_retries x request_timeout_seconds) when LC is slow."
+        )
+
     def test_caps_at_max_isbns(self, stub_http_json):
         # Fabricate a work with many editions in-memory; pass the dict
         # straight to the stub so we don't have to write a giant fixture.
