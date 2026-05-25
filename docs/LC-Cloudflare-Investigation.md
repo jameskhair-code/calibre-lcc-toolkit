@@ -1,9 +1,49 @@
 # LC Catalog Reachability — Cloudflare Investigation
 
 **Discovered:** v1.3 item 12 smoke-test session (post-merge of PRs #10, #11).
-**Status:** Open. Captures the investigation context so a future session can
-resume without re-deriving anything. See ROADMAP.md item 12a for the
-planned work.
+**Status:** **Resolved by routing around LC entirely** — see "Resolution"
+below. The original investigation context is preserved as a historical
+record.
+
+---
+
+## Resolution (post-investigation)
+
+Rather than wrestle with Cloudflare (cloudscraper / curl_cffi /
+OAI-PMH / etc.), we ran an alternative-source probe
+(`scripts/probe_lcc_sources.py`) against 30 hand-picked books from
+the user's library. Result: **deepening Open Library's edition
+cascade — without touching LC at all — produced real catalog-sourced
+LC call numbers for 76% of books with ISBNs** (43% raw including
+books that lacked any ISBN). HathiTrust was a dud at <7% for this
+collection (skewed academic; user's library is literary fiction and
+accessible non-fiction).
+
+So the LC code paths were **removed entirely** from
+`services/lc_catalog.py`. The module still produces LC call numbers
+— it just sources them through Open Library's data graph instead.
+
+What shipped:
+
+- `_EDITION_CASCADE_MAX_ISBNS` bumped from 3 → 10 (was conservative
+  because of LC retry cost; deeper walk doesn't touch LC).
+- New per-process `_work_editions_cache` so books in the same series
+  share a single editions.json fetch.
+- Removed: `lookup_by_lccn`, `lookup_by_isbn` (LC), `_normalise_lccn`,
+  `lookup_by_title_author_sru`, `_extract_call_number_from_marcxml`,
+  `_http_get_text`, all SRU-related constants, all MARCXML fixtures
+  and tests.
+- `lookup_book()` cascade simplified to OL-direct → OL edition
+  cascade. `title` and `author` kwargs kept for signature stability
+  but are no longer used.
+- `modules/lcc.py` stats simplified to `ol_direct_hits` /
+  `ol_cascade_hits`.
+
+Item 12a is closed as **superseded** rather than implemented.
+
+The rest of this document is the original investigation. If LC ever
+drops Cloudflare and direct LC lookups become attractive again, the
+historical workaround options below are still valid starting points.
 
 ---
 

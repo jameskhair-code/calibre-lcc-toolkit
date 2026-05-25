@@ -154,20 +154,26 @@ class TestParseLccResponse:
 
 
 class TestBuildCatalogSuggestion:
-    def test_lc_hit_marks_lc_catalog(self):
-        hit = CatalogHit(call_number="PR6059.S5 R4 1989",
-                         source="LC catalog (ISBN 9780571258246)")
-        book = _book(42)
-        s = _build_catalog_suggestion(book, {}, hit)
-        assert s.source_authority == "lc_catalog"
-        assert s.attribution_prefix == "[LC]"
-        assert s.confidence == "high"
+    """After the v1.3 LC removal every catalog hit is Open Library
+    (direct or via the edition cascade). There is no longer a code
+    path that produces an LC-attributed CatalogHit, so the only
+    behaviour to lock in is the OL one."""
 
-    def test_open_library_hit_marks_open_library(self):
+    def test_open_library_direct_hit_marks_open_library_medium(self):
         hit = CatalogHit(call_number="PR6059.S5 N48 2005",
                          source="Open Library (ISBN 9780571258246)")
         book = _book(42)
         s = _build_catalog_suggestion(book, {}, hit)
         assert s.source_authority == "open_library"
         assert s.attribution_prefix == "[OL]"
+        assert s.confidence == "medium"
+
+    def test_edition_cascade_hit_also_marks_open_library(self):
+        hit = CatalogHit(
+            call_number="PR9619.3.K46 C66",
+            source="Open Library via edition cascade (seed ISBN x, matched sibling y)",
+        )
+        book = _book(42)
+        s = _build_catalog_suggestion(book, {}, hit)
+        assert s.source_authority == "open_library"
         assert s.confidence == "medium"

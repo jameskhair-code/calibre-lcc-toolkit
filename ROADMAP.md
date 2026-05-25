@@ -310,7 +310,15 @@ near-0% to 40–60%.
 
 ---
 
-### 12a. Restore LC catalog reachability (Cloudflare workaround)
+### 12a. Restore LC catalog reachability (Cloudflare workaround) — **SUPERSEDED**
+
+**Status.** Closed without implementing the Cloudflare workaround. The
+alternative-source probe (`scripts/probe_lcc_sources.py`) showed that
+deepening Open Library's edition cascade produces real catalog-sourced
+LC call numbers for ~76% of books with ISBNs — without touching LC at
+all. The LC code paths were removed entirely in PR #18; see
+`docs/LC-Cloudflare-Investigation.md` "Resolution" section. The
+problem statement below is preserved for historical context.
 
 **Problem.** Discovered during item 12 smoke testing: every LC public API
 (`www.loc.gov`, `lx2.loc.gov`) is now behind Cloudflare's JavaScript challenge.
@@ -565,6 +573,29 @@ that step. Data already loaded in `tui/app.py:456–510`.
 
 **Expected impact.** At-a-glance pipeline status; useful at the start of every
 session.
+
+---
+
+## Beyond v1.5 — future-work parking lot
+
+Captured here to avoid losing context. Promote to a numbered v2.x
+milestone item when ready to scope.
+
+- **Catalog-lookup performance.** After the v1.3 LC removal the OL
+  edition cascade is the dominant per-book cost (~25s/book in probe
+  runs, dominated by sequential sibling lookups). The work-key cache
+  helps for shared works; further wins available from request-level
+  parallelism inside the cascade (currently the outer loop in
+  `modules/lcc.py` parallelises across books, but each book's cascade
+  is serial), warm-cache persistence across runs, or pre-fetching the
+  full editions list once per work and re-using for siblings.
+
+- **`lcc` field re-evaluation.** Now that Open Library produces real
+  catalog-sourced call numbers for ~76% of ISBN-bearing books, the
+  open product question from `docs/LC-Cloudflare-Investigation.md`
+  ("is the AI-generated call number worth keeping in its current form
+  when LC is unreachable?") may have shifted. Worth re-asking once a
+  full library run shows the new hit rate in practice.
 
 ---
 
