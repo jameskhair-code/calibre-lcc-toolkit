@@ -310,6 +310,56 @@ near-0% to 40–60%.
 
 ---
 
+### 12a. Restore LC catalog reachability (Cloudflare workaround)
+
+**Problem.** Discovered during item 12 smoke testing: every LC public API
+(`www.loc.gov`, `lx2.loc.gov`) is now behind Cloudflare's JavaScript challenge.
+Python's `urllib` cannot solve the challenge, so every LC HTTP request from
+this tool fails — silently, with timeouts or HTML challenge pages. Realistic
+User-Agent spoofing was tested and is insufficient (Cloudflare fingerprints
+the TLS handshake and request behaviour, not just the UA string). This has
+been the case throughout v1.3 development, not just on the day of discovery —
+item 8's honest-source-attribution work was already correctly resolving every
+fallback to `[AI]`, so the user is not being misled, but the v1.1 / v1.2 /
+v1.3 LC pipeline is dormant until a workaround ships.
+
+**Approach.** Investigate and decide between these options (full pros/cons in
+`docs/LC-Cloudflare-Investigation.md`):
+
+- **`cloudscraper`** — pure-Python JS-challenge solver. Drop-in, small dep,
+  but Cloudflare evolves and may break it.
+- **`curl_cffi`** — libcurl wrapper with browser TLS fingerprint
+  impersonation. Heavier dep, more robust against fingerprint detection.
+- **LC bulk MARC datasets** — monthly snapshots, local index. No live
+  service dependency but ~10GB+ of data and a separate offline-mode code
+  path.
+- **LC OAI-PMH endpoint** — historically whitelisted for harvesters; may
+  bypass Cloudflare. XML-heavy and not designed for single-record lookups.
+- **Drop LC entirely** — lean on Open Library for everything. Loses access
+  to LC's deeper catalog for non-US books.
+
+Pick one approach (probably `curl_cffi` for robustness or OAI-PMH for
+politeness), implement in `services/lc_catalog.py`, verify against a real
+batch, document the new dependency / approach in `docs/Getting-Started.md`.
+
+**Touch points.** `calibre_toolkit/services/lc_catalog.py`; possibly
+`pyproject.toml` (new dependency); `docs/Getting-Started.md`;
+`docs/LC-Cloudflare-Investigation.md` (mark resolved when shipped).
+
+**Risk.** Moderate–high. All approaches are fragile against Cloudflare
+updates (option 1, 2) or operationally heavy (option 3). The OL fallback
+shipped in item 12 cushions this — the toolkit still works without LC,
+just with lower hit rate on non-US books.
+
+**Expected impact.** Restores the dormant cascade work from items 5, 8, 12.
+Restores the call-number field's value as a catalog-verified field rather
+than an AI-generated guess. Should also prompt a separate question (also
+captured in the investigation doc): is the AI-generated call-number field
+worth keeping in its current form when LC is unreachable, or should it be
+truncated to its supportable portion (class letters only)?
+
+---
+
 ### 13. Token usage & cost telemetry
 
 **Problem.** No token tracking exists. After running an AI step, users have no idea
