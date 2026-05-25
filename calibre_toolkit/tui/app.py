@@ -495,9 +495,21 @@ class CalibreToolkitApp(App):
             if step.mqg_column:
                 done = self._db.count_column_true(step.mqg_column)
                 stats[step.key] = (done, total)
-        self.call_from_thread(self._apply_stats, stats, total)
+        # Cumulative cost across every prior session — read from the
+        # persisted usage log (item 13). Best-effort; failures yield None
+        # and the subtitle just omits the cost suffix.
+        from ..usage import replay_usage_log
+        usage_aggregate = replay_usage_log()
+        cost = usage_aggregate.cost_estimate_usd()
+        self.call_from_thread(self._apply_stats, stats, total, cost, usage_aggregate.call_count)
 
-    def _apply_stats(self, stats: dict, total: int) -> None:
+    def _apply_stats(
+        self,
+        stats: dict,
+        total: int,
+        cumulative_cost: float | None = None,
+        call_count: int = 0,
+    ) -> None:
         self._total_books = total
         self._stats = stats
         for step in self._steps_only():
@@ -507,7 +519,10 @@ class CalibreToolkitApp(App):
             widget._total = tot
             widget.refresh()
         self._update_right(self._selected_idx)
-        self.sub_title = f"Calibre Toolkit  ·  {total:,} books"
+        subtitle = f"Calibre Toolkit  ·  {total:,} books"
+        if cumulative_cost is not None and call_count > 0:
+            subtitle += f"  ·  ≈ ${cumulative_cost:.2f} spent ({call_count:,} AI calls)"
+        self.sub_title = subtitle
 
     def action_refresh_stats(self) -> None:
         self._load_stats()

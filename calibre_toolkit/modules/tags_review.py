@@ -21,6 +21,7 @@ from rich.text import Text
 from rich.prompt import Prompt
 
 from ..ai import AIClient, TagsReviewSuggestion
+from ..usage import format_summary
 from ..db import CalibreDB, Book
 
 console = Console()
@@ -308,3 +309,6 @@ def run_tags_review(
         f"\n[bold green]Session complete.[/bold green] "
         f"[green]{locked}[/green] locked, [dim]{skipped}[/dim] skipped."
     )
+
+    if ai is not None and ai.usage.call_count > 0:
+        console.print(f"[dim]{format_summary(ai.usage, step_label='tags-review')}[/dim]")

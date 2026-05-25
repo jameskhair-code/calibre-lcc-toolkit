@@ -26,6 +26,7 @@ from ..db import CalibreDB
 from ..logging_config import audit_log, get_logger
 from ..services.book_description import BookDescription, fetch_descriptions_batch
 from ..services.lc_catalog import CatalogHit, lookup_book
+from ..usage import format_summary
 
 
 console = Console()
@@ -868,6 +869,12 @@ def run_lcc_enrichment(
         + (f", [yellow]{len(manual_ids)}[/yellow] flagged for manual" if manual_ids else "")
         + "."
     )
+
+    # Token telemetry summary (item 13). Always shown so users know the
+    # cost of every run; cache hit-rate visible so the prompt-caching
+    # claim in ai.py:4-7 is measurable, not just asserted.
+    if ai.usage.call_count > 0:
+        console.print(f"[dim]{format_summary(ai.usage, step_label='lcc-enrich')}[/dim]")
 
 
 def _apply_batch(

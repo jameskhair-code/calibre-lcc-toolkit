@@ -17,6 +17,7 @@ from rich import box
 from rich.prompt import Prompt
 
 from ..ai import AIClient, CommentsSuggestion
+from ..usage import format_summary
 from ..db import CalibreDB
 from ..logging_config import audit_log
 
@@ -307,6 +308,9 @@ def run_comments_enrichment(
         + (f", [yellow]{len(manual_ids)}[/yellow] flagged for manual" if manual_ids else "")
         + "."
     )
+
+    if ai.usage.call_count > 0:
+        console.print(f"[dim]{format_summary(ai.usage, step_label='comments-enrich')}[/dim]")
 
 
 def _apply_batch(db: CalibreDB, suggestions: list[CommentsSuggestion]) -> list[int]:

@@ -15,6 +15,7 @@ from rich.prompt import Prompt
 
 from ..db import CalibreDB, Book
 from ..ai import AIClient, CleanupSuggestion
+from ..usage import format_summary
 
 
 console = Console()
@@ -198,6 +199,9 @@ def run_cleanup(
     # ── 5. Mark MQG complete ──────────────────────────────────────────────────
     _mark_complete(db, mqg_column, clean_ids + applied_ids, label="processed")
     console.print("\n[bold green]Done![/bold green]")
+
+    if ai.usage.call_count > 0:
+        console.print(f"[dim]{format_summary(ai.usage, step_label='clean-titles')}[/dim]")
 
 
 def _apply_suggestions(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> list[int]:

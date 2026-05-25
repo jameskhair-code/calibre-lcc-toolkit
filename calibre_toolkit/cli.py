@@ -142,11 +142,15 @@ def _make_ai(
         )
         raise typer.Exit(1)
 
+    # step_label is stamped onto every persisted usage record so the
+    # cumulative-cost view in the TUI (item 13) can attribute spend by
+    # step without inference.
     return AIClient(
         api_key=api_key,
         model=ai_cfg.get("model"),
         request_timeout_seconds=float(ai_cfg.get("request_timeout_seconds", 120.0)),
         max_retries=int(ai_cfg.get("max_retries", 3)),
+        step_label=command_key or "",
     )
 
 
