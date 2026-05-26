@@ -314,6 +314,77 @@ class StepItem(Static):
         return line1 + "\n" + line2
 
 
+def _render_overview_row(name: str, number: str, done: int, total: int) -> str:
+    """Render one row of the top-of-screen pipeline overview.
+
+    Pure function so the rendering can be unit-tested without a live
+    Textual App. Returns a single line of Rich markup with the state
+    bullet, step number, name, bar, percentage, and indicator text.
+    """
+    bar_w = 20
+
+    if total == 0:
+        pct = 0.0
+        filled = 0
+        icon = "○"
+        color = "dim"
+        label = "not-started"
+    else:
+        pct = done / total
+        filled = int(pct * bar_w)
+        if done >= total:
+            icon, color, label = "●", "green", "done"
+        elif done == 0:
+            icon, color, label = "○", "dim", "not-started"
+        else:
+            icon, color, label = "◐", "yellow", "in-progress"
+
+    bar = "[green]" + "█" * filled + "[/green]" + "[dim]" + "░" * (bar_w - filled) + "[/dim]"
+    pct_str = f"{pct * 100:3.0f}%"
+    name_col = f"{name:<22.22}"
+    num_col = f"{number}" if number else "  "
+
+    return (
+        f"[{color}]{icon}[/{color}]  "
+        f"[bold #7c3aed]{num_col}[/]  "
+        f"{name_col}  "
+        f"{bar}  "
+        f"[bold]{pct_str}[/bold]  "
+        f"[dim]{label}[/dim]"
+    )
+
+
+class OverviewPanel(Static):
+    """5-row pipeline overview shown above the two-panel menu layout.
+
+    One row per MQG step with a progress bar, percentage, and a
+    done / in-progress / not-started indicator. Refreshes piggyback
+    on the app's existing `_apply_stats` callback (which fires on
+    mount and on `r`); no new bindings, no new data source.
+    """
+
+    DEFAULT_CSS = """
+    OverviewPanel {
+        height: 7;
+        padding: 1 2;
+        background: #0d1117;
+        border-bottom: solid #30363d;
+        color: #c9d1d9;
+    }
+    """
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self._rows: list[tuple[str, str, int, int]] = []
+
+    def set_rows(self, rows: list[tuple[str, str, int, int]]) -> None:
+        self._rows = rows
+        if not rows:
+            self.update("[dim]Loading pipeline status…[/dim]")
+            return
+        self.update("\n".join(_render_overview_row(*r) for r in rows))
+
+
 class SectionItem(Static):
     """A section-divider row in the left-panel list."""
 
@@ -479,6 +550,7 @@ class CalibreToolkitApp(App):
                 items.append(ListItem(StepItem(item, 0, 0, id=f"item-{item.key}")))
 
         yield Static(f"[bold]MQG Pipeline[/bold]", id="left-header")
+        yield OverviewPanel(id="overview-panel")
         with Horizontal():
             with Vertical(id="left"):
                 yield ListView(*items, id="step-list")
@@ -534,6 +606,14 @@ class CalibreToolkitApp(App):
             widget._done  = done
             widget._total = tot
             widget.refresh()
+
+        overview_rows: list[tuple[str, str, int, int]] = [
+            (step.name, step.number, *stats.get(step.key, (0, total)))
+            for step in self._steps_only()
+            if step.mqg_column is not None and step.number
+        ]
+        self.query_one("#overview-panel", OverviewPanel).set_rows(overview_rows)
+
         self._update_right(self._selected_idx)
         subtitle = f"Calibre Toolkit  ·  {total:,} books"
         if cumulative_cost is not None and call_count > 0:
