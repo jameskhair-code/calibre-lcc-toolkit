@@ -10,6 +10,16 @@ import sys
 from pathlib import Path
 from typing import Optional, Annotated
 
+# Typer/Rich help text contains Unicode glyphs (e.g. → U+2192) that crash on
+# legacy Windows consoles where stdout defaults to cp1252. Reconfigure before
+# any Rich Console is constructed.
+if sys.platform == "win32":
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
 import typer
 from rich.console import Console
 from rich.panel import Panel
