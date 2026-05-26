@@ -13,9 +13,12 @@ from rich.text import Text
 from rich import box
 from rich.prompt import Prompt
 
+from datetime import datetime
+from time import monotonic
+
 from ..db import CalibreDB, Book
 from ..ai import AIClient, CleanupSuggestion
-from ..usage import format_summary
+from ..summary import StepSummary, render_summary_panel
 
 
 console = Console()
@@ -72,6 +75,8 @@ def run_cleanup(
     limit: int | None = None,
 ) -> None:
     """Full Author/Title cleanup flow for a given Calibre search string."""
+    _started_at = datetime.now()
+    _t0 = monotonic()
 
     # ── 1. Fetch ──────────────────────────────────────────────────────────────
     try:
@@ -198,10 +203,22 @@ def run_cleanup(
 
     # ── 5. Mark MQG complete ──────────────────────────────────────────────────
     _mark_complete(db, mqg_column, clean_ids + applied_ids, label="processed")
-    console.print("\n[bold green]Done![/bold green]")
 
-    if ai.usage.call_count > 0:
-        console.print(f"[dim]{format_summary(ai.usage, step_label='clean-titles')}[/dim]")
+    applied_ids_set = set(applied_ids)
+    declined_count = sum(1 for s in changes if s.book_id not in applied_ids_set)
+    console.print(render_summary_panel(
+        StepSummary(
+            step_label="clean-titles",
+            started_at=_started_at,
+            elapsed_seconds=monotonic() - _t0,
+            applied_high=sum(1 for s in changes if s.confidence == "high" and s.book_id in applied_ids_set),
+            applied_medium=sum(1 for s in changes if s.confidence == "medium" and s.book_id in applied_ids_set),
+            applied_low=sum(1 for s in changes if s.confidence == "low" and s.book_id in applied_ids_set),
+            skipped_already_done=len(no_changes),
+            skipped_declined=declined_count,
+            usage=ai.usage,
+        ),
+    ))
 
 
 def _apply_suggestions(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> list[int]:

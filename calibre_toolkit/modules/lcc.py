@@ -30,12 +30,15 @@ from rich.text import Text
 from rich import box
 from rich.prompt import Prompt
 
+from datetime import datetime
+from time import monotonic
+
 from ..ai import AIClient, LccSuggestion
 from ..db import CalibreDB
 from ..logging_config import audit_log, get_logger
 from ..services.book_description import BookDescription, fetch_descriptions_batch
 from ..services.lc_catalog import CatalogHit, lookup_book
-from ..usage import format_summary
+from ..summary import StepSummary, render_summary_panel
 
 
 console = Console()
@@ -578,6 +581,9 @@ def run_lcc_enrichment(
         {"lcc": "#lcc", "lcc_primary_class": "#lcc_primary_class", ...}
     force=True processes books that already have all four fields populated.
     """
+    _started_at = datetime.now()
+    _t0 = monotonic()
+
     # ── 1. Search ─────────────────────────────────────────────────────────────
     # --force overrides the manual-skip exclusion: when re-running on purpose,
     # the user wants to see books they previously declined as well.
@@ -612,6 +618,7 @@ def run_lcc_enrichment(
         current_map = _read_current(db, book_ids, columns)
 
     # Skip books already fully populated unless --force
+    skipped = 0
     if not force:
         before = len(books)
         already_populated = [b.id for b in books if all(current_map[b.id][k] for k in _LCC_FIELDS)]
@@ -810,9 +817,19 @@ def run_lcc_enrichment(
         console.print("[bold cyan]── Dry-run: comparing AI proposals to current values ──[/bold cyan]\n")
         console.print(_build_audit_table(validated, current_map))
         _print_audit_summary(validated, current_map)
-        # Token telemetry even in dry-run: the AI call already cost real money.
-        if ai.usage.call_count > 0:
-            console.print(f"[dim]{format_summary(ai.usage, step_label='lcc-enrich')}[/dim]")
+        console.print(render_summary_panel(
+            StepSummary(
+                step_label="lcc-enrich",
+                started_at=_started_at,
+                elapsed_seconds=monotonic() - _t0,
+                applied_high=len(high),
+                applied_medium=len(medium),
+                applied_low=len(low),
+                skipped_already_done=skipped,
+                usage=ai.usage,
+            ),
+            dry_run=True,
+        ))
         return
 
     applied_ids: list[int] = []
@@ -873,19 +890,23 @@ def run_lcc_enrichment(
         with console.status("Flagging…"):
             db.mark_mqg_complete(manual_ids, mqg_manual_column)
 
-    console.print(
-        f"\n[bold green]Done![/bold green] "
-        f"[green]{len(applied_ids)}[/green] applied, "
-        f"[green]{len(applied_ids)}[/green] marked MQG-03 complete"
-        + (f", [yellow]{len(manual_ids)}[/yellow] flagged for manual" if manual_ids else "")
-        + "."
-    )
-
-    # Token telemetry summary (item 13). Always shown so users know the
-    # cost of every run; cache hit-rate visible so the prompt-caching
-    # claim in ai.py:4-7 is measurable, not just asserted.
-    if ai.usage.call_count > 0:
-        console.print(f"[dim]{format_summary(ai.usage, step_label='lcc-enrich')}[/dim]")
+    applied_ids_set = set(applied_ids)
+    flagged = len(manual_ids) if mqg_manual_column else 0
+    declined_only = len(declined) if not mqg_manual_column else 0
+    console.print(render_summary_panel(
+        StepSummary(
+            step_label="lcc-enrich",
+            started_at=_started_at,
+            elapsed_seconds=monotonic() - _t0,
+            applied_high=sum(1 for v in high if v.book_id in applied_ids_set),
+            applied_medium=sum(1 for v in medium if v.book_id in applied_ids_set),
+            applied_low=sum(1 for v in low if v.book_id in applied_ids_set),
+            skipped_already_done=skipped,
+            skipped_declined=declined_only,
+            flagged_manual=flagged,
+            usage=ai.usage,
+        ),
+    ))
 
 
 def _apply_batch(

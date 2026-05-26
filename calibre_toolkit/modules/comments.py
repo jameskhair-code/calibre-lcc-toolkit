@@ -25,16 +25,27 @@ from rich.text import Text
 from rich import box
 from rich.prompt import Prompt
 
+from datetime import datetime
+from time import monotonic
+
 from ..ai import AIClient, CommentsSuggestion
 from ..coherence import check_comments_coherence
-from ..usage import format_summary
 from ..db import CalibreDB
 from ..logging_config import audit_log
+from ..summary import StepSummary, render_summary_panel
 
 if TYPE_CHECKING:
     from ..db import BookDetails
 
 console = Console()
+
+
+def _word_count(suggestions: list[CommentsSuggestion]) -> int:
+    total = 0
+    for s in suggestions:
+        text = re.sub(r"<[^>]+>", " ", s.html or "")
+        total += len(text.split())
+    return total
 
 _CONF_DISPLAY = {
     "high":   ("●", "green"),
@@ -201,6 +212,8 @@ def run_comments_enrichment(
     force=True bypasses the manual-skip exclusion so books previously
     flagged for manual review are still picked up.
     """
+    _started_at = datetime.now()
+    _t0 = monotonic()
 
     # ── 1. Search ─────────────────────────────────────────────────────────────
     effective_query = (
@@ -303,8 +316,19 @@ def run_comments_enrichment(
             f"\n[dim]Dry-run complete — {len(suggestions)} book(s) shown. "
             "No changes written.[/dim]"
         )
-        if ai.usage.call_count > 0:
-            console.print(f"[dim]{format_summary(ai.usage, step_label='comments-enrich')}[/dim]")
+        console.print(render_summary_panel(
+            StepSummary(
+                step_label="comments-enrich",
+                started_at=_started_at,
+                elapsed_seconds=monotonic() - _t0,
+                applied_high=len(high),
+                applied_medium=len(medium),
+                applied_low=len(low),
+                word_count=_word_count(suggestions),
+                usage=ai.usage,
+            ),
+            dry_run=True,
+        ))
         return
 
     console.print(_build_review_table(suggestions))
@@ -373,16 +397,24 @@ def run_comments_enrichment(
         with console.status("Flagging…"):
             db.mark_mqg_complete(manual_ids, mqg_manual_column)
 
-    console.print(
-        f"\n[bold green]Done![/bold green] "
-        f"[green]{len(applied_ids)}[/green] applied, "
-        f"[green]{len(high_applied)}[/green] marked MQG-04 complete"
-        + (f", [yellow]{len(manual_ids)}[/yellow] flagged for manual" if manual_ids else "")
-        + "."
-    )
-
-    if ai.usage.call_count > 0:
-        console.print(f"[dim]{format_summary(ai.usage, step_label='comments-enrich')}[/dim]")
+    applied_ids_set = set(applied_ids)
+    applied_suggestions = [s for s in suggestions if s.book_id in applied_ids_set]
+    flagged = len(manual_ids) if mqg_manual_column else 0
+    declined_only = len(declined) if not mqg_manual_column else 0
+    console.print(render_summary_panel(
+        StepSummary(
+            step_label="comments-enrich",
+            started_at=_started_at,
+            elapsed_seconds=monotonic() - _t0,
+            applied_high=sum(1 for s in high if s.book_id in applied_ids_set),
+            applied_medium=sum(1 for s in medium if s.book_id in applied_ids_set),
+            applied_low=sum(1 for s in low if s.book_id in applied_ids_set),
+            skipped_declined=declined_only,
+            flagged_manual=flagged,
+            word_count=_word_count(applied_suggestions),
+            usage=ai.usage,
+        ),
+    ))
 
 
 def _apply_batch(db: CalibreDB, suggestions: list[CommentsSuggestion]) -> list[int]:
