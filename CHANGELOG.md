@@ -2,6 +2,43 @@
 
 ---
 
+## v1.5 — UX Polish
+
+Items 19–22 from ROADMAP.md. Two PRs shipped (#24, #25), one item cut, one item attempted and rejected. Test suite from 415 → 444 hermetic tests.
+
+The v1.5 theme is closing out the four pre-Beyond ROADMAP items with display-only improvements: no behavioral changes, no AI prompt edits, no new commands, no architectural refactors. The cycle existed to create a clean visible surface for the upcoming v1.6 deep re-audit, not to add features. Two items shipped on plan; the other two were dispositioned during the cycle and documented rather than forced through.
+
+### Items shipped
+
+**19. Per-batch structured summary panels** (PR #25)
+- The end of every enrichment step previously printed a one-line "Done! X applied, Y marked complete" plus a separate token-telemetry line, with each module choosing its own wording and ordering. Reading three step outputs in a session meant context-switching between three slightly different formats.
+- New `calibre_toolkit/summary.py` defines a shared `StepSummary` dataclass (tier counters, skip/outcome counters, step-specific breakdowns in `extras`, optional usage + word count) and a `render_summary_panel()` that renders a Rich Panel in either apply or dry-run framing. Rows that don't apply for a given step (e.g. the "Other outcomes" row when nothing was skipped) hide automatically.
+- Wired into six call sites: `lcc-enrich`, `comments-enrich` (with word count), `tags-enrich`, `tags-cleanup`, `enrich-identifiers` (with `by_lookup_method` extras), and `clean-titles`. `tags-review` and `clean-identifiers` are deliberately out of scope — the first is interactive per-book and shaped differently, the second is a fix-up command rather than an enrichment batch.
+- One internal refactor folded in: `tags._apply_operations` now returns `(total_affected, by_pattern_group, errors)` instead of printing its own end-of-run lines, so the caller in `run_tags_cleanup` can own the `StepSummary` and keep the end-of-run output consistent with the other modules. Contract is internal to the module.
+
+**20. Progress bars for `lcc-enrich` and `comments-enrich`** (PR #24)
+- These two step modules still wrapped their AI batch pass in a single `console.status()` spinner with no ETA. On a 50-book batch the user couldn't tell whether to wait or interrupt — every other batch-pass in the toolkit had already gained a `rich.progress.Progress` block with `MofNCompleteColumn`, `TimeElapsedColumn`, and `TimeRemainingColumn`.
+- The `progress_callback` plumbing has been in `ai.py` since the tags-cleanup batching pass (`_run_batches_concurrent`), and `suggest_lcc` / `suggest_comments` already accept it. This PR wires the canonical `identifiers.py` Progress block into the two remaining call sites — no shared helper extracted (charter explicitly said copy the pattern, do not abstract at two call sites).
+- ROADMAP item 20 wording correction folded in: the original entry listed the identifier loop and `tags.py` as remaining scope, but those had already picked up progress bars in earlier items. Real remaining scope was just `lcc.py` and `comments.py`.
+
+### Items cut or rejected
+
+**21. Memory streaming / chunked rendering for large batches** — cut
+- The ROADMAP entry's stated motivation was that "a 1000-book run can exhaust RAM and slow Rich table rendering" in `identifier_enrichment` and `lcc_enrichment`. The charter flagged item 21 as a cut candidate from the start, gated on whether real-library batch sizes actually showed the predicted memory pressure.
+- After items 19 and 20 shipped and the toolkit was exercised against the maintainer's ~5K-book library, no RAM pressure or Rich rendering slowdown surfaced. The predicted bottleneck never materialised in practice. Item cut from v1.5 with no follow-up scheduled; ROADMAP entry retained so the analysis isn't lost if RAM pressure shows up in a future, larger workload.
+
+**22. TUI pipeline overview panel** — attempted, rejected
+- Implemented on `feat/v1.5-tui-overview` (PR #26): a 5-row summary panel above the existing two-panel TUI layout, each row showing step number, name, progress bar, percentage, and a status icon + verbal label. Tests added (444 → 460), suite green, scope matched the charter exactly.
+- Rejected on live inspection in the TUI. The new panel duplicated the left-panel `ListView`, which already rendered step number, name, progress bar, and done/total/% for each MQG step in roughly the same vertical space. The overview's only additions — status icons (●/◐/○) and a verbal "done/in-progress/not-started" label — were inferable at a glance from the bar itself. Net effect was lost screen real estate for the actions panel on the right without added signal.
+- PR #26 closed without merge. The branch was discarded and the disposition documented in PR #27 (ROADMAP and v1.5 charter). The lesson recorded for additive-UI items at this polish level: the question is "does this carry information the existing surface doesn't," not "can this be added without breaking anything." If a top-of-screen pipeline view is worth revisiting, the higher-leverage shape is a single-line cross-step summary (e.g. `Pipeline: 1✓ 2◐ 3◐ 4○ 5○ · 2,431/4,872 books fully enriched`), not a re-render of what the left panel already shows.
+
+### Known limitations after v1.5
+
+- **No top-level pipeline-status surface yet.** Item 22's rejection leaves the TUI without a single-line cross-step status view. Per-step status is visible in the left-panel `ListView`; whole-pipeline status requires the user's eye to scan the column. Whether this is worth a future, differently-shaped attempt is open.
+- **Large-batch memory behaviour unmeasured at extreme scale.** Item 21 was cut on the basis of no observed pressure at ~5K books. If a future user runs against substantially larger libraries (10K+) and Rich table rendering or peak RSS becomes a problem, the ROADMAP entry remains as scoped work to pick up.
+
+---
+
 ## v1.4 — Coherence, Calibration & Scope
 
 Items 16–18 from ROADMAP.md. Three PRs (#19, #20, #21), test suite from 359 → 415 hermetic tests.
