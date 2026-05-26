@@ -376,8 +376,8 @@ how many tokens were consumed or the approximate cost.
 **Approach.** Capture `usage.input_tokens` / `usage.output_tokens` from every
 Anthropic response in `ai.py`. Sum per-batch and per-run. At end of each step,
 report: `Tokens used: 45,230 input + 12,104 output ≈ $0.47`. Cumulative totals
-visible in the TUI overview panel. Also validate prompt-cache hit rate against the
-claim in `ai.py:4–7`.
+visible in the TUI's left-panel spend line and the title-bar subtitle. Also
+validate prompt-cache hit rate against the claim in `ai.py:4–7`.
 
 **Touch points.** `ai.py` (AIClient); all step modules (end-of-run display);
 `tui/app.py` (stats panel).
@@ -557,23 +557,43 @@ rendering helpers.
 
 ---
 
-### 22. TUI pipeline overview panel
+### 22. TUI pipeline overview panel — *attempted, rejected during v1.5*
 
-**Problem.** The TUI shows per-step stats in a vertical list but no top-level "where
-am I in the pipeline" view. Users can't quickly assess which steps are complete and
-which remain.
+**Status.** Implemented on `feat/v1.5-tui-overview` (commit `375835f`, PR #26),
+then reverted before merge after live inspection in the TUI showed the new
+panel duplicated the existing left-panel `ListView` (`tui/app.py` `StepItem`
+rendering): both surfaces showed step number, name, progress bar, done/total,
+and percentage in the same vertical space. The overview's only additions —
+status icons (●/◐/○) and a verbal "done/in-progress/not-started" label — are
+inferable at a glance from the bar itself, so the panel cost screen space
+without adding signal. The branch was discarded and PR #26 closed without
+merge. **Conclusion: the visualization that already existed in the left panel
+was the right one to keep.**
 
-**Approach.** Add a 5-row summary panel at the top of the TUI menu (above the
-current two-panel layout) showing each step's progress bar, percentage, and a
-done ✓ / in-progress → / not-started indicator. Refresh on `r`; tap to jump to
-that step. Data already loaded in `tui/app.py:456–510`.
+If a top-of-screen pipeline view is worth revisiting in a future cycle, the
+higher-leverage shape is a single-line *cross-step* summary the per-row left
+panel can't provide — e.g. `Pipeline: 1✓ 2◐ 3◐ 4○ 5○ · 2,431/4,872 books
+fully enriched`. That carries information the existing left panel does not,
+rather than re-rendering what it already shows.
+
+**Original problem statement (retained for context).** The TUI shows per-step
+stats in a vertical list but no top-level "where am I in the pipeline" view.
+Users can't quickly assess which steps are complete and which remain.
+
+**Original approach (retained for context).** Add a 5-row summary panel at the
+top of the TUI menu (above the current two-panel layout) showing each step's
+progress bar, percentage, and a done ✓ / in-progress → / not-started indicator.
+Refresh on `r`; tap to jump to that step. Data already loaded in
+`tui/app.py:456–510`.
 
 **Touch points.** `calibre_toolkit/tui/app.py` (stats loading, layout).
 
-**Risk.** Low. Additive UI panel.
+**Risk.** Low. Additive UI panel. *Actual outcome: low-risk, but also
+low-value — the duplication wasn't visible until the panel was rendered
+against a real library.*
 
 **Expected impact.** At-a-glance pipeline status; useful at the start of every
-session.
+session. *Actual: redundant with what the left panel already provides.*
 
 ---
 
