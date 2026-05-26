@@ -25,9 +25,13 @@ from rich.text import Text
 from rich import box
 from rich.prompt import Prompt
 
+from datetime import datetime
+from time import monotonic
+
 from ..db import CalibreDB, Book
 from ..fetcher import IdentifierFetcher, IDENTIFIER_TYPES
 from ..logging_config import get_logger
+from ..summary import StepSummary, render_summary_panel
 
 _log = get_logger(__name__)
 
@@ -328,6 +332,9 @@ def run_enrichment(
     if mqg_complete_requires is None:
         mqg_complete_requires = []
 
+    _started_at = datetime.now()
+    _t0 = monotonic()
+
     # ── 0. Probe binary ───────────────────────────────────────────────────────
     probe_error = fetcher.probe()
     if probe_error:
@@ -601,17 +608,31 @@ def run_enrichment(
         label="complete",
     )
 
-    total_enriched = len(applied_ids)
-    total_complete = len(already_mqg_complete) + len(now_complete)
     total_manual = len(needs_manual) + len(manually_declined)
-    console.print(
-        f"\n[bold green]Done![/bold green] "
-        f"[green]{total_enriched}[/green] enriched, "
-        f"[green]{total_complete}[/green] marked MQG-02 complete"
-        + (f", [yellow]{total_manual}[/yellow] flagged for manual review" if total_manual else "")
-        + (f", [dim]{len(all_needs_ratings)} pending ratings[/dim]" if all_needs_ratings else "")
-        + "."
-    )
+    applied_ids_set = set(applied_ids)
+    applied_suggestions = [s for s in has_new if s.book_id in applied_ids_set]
+    by_lookup_method: dict[str, int] = {}
+    for s in applied_suggestions:
+        key = s.lookup_method or "unknown"
+        by_lookup_method[key] = by_lookup_method.get(key, 0) + 1
+
+    extras: dict[str, dict[str, int]] = {}
+    if by_lookup_method:
+        extras["by_lookup_method"] = by_lookup_method
+
+    console.print(render_summary_panel(
+        StepSummary(
+            step_label="enrich-identifiers",
+            started_at=_started_at,
+            elapsed_seconds=monotonic() - _t0,
+            applied_high=sum(1 for s in high if s.book_id in applied_ids_set),
+            applied_low=sum(1 for s in low if s.book_id in applied_ids_set),
+            skipped_already_done=len(already_sufficient),
+            flagged_manual=total_manual,
+            pending_followup=len(all_needs_ratings),
+            extras=extras,
+        ),
+    ))
 
 
 def _apply_suggestions(db: CalibreDB, suggestions: list[IdentifierSuggestion]) -> list[int]:

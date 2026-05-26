@@ -13,12 +13,15 @@ from rich.text import Text
 from rich import box
 from rich.prompt import Prompt
 
+from datetime import datetime
+from time import monotonic
+
 from ..ai import AIClient, TagsSuggestion, TagOperation
 from ..coherence import check_tags_coherence
 from ..db import CalibreDB
 from ..logging_config import audit_log
+from ..summary import StepSummary, render_summary_panel
 from ..tag_scanner import scan_tags, PATTERN_GROUP_LABELS
-from ..usage import format_summary
 
 
 # Cap for the comments excerpt fed into the tags prompt. ~400 chars
@@ -132,6 +135,8 @@ def run_tags_enrichment(
     lcc_primary_column: str | None = None,
 ) -> None:
     """Full MQG-05 Tags enrichment flow for a Calibre search string."""
+    _started_at = datetime.now()
+    _t0 = monotonic()
 
     # ── 1. Search ─────────────────────────────────────────────────────────────
     effective_query = (
@@ -226,8 +231,18 @@ def run_tags_enrichment(
             f"\n[dim]Dry-run complete — {len(suggestions)} book(s) shown, "
             f"{changed} would change. No writes.[/dim]"
         )
-        if ai.usage.call_count > 0:
-            console.print(f"[dim]{format_summary(ai.usage, step_label='tags-enrich')}[/dim]")
+        console.print(render_summary_panel(
+            StepSummary(
+                step_label="tags-enrich",
+                started_at=_started_at,
+                elapsed_seconds=monotonic() - _t0,
+                applied_high=len(high),
+                applied_medium=len(medium),
+                applied_low=len(low),
+                usage=ai.usage,
+            ),
+            dry_run=True,
+        ))
         return
 
     console.print(_build_review_table(suggestions))
@@ -296,16 +311,22 @@ def run_tags_enrichment(
         with console.status("Flagging…"):
             db.mark_mqg_complete(manual_ids, mqg_manual_column)
 
-    console.print(
-        f"\n[bold green]Done![/bold green] "
-        f"[green]{len(applied_ids)}[/green] applied, "
-        f"[green]{len(high_applied)}[/green] marked MQG-05 complete"
-        + (f", [yellow]{len(manual_ids)}[/yellow] flagged for manual" if manual_ids else "")
-        + "."
-    )
-
-    if ai.usage.call_count > 0:
-        console.print(f"[dim]{format_summary(ai.usage, step_label='tags-enrich')}[/dim]")
+    applied_ids_set = set(applied_ids)
+    flagged = len(manual_ids) if mqg_manual_column else 0
+    declined_only = len(declined) if not mqg_manual_column else 0
+    console.print(render_summary_panel(
+        StepSummary(
+            step_label="tags-enrich",
+            started_at=_started_at,
+            elapsed_seconds=monotonic() - _t0,
+            applied_high=sum(1 for s in high if s.book_id in applied_ids_set),
+            applied_medium=sum(1 for s in medium if s.book_id in applied_ids_set),
+            applied_low=sum(1 for s in low if s.book_id in applied_ids_set),
+            skipped_declined=declined_only,
+            flagged_manual=flagged,
+            usage=ai.usage,
+        ),
+    ))
 
 
 def _apply_batch(db: CalibreDB, suggestions: list[TagsSuggestion]) -> list[int]:
@@ -385,6 +406,8 @@ def run_tags_cleanup(
     touch no book matching the search. This lets a user normalise
     vocabulary for a batch without polluting books outside that batch.
     """
+    _started_at = datetime.now()
+    _t0 = monotonic()
 
     # ── 1. Read all tags ──────────────────────────────────────────────────────
     with console.status("[cyan]Reading all tags in library…"):
@@ -509,8 +532,21 @@ def run_tags_cleanup(
 
     if dry_run:
         console.print("\n[dim]Dry-run — no changes written.[/dim]")
-        if ai is not None and ai.usage.call_count > 0:
-            console.print(f"[dim]{format_summary(ai.usage, step_label='tags-cleanup')}[/dim]")
+        proposed_by_pattern_group: dict[str, int] = {}
+        for op in all_ops:
+            proposed_by_pattern_group[op.pattern_group] = (
+                proposed_by_pattern_group.get(op.pattern_group, 0) + 1
+            )
+        console.print(render_summary_panel(
+            StepSummary(
+                step_label="tags-cleanup",
+                started_at=_started_at,
+                elapsed_seconds=monotonic() - _t0,
+                extras={"by_pattern_group": proposed_by_pattern_group},
+                usage=ai.usage if ai is not None else None,
+            ),
+            dry_run=True,
+        ))
         return
 
     # ── 5. Per-group bulk approval ────────────────────────────────────────────
@@ -533,10 +569,34 @@ def run_tags_cleanup(
 
     if not to_apply:
         console.print("\n[dim]No operations approved. Nothing changed.[/dim]")
+        console.print(render_summary_panel(
+            StepSummary(
+                step_label="tags-cleanup",
+                started_at=_started_at,
+                elapsed_seconds=monotonic() - _t0,
+                usage=ai.usage if ai is not None else None,
+            ),
+        ))
         return
 
     # ── 6. Apply ──────────────────────────────────────────────────────────────
-    _apply_operations(db, to_apply, ai=ai)
+    total_affected, by_pattern_group, _errors = _apply_operations(db, to_apply)
+
+    extras: dict[str, dict[str, int]] = {}
+    if by_pattern_group:
+        extras["by_pattern_group"] = by_pattern_group
+    if total_affected:
+        extras["links_changed"] = {"book-tag links": total_affected}
+
+    console.print(render_summary_panel(
+        StepSummary(
+            step_label="tags-cleanup",
+            started_at=_started_at,
+            elapsed_seconds=monotonic() - _t0,
+            extras=extras,
+            usage=ai.usage if ai is not None else None,
+        ),
+    ))
 
 
 def _op_touches_scope(op: TagOperation, scope_tags: set[str]) -> bool:
@@ -681,20 +741,20 @@ def _review_ops_individually(ops: list[TagOperation]) -> list[TagOperation]:
 def _apply_operations(
     db: CalibreDB,
     ops: list[TagOperation],
-    ai: AIClient | None = None,
-) -> None:
+) -> tuple[int, dict[str, int], list[str]]:
     """Execute approved operations via direct SQLite tag-table writes.
 
     Each op touches the tags / books_tags_link tables directly — no
     per-book subprocess calls. One SQL statement per source tag regardless
     of how many books carry it.
 
-    `ai` is accepted (default None) only so the end-of-run token-usage
-    summary can be printed when the AI semantic pass ran. Pre-v1.4 the
-    function referenced an undefined `ai` symbol — fixed alongside item 18.
+    Returns (total_affected_links, ops_by_pattern_group, errors). The
+    caller is responsible for rendering the end-of-run StepSummary; this
+    function only prints per-op progress and the error list.
     """
     total_affected = 0
     errors: list[str] = []
+    by_pattern_group: dict[str, int] = {}
 
     for i, op in enumerate(ops, 1):
         try:
@@ -710,6 +770,7 @@ def _apply_operations(
                     count += db.rename_tag(src, target)
 
             total_affected += count
+            by_pattern_group[op.pattern_group] = by_pattern_group.get(op.pattern_group, 0) + 1
             console.print(
                 f"  [green]✓[/green] {op.display_arrow}  "
                 f"[dim]({count} book(s))[/dim]"
@@ -718,19 +779,14 @@ def _apply_operations(
             errors.append(f"{op.display_arrow}: {e}")
             console.print(f"  [red]✗[/red] {op.display_arrow}: {e}")
 
-    console.print(
-        f"\n[bold green]Done![/bold green] "
-        f"{len(ops)} operation(s), {total_affected} book-tag link(s) changed."
-    )
-
-    if ai is not None and ai.usage.call_count > 0:
-        console.print(f"[dim]{format_summary(ai.usage, step_label='tags-cleanup')}[/dim]")
     if errors:
         console.print(f"[red]{len(errors)} error(s) during apply:[/red]")
         for err in errors[:10]:
             console.print(f"  [red]✗[/red] {err}")
         if len(errors) > 10:
             console.print(f"  [dim]… + {len(errors) - 10} more[/dim]")
+
+    return total_affected, by_pattern_group, errors
 
 
 def _mark_complete(
