@@ -437,11 +437,22 @@ class CalibreToolkitApp(App):
     }
     """
 
+    # Digit/letter jump shortcuts: 1-5 jump to the matching MQG step, m to
+    # the Maintenance section header, t to Tags Cleanup. Hidden from the
+    # footer to keep it readable; the "01"…"05" badges in the step list
+    # are the discoverability hook.
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh_stats", "Refresh"),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up",   "Up",   show=False),
+        Binding("1", "jump(0)", "Step 1", show=False),
+        Binding("2", "jump(1)", "Step 2", show=False),
+        Binding("3", "jump(2)", "Step 3", show=False),
+        Binding("4", "jump(3)", "Step 4", show=False),
+        Binding("5", "jump(4)", "Step 5", show=False),
+        Binding("m", "jump(5)", "Maintenance", show=False),
+        Binding("t", "jump(6)", "Tags Cleanup", show=False),
     ]
 
     _stats: reactive[dict[str, tuple[int, int]]] = reactive({})
@@ -572,6 +583,11 @@ class CalibreToolkitApp(App):
 
     def action_cursor_up(self) -> None:
         self.query_one("#step-list", ListView).action_cursor_up()
+
+    def action_jump(self, idx: int) -> None:
+        step_list = self.query_one("#step-list", ListView)
+        if 0 <= idx < len(self._menu):
+            step_list.index = idx
 
     # ── Right panel ───────────────────────────────────────────────────────────
 
