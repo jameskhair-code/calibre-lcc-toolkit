@@ -36,6 +36,7 @@ from time import monotonic
 from ..ai import AIClient, LccSuggestion
 from ..db import CalibreDB
 from ..logging_config import audit_log, get_logger
+from ..review_prompts import confirm_bulk_apply
 from ..services.book_description import BookDescription, fetch_descriptions_batch
 from ..services.lc_catalog import CatalogHit, lookup_book
 from ..summary import StepSummary, render_summary_panel
@@ -574,6 +575,7 @@ def run_lcc_enrichment(
     description_timeout: float = _CATALOG_LOOKUP_TIMEOUT,
     description_max_retries: int = 3,
     google_books_api_key: str | None = None,
+    apply_confirm_threshold: int = 20,
 ) -> None:
     """Full MQG-03 LCC enrichment flow for a Calibre search string.
 
@@ -847,7 +849,10 @@ def run_lcc_enrichment(
             )
             choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
             if choice == "all":
-                applied_ids += _apply_batch(db, high, columns)
+                if confirm_bulk_apply(len(high), apply_confirm_threshold, console):
+                    applied_ids += _apply_batch(db, high, columns)
+                else:
+                    console.print("[dim]Bulk apply cancelled.[/dim]")
             elif choice == "review":
                 a, d = _prompt_and_apply(db, high, columns)
                 applied_ids += a; declined += d
@@ -860,7 +865,10 @@ def run_lcc_enrichment(
         )
         choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
-            applied_ids += _apply_batch(db, medium, columns)
+            if confirm_bulk_apply(len(medium), apply_confirm_threshold, console):
+                applied_ids += _apply_batch(db, medium, columns)
+            else:
+                console.print("[dim]Bulk apply cancelled.[/dim]")
         elif choice == "review":
             a, d = _prompt_and_apply(db, medium, columns)
             applied_ids += a; declined += d
@@ -873,7 +881,10 @@ def run_lcc_enrichment(
         )
         choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
-            applied_ids += _apply_batch(db, low, columns)
+            if confirm_bulk_apply(len(low), apply_confirm_threshold, console):
+                applied_ids += _apply_batch(db, low, columns)
+            else:
+                console.print("[dim]Bulk apply cancelled.[/dim]")
         elif choice == "review":
             a, d = _prompt_and_apply(db, low, columns)
             applied_ids += a; declined += d

@@ -31,6 +31,7 @@ from time import monotonic
 from ..db import CalibreDB, Book
 from ..fetcher import IdentifierFetcher, IDENTIFIER_TYPES
 from ..logging_config import get_logger
+from ..review_prompts import confirm_bulk_apply
 from ..summary import StepSummary, render_summary_panel
 
 _log = get_logger(__name__)
@@ -317,6 +318,7 @@ def run_enrichment(
     mqg_complete_requires: list[str] | None = None,
     force_lookup: bool = False,
     max_workers: int = 4,
+    apply_confirm_threshold: int = 20,
 ) -> None:
     """Full MQG-02 identifier enrichment flow for a given Calibre search string.
 
@@ -533,7 +535,10 @@ def run_enrichment(
             )
             choice_high = {"a": "all", "r": "review", "s": "skip"}.get(choice_high, choice_high)
             if choice_high == "all":
-                applied_ids += _apply_suggestions(db, high)
+                if confirm_bulk_apply(len(high), apply_confirm_threshold, console):
+                    applied_ids += _apply_suggestions(db, high)
+                else:
+                    console.print("[dim]Bulk apply cancelled.[/dim]")
             elif choice_high == "review":
                 ids, declined = _prompt_and_apply(db, high)
                 applied_ids += ids
@@ -555,7 +560,10 @@ def run_enrichment(
         )
         low_choice = {"a": "all", "r": "review", "s": "skip"}.get(low_choice, low_choice)
         if low_choice == "all":
-            applied_ids += _apply_suggestions(db, low)
+            if confirm_bulk_apply(len(low), apply_confirm_threshold, console):
+                applied_ids += _apply_suggestions(db, low)
+            else:
+                console.print("[dim]Bulk apply cancelled.[/dim]")
         elif low_choice == "review":
             ids, declined = _prompt_and_apply(db, low)
             applied_ids += ids

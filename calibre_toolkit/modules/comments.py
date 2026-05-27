@@ -32,6 +32,7 @@ from ..ai import AIClient, CommentsSuggestion
 from ..coherence import check_comments_coherence
 from ..db import CalibreDB
 from ..logging_config import audit_log
+from ..review_prompts import confirm_bulk_apply
 from ..summary import StepSummary, render_summary_panel
 
 if TYPE_CHECKING:
@@ -206,6 +207,7 @@ def run_comments_enrichment(
     mqg_column: str | None = None,
     mqg_manual_column: str | None = None,
     lcc_summary_column: str | None = None,
+    apply_confirm_threshold: int = 20,
 ) -> None:
     """Full MQG-04 Comments enrichment flow for a Calibre search string.
 
@@ -351,7 +353,10 @@ def run_comments_enrichment(
         )
         choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
-            applied_ids += _apply_batch(db, high)
+            if confirm_bulk_apply(len(high), apply_confirm_threshold, console):
+                applied_ids += _apply_batch(db, high)
+            else:
+                console.print("[dim]Bulk apply cancelled.[/dim]")
         elif choice == "review":
             a, d = _prompt_and_apply(db, high)
             applied_ids += a
@@ -366,7 +371,10 @@ def run_comments_enrichment(
         )
         choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
-            applied_ids += _apply_batch(db, medium)
+            if confirm_bulk_apply(len(medium), apply_confirm_threshold, console):
+                applied_ids += _apply_batch(db, medium)
+            else:
+                console.print("[dim]Bulk apply cancelled.[/dim]")
         elif choice == "review":
             a, d = _prompt_and_apply(db, medium)
             applied_ids += a
@@ -381,7 +389,10 @@ def run_comments_enrichment(
         )
         choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
-            applied_ids += _apply_batch(db, low)
+            if confirm_bulk_apply(len(low), apply_confirm_threshold, console):
+                applied_ids += _apply_batch(db, low)
+            else:
+                console.print("[dim]Bulk apply cancelled.[/dim]")
         elif choice == "review":
             a, d = _prompt_and_apply(db, low)
             applied_ids += a
