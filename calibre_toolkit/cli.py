@@ -188,6 +188,10 @@ def clean_titles(
         Optional[int],
         typer.Option("--limit", "-n", help="Cap the number of books processed (e.g. 50)"),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview proposed changes without writing to Calibre"),
+    ] = False,
 ):
     """
     AI-assisted author and title cleanup.
@@ -196,7 +200,7 @@ def clean_titles(
 
         calibre-toolkit clean-titles "tag:booker"
 
-        calibre-toolkit clean-titles "series:Man Booker Prize"
+        calibre-toolkit clean-titles "series:Man Booker Prize" --limit 10 --dry-run
 
         calibre-toolkit clean-titles "not custom_column_cleaned:true"
     """
@@ -228,6 +232,7 @@ def clean_titles(
         auto_apply_high=auto_apply_high,
         mqg_column=mqg_column,
         limit=limit,
+        dry_run=dry_run,
     )
 
 

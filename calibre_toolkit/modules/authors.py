@@ -73,6 +73,7 @@ def run_cleanup(
     auto_apply_high: bool = False,
     mqg_column: str | None = None,
     limit: int | None = None,
+    dry_run: bool = False,
 ) -> None:
     """Full Author/Title cleanup flow for a given Calibre search string."""
     _started_at = datetime.now()
@@ -148,7 +149,8 @@ def run_cleanup(
 
     if not changes:
         console.print("[green]Everything looks good — no changes needed![/green]")
-        _mark_complete(db, mqg_column, clean_ids, label="already-clean")
+        if not dry_run:
+            _mark_complete(db, mqg_column, clean_ids, label="already-clean")
         raise typer.Exit()
 
     # ── 3. Review table ───────────────────────────────────────────────────────
@@ -158,6 +160,25 @@ def run_cleanup(
         "\n[dim]Legend: [green]●[/green] High confidence  "
         "[yellow]◑[/yellow] Medium  [red]○[/red] Low (review carefully)[/dim]\n"
     )
+
+    if dry_run:
+        console.print(
+            "[bold cyan]── Dry-run: proposed changes shown above (no writes) ──[/bold cyan]"
+        )
+        console.print(render_summary_panel(
+            StepSummary(
+                step_label="clean-titles",
+                started_at=_started_at,
+                elapsed_seconds=monotonic() - _t0,
+                applied_high=sum(1 for s in changes if s.confidence == "high"),
+                applied_medium=sum(1 for s in changes if s.confidence == "medium"),
+                applied_low=sum(1 for s in changes if s.confidence == "low"),
+                skipped_already_done=len(no_changes),
+                usage=ai.usage,
+            ),
+            dry_run=True,
+        ))
+        return
 
     # ── 4. Apply options ──────────────────────────────────────────────────────
     high = [s for s in changes if s.confidence == "high"]
