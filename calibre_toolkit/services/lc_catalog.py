@@ -29,11 +29,11 @@ Public endpoints used (no API key needed):
       cascade.
 
   • https://openlibrary.org/works/{wid}/editions.json
-      All editions of a work. Each edition carries its own ISBN(s) and
-      may have its own classifications block. The cascade walks
-      sibling editions and re-runs the bibkeys lookup against each.
-      Catches UK / international ISBNs whose specific edition lacks
-      LC data but whose US sibling does.
+      All editions of a work. Each edition carries its own ISBN(s).
+      The cascade enumerates sibling ISBNs from these entries and
+      issues a single batched bibkeys lookup across them. Catches
+      UK / international ISBNs whose specific edition lacks LC data
+      but whose US sibling does.
 
 All functions are best-effort: any network failure, missing field, or
 parse error returns None so the caller can fall through to AI
@@ -147,6 +147,55 @@ def _pick_lcc_call_number(call_numbers: list) -> Optional[str]:
 # ── Open Library direct ISBN lookup ──────────────────────────────────────────
 
 
+def _lookup_isbns_openlibrary_batch(
+    isbns: list[str],
+    timeout: float = _DEFAULT_TIMEOUT,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+) -> dict[str, Optional[CatalogHit]]:
+    """Resolve a batch of ISBNs to LC call numbers in one OL request.
+
+    Output is keyed by each input string. Duplicates and blank inputs
+    collapse to one HTTP request; each input key still appears in the
+    output mapping with a CatalogHit or None.
+    """
+    out: dict[str, Optional[CatalogHit]] = {raw: None for raw in isbns if raw is not None}
+    raw_to_cleaned: dict[str, str] = {}
+    cleaned_seen: list[str] = []
+    for raw in isbns:
+        if raw is None:
+            continue
+        cleaned = re.sub(r"[\s\-]", "", raw.strip())
+        if not cleaned:
+            continue
+        raw_to_cleaned[raw] = cleaned
+        if cleaned not in cleaned_seen:
+            cleaned_seen.append(cleaned)
+    if not cleaned_seen:
+        return out
+    params = urllib.parse.urlencode({
+        "bibkeys": ",".join(f"ISBN:{c}" for c in cleaned_seen),
+        "jscmd": "data",
+        "format": "json",
+    })
+    url = f"https://openlibrary.org/api/books?{params}"
+    data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
+    if not data:
+        return out
+    hit_by_cleaned: dict[str, CatalogHit] = {}
+    for cleaned in cleaned_seen:
+        record = data.get(f"ISBN:{cleaned}") or {}
+        lc_classes = (record.get("classifications") or {}).get("lc_classifications") or []
+        call = _pick_lcc_call_number(lc_classes)
+        if call:
+            hit_by_cleaned[cleaned] = CatalogHit(
+                call_number=call,
+                source=f"Open Library (ISBN {cleaned})",
+            )
+    for raw, cleaned in raw_to_cleaned.items():
+        out[raw] = hit_by_cleaned.get(cleaned)
+    return out
+
+
 def lookup_by_isbn_openlibrary(
     isbn: str,
     timeout: float = _DEFAULT_TIMEOUT,
@@ -155,27 +204,10 @@ def lookup_by_isbn_openlibrary(
     """Resolve an ISBN to an LC call number via Open Library."""
     if not isbn:
         return None
-    cleaned = re.sub(r"[\s\-]", "", isbn.strip())
-    if not cleaned:
-        return None
-    params = urllib.parse.urlencode({
-        "bibkeys": f"ISBN:{cleaned}",
-        "jscmd": "data",
-        "format": "json",
-    })
-    url = f"https://openlibrary.org/api/books?{params}"
-    data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
-    if not data:
-        return None
-    record = data.get(f"ISBN:{cleaned}") or {}
-    lc_classes = (record.get("classifications") or {}).get("lc_classifications") or []
-    call = _pick_lcc_call_number(lc_classes)
-    if not call:
-        return None
-    return CatalogHit(
-        call_number=call,
-        source=f"Open Library (ISBN {cleaned})",
+    results = _lookup_isbns_openlibrary_batch(
+        [isbn], timeout=timeout, max_retries=max_retries,
     )
+    return results.get(isbn)
 
 
 # ── Open Library edition cascade ─────────────────────────────────────────────
@@ -187,9 +219,10 @@ def lookup_by_isbn_openlibrary(
 #
 # Cap raised to 10 (from 3) after the probe in
 # scripts/probe_lcc_sources.py demonstrated that the deeper walk lifts
-# hit rate from 27% → 76% on books with ISBNs. The cap is conservative
-# enough that worst-case time per book stays bounded; the cache below
-# stops repeat work on shared works.
+# hit rate from 27% → 76% on books with ISBNs. With v1.7's batched
+# bibkeys lookup the cap is also a safety belt on URL length and OL
+# response size — 10 ISBN-13 fits comfortably in one request — and the
+# cache below still stops repeat work on shared works.
 
 _EDITION_CASCADE_MAX_ISBNS = 10
 
@@ -312,9 +345,10 @@ def lookup_by_isbn_with_edition_cascade(
     record carries an LC classification.
 
     Called only after the direct OL ISBN lookup for `isbn` has already
-    missed. Resolves the OL work, fetches its editions, and re-runs
-    `lookup_by_isbn_openlibrary` against each sibling ISBN. Returns the
-    first hit (with a source string that records the cascade), or None.
+    missed. Resolves the OL work, fetches its editions, then issues one
+    batched `/api/books?bibkeys=...` lookup across every sibling ISBN
+    at once. Returns the first sibling hit in cascade preference order,
+    or None.
     """
     if not isbn:
         return None
@@ -332,11 +366,14 @@ def lookup_by_isbn_with_edition_cascade(
         )
         return None
     _log.debug(
-        "Edition cascade: trying %d sibling ISBN(s) for work %s",
+        "Edition cascade: batching %d sibling ISBN(s) for work %s",
         len(siblings), work_key,
     )
+    results = _lookup_isbns_openlibrary_batch(
+        siblings, timeout=timeout, max_retries=max_retries,
+    )
     for sib in siblings:
-        hit = lookup_by_isbn_openlibrary(sib, timeout=timeout, max_retries=max_retries)
+        hit = results.get(sib)
         if hit:
             return CatalogHit(
                 call_number=hit.call_number,

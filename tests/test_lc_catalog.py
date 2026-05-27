@@ -18,6 +18,7 @@ import pytest
 from calibre_toolkit.services import lc_catalog
 from calibre_toolkit.services.lc_catalog import (
     CatalogHit,
+    _lookup_isbns_openlibrary_batch,
     _ol_sibling_isbns_for_work,
     _ol_work_key_for_isbn,
     _pick_lcc_call_number,
@@ -119,6 +120,143 @@ class TestOpenLibraryDirect:
         # must reach the same record.
         hit = lookup_by_isbn_openlibrary("978-0-571-25824-6")
         assert hit is not None
+
+
+# ── Batched bibkeys lookup ──────────────────────────────────────────────────
+
+
+class TestBatchedBibkeys:
+    """v1.7 item 3: one /api/books?bibkeys=ISBN:X,ISBN:Y,... call per
+    sibling group, not one per sibling."""
+
+    def test_single_isbn_returns_hit(self, stub_http):
+        stub_http("openlibrary.org/api/books?", "openlibrary_hit.json")
+        results = _lookup_isbns_openlibrary_batch(["9780571258246"])
+        assert results["9780571258246"] is not None
+        assert results["9780571258246"].call_number == "PR6059.S5 N48 2005"
+
+    def test_returns_per_input_dict_with_hits_and_misses(self, stub_http):
+        stub_http("openlibrary.org/api/books?", {
+            "ISBN:9780000000001": {
+                "classifications": {"lc_classifications": ["PR9619.3.K46"]},
+            },
+            "ISBN:9780000000002": {},
+            # ISBN:9780000000003 absent from response — represents an
+            # ISBN OL doesn't know at all.
+        })
+        results = _lookup_isbns_openlibrary_batch([
+            "9780000000001", "9780000000002", "9780000000003",
+        ])
+        assert results["9780000000001"] is not None
+        assert results["9780000000001"].call_number == "PR9619.3.K46"
+        assert results["9780000000002"] is None
+        assert results["9780000000003"] is None
+
+    def test_single_http_call_for_whole_batch(self, monkeypatch):
+        """N ISBNs → one HTTP request, not N."""
+        call_count = 0
+
+        def counting_get(url, timeout=10.0, max_retries=3):
+            nonlocal call_count
+            call_count += 1
+            return {"ISBN:9780000000001": {}}
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", counting_get)
+        _lookup_isbns_openlibrary_batch([
+            "9780000000001", "9780000000002", "9780000000003", "9780000000004",
+        ])
+        assert call_count == 1
+
+    def test_url_carries_comma_separated_bibkeys(self, monkeypatch):
+        captured: list[str] = []
+
+        def capturing_get(url, timeout=10.0, max_retries=3):
+            captured.append(url)
+            return {}
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", capturing_get)
+        _lookup_isbns_openlibrary_batch(["9780000000001", "9780000000002"])
+        assert len(captured) == 1
+        # urlencode renders comma as %2C and colon as %3A.
+        assert "ISBN%3A9780000000001%2CISBN%3A9780000000002" in captured[0]
+
+    def test_strips_hyphens_and_whitespace_for_url(self, monkeypatch):
+        captured: list[str] = []
+
+        def capturing_get(url, timeout=10.0, max_retries=3):
+            captured.append(url)
+            return {
+                "ISBN:9780000000001": {
+                    "classifications": {"lc_classifications": ["PR1"]},
+                },
+            }
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", capturing_get)
+        results = _lookup_isbns_openlibrary_batch(["978-0-00-000000-1"])
+        assert "ISBN%3A9780000000001" in captured[0]
+        # Result is keyed by the original input string, not the cleaned form.
+        assert results["978-0-00-000000-1"] is not None
+        assert results["978-0-00-000000-1"].call_number == "PR1"
+
+    def test_dedupes_inputs_in_url_but_preserves_keys(self, monkeypatch):
+        captured: list[str] = []
+
+        def capturing_get(url, timeout=10.0, max_retries=3):
+            captured.append(url)
+            return {
+                "ISBN:9780000000001": {
+                    "classifications": {"lc_classifications": ["PR1"]},
+                },
+            }
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", capturing_get)
+        results = _lookup_isbns_openlibrary_batch([
+            "9780000000001", "9780000000001",
+        ])
+        # Duplicate doesn't expand into two bibkeys entries.
+        assert captured[0].count("ISBN%3A9780000000001") == 1
+        assert results["9780000000001"] is not None
+
+    def test_skips_blank_and_none_inputs(self, monkeypatch):
+        captured: list[str] = []
+
+        def capturing_get(url, timeout=10.0, max_retries=3):
+            captured.append(url)
+            return {
+                "ISBN:9780000000001": {
+                    "classifications": {"lc_classifications": ["PR1"]},
+                },
+            }
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", capturing_get)
+        results = _lookup_isbns_openlibrary_batch(["", "   ", "9780000000001"])
+        assert "ISBN%3A9780000000001" in captured[0]
+        assert results[""] is None
+        assert results["   "] is None
+        assert results["9780000000001"] is not None
+
+    def test_empty_input_makes_no_http_call(self, monkeypatch):
+        call_count = 0
+
+        def counting_get(url, timeout=10.0, max_retries=3):
+            nonlocal call_count
+            call_count += 1
+            return None
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", counting_get)
+        assert _lookup_isbns_openlibrary_batch([]) == {}
+        assert _lookup_isbns_openlibrary_batch(["", "   "]) == {"": None, "   ": None}
+        assert call_count == 0
+
+    def test_http_failure_returns_all_none(self, monkeypatch):
+        def failing_get(url, timeout=10.0, max_retries=3):
+            return None
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", failing_get)
+        results = _lookup_isbns_openlibrary_batch([
+            "9780000000001", "9780000000002",
+        ])
+        assert results == {"9780000000001": None, "9780000000002": None}
 
 
 # ── OL work-key resolution ──────────────────────────────────────────────────
@@ -280,6 +418,37 @@ class TestEditionCascade:
 
     def test_returns_none_on_empty_isbn(self):
         assert lookup_by_isbn_with_edition_cascade("") is None
+
+    def test_sibling_lookup_is_one_http_call(self, monkeypatch, fixtures_dir):
+        """v1.7 item 3: sibling classifications resolve in ONE batched
+        bibkeys request, not one per sibling. Pre-v1.7 this would have
+        been three sequential /api/books? calls."""
+        editions = _load_fixture(fixtures_dir, "ol_work_editions.json")
+        isbn_lookup = _load_fixture(fixtures_dir, "ol_isbn_lookup_with_work.json")
+        api_books_calls = 0
+
+        def counting_get(url, timeout=10.0, max_retries=3):
+            nonlocal api_books_calls
+            if "openlibrary.org/api/books?" in url:
+                api_books_calls += 1
+                # First sibling gets classifications; the rest don't.
+                return {
+                    "ISBN:9780671254834": {
+                        "classifications": {"lc_classifications": ["PR9619.3.K46 C66"]},
+                    },
+                }
+            if "openlibrary.org/isbn/9781504026758.json" in url:
+                return isbn_lookup
+            if "/works/OL999W/editions.json" in url:
+                return editions
+            return None
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", counting_get)
+        hit = lookup_by_isbn_with_edition_cascade("9781504026758")
+        assert hit is not None
+        # ol_work_editions.json has 3 sibling ISBNs after seed exclusion;
+        # the pre-v1.7 implementation would have made up to 3 calls.
+        assert api_books_calls == 1
 
 
 # ── lookup_book end-to-end cascade ──────────────────────────────────────────
