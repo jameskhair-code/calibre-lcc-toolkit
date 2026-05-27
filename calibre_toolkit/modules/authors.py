@@ -198,12 +198,14 @@ def run_cleanup(
             )
             applied_ids += _prompt_and_apply(db, medium_low)
     else:
+        console.print("[dim]Waiting for input…[/dim]")
         choice = Prompt.ask(
-            "[bold]Apply changes?[/bold]",
-            choices=["all", "high-only", "review", "skip"],
+            "[bold]Apply changes?[/bold]  \\[a]ll / \\[h]igh-only / \\[r]eview / \\[s]kip",
+            choices=["all", "high-only", "review", "skip", "a", "h", "r", "s"],
             default="review",
-            show_choices=True,
+            show_choices=False,
         )
+        choice = {"a": "all", "h": "high-only", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "skip":
             console.print("[dim]No changes applied.[/dim]")
             raise typer.Exit()

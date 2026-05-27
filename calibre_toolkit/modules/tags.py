@@ -257,11 +257,13 @@ def run_tags_enrichment(
     declined: list[TagsSuggestion] = []
 
     if high:
+        console.print("[dim]Waiting for input…[/dim]")
         choice = Prompt.ask(
             f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence "
-            f"tag set{'s' if len(high) != 1 else ''}?",
-            choices=["all", "review", "skip"], default="all", show_choices=True,
+            f"tag set{'s' if len(high) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+            choices=["all", "review", "skip", "a", "r", "s"], default="all", show_choices=False,
         )
+        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
             applied_ids += _apply_batch(db, high)
         elif choice == "review":
@@ -270,11 +272,13 @@ def run_tags_enrichment(
             declined += d
 
     if medium:
+        console.print("[dim]Waiting for input…[/dim]")
         choice = Prompt.ask(
             f"\n[bold yellow]Tier 2:[/bold yellow] Apply {len(medium)} medium-confidence "
-            f"tag set{'s' if len(medium) != 1 else ''}?",
-            choices=["all", "review", "skip"], default="review", show_choices=True,
+            f"tag set{'s' if len(medium) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+            choices=["all", "review", "skip", "a", "r", "s"], default="review", show_choices=False,
         )
+        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
             applied_ids += _apply_batch(db, medium)
         elif choice == "review":
@@ -283,11 +287,13 @@ def run_tags_enrichment(
             declined += d
 
     if low:
+        console.print("[dim]Waiting for input…[/dim]")
         choice = Prompt.ask(
             f"\n[bold red]Tier 3:[/bold red] Apply {len(low)} low-confidence "
-            f"tag set{'s' if len(low) != 1 else ''}?",
-            choices=["all", "review", "skip"], default="skip", show_choices=True,
+            f"tag set{'s' if len(low) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+            choices=["all", "review", "skip", "a", "r", "s"], default="skip", show_choices=False,
         )
+        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
             applied_ids += _apply_batch(db, low)
         elif choice == "review":
@@ -554,12 +560,14 @@ def run_tags_cleanup(
     for group_key, ops in grouped.items():
         label = PATTERN_GROUP_LABELS.get(group_key, group_key)
         default = "all" if _is_safe_group(group_key) else "review"
+        console.print("[dim]Waiting for input…[/dim]")
         choice = Prompt.ask(
-            f"\n[bold]{label}[/bold] — {len(ops)} op(s). Apply?",
-            choices=["all", "except", "review", "skip"],
+            f"\n[bold]{label}[/bold] — {len(ops)} op(s). Apply?  \\[a]ll / \\[e]xcept / \\[r]eview / \\[s]kip",
+            choices=["all", "except", "review", "skip", "a", "e", "r", "s"],
             default=default,
-            show_choices=True,
+            show_choices=False,
         )
+        choice = {"a": "all", "e": "except", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
             to_apply.extend(ops)
         elif choice == "except":

@@ -524,12 +524,14 @@ def run_enrichment(
             )
             applied_ids += _apply_suggestions(db, high)
         else:
+            console.print("[dim]Waiting for input…[/dim]")
             choice_high = Prompt.ask(
-                f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence enrichment{'s' if len(high) != 1 else ''}?",
-                choices=["all", "review", "skip"],
+                f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence enrichment{'s' if len(high) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+                choices=["all", "review", "skip", "a", "r", "s"],
                 default="all",
-                show_choices=True,
+                show_choices=False,
             )
+            choice_high = {"a": "all", "r": "review", "s": "skip"}.get(choice_high, choice_high)
             if choice_high == "all":
                 applied_ids += _apply_suggestions(db, high)
             elif choice_high == "review":
@@ -544,12 +546,14 @@ def run_enrichment(
             f"\n[bold yellow]Tier 2:[/bold yellow] {len(low)} low-confidence enrichment{'s' if len(low) != 1 else ''} "
             "— title/author match (wrong ISBN will affect run 2):\n"
         )
+        console.print("[dim]Waiting for input…[/dim]")
         low_choice = Prompt.ask(
-            "[bold]Tier 2:[/bold] Apply low-confidence enrichments?",
-            choices=["all", "review", "skip"],
+            "[bold]Tier 2:[/bold] Apply low-confidence enrichments?  \\[a]ll / \\[r]eview / \\[s]kip",
+            choices=["all", "review", "skip", "a", "r", "s"],
             default="review",
-            show_choices=True,
+            show_choices=False,
         )
+        low_choice = {"a": "all", "r": "review", "s": "skip"}.get(low_choice, low_choice)
         if low_choice == "all":
             applied_ids += _apply_suggestions(db, low)
         elif low_choice == "review":
