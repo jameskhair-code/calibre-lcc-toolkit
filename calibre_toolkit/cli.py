@@ -171,7 +171,14 @@ def _make_ai(
 
 # ── Commands ───────────────────────────────────────────────────────────────────
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        '  calibre-toolkit clean-titles "tag:booker"\n\n'
+        '  calibre-toolkit clean-titles "series:Man Booker Prize" --limit 10 --dry-run\n\n'
+        '  calibre-toolkit clean-titles "not custom_column_cleaned:true"\n'
+    ),
+)
 def clean_titles(
     search: Annotated[
         str,
@@ -198,17 +205,7 @@ def clean_titles(
         typer.Option("--dry-run", help="Preview proposed changes without writing to Calibre"),
     ] = False,
 ):
-    """
-    AI-assisted author and title cleanup.
-
-    Examples:
-
-        calibre-toolkit clean-titles "tag:booker"
-
-        calibre-toolkit clean-titles "series:Man Booker Prize" --limit 10 --dry-run
-
-        calibre-toolkit clean-titles "not custom_column_cleaned:true"
-    """
+    """AI-assisted author and title cleanup."""
     from .modules.authors import run_cleanup
 
     cfg = _load_config(config)
@@ -242,7 +239,13 @@ def clean_titles(
     )
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        '  calibre-toolkit enrich-identifiers "#metadata_queue:true"\n\n'
+        '  calibre-toolkit enrich-identifiers "#mqg_title_author:true" --batch-size 10\n'
+    ),
+)
 def enrich_identifiers(
     search: Annotated[
         str,
@@ -276,12 +279,6 @@ def enrich_identifiers(
     sources including Goodreads. Each book requires a live web lookup.
     Books that cannot be found are automatically flagged in the manual curation
     column (mqg.identifiers_manual_column in config.json).
-
-    Examples:
-
-        calibre-toolkit enrich-identifiers "#metadata_queue:true"
-
-        calibre-toolkit enrich-identifiers "#mqg_title_author:true" --batch-size 10
     """
     from .modules.identifiers import run_enrichment
     from .fetcher import IdentifierFetcher
@@ -337,7 +334,13 @@ def enrich_identifiers(
     )
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        '  calibre-toolkit lcc-enrich "#mqg_identifiers:true and not #mqg_lcc:true"\n\n'
+        '  calibre-toolkit lcc-enrich "tag:booker" --batch-size 5 --auto-apply-high\n'
+    ),
+)
 def lcc_enrich(
     search: Annotated[
         str,
@@ -387,12 +390,6 @@ def lcc_enrich(
 
     Primary and secondary class are code-derived from the AI-proposed call
     number and validated against config/lcc-{primary,secondary}-canonical.csv.
-
-    Examples:
-
-        calibre-toolkit lcc-enrich "#mqg_identifiers:true and not #mqg_lcc:true"
-
-        calibre-toolkit lcc-enrich "tag:booker" --batch-size 5 --auto-apply-high
     """
     from .modules.lcc import run_lcc_enrichment
 
@@ -471,7 +468,13 @@ def lcc_enrich(
     )
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        '  calibre-toolkit tags-enrich "#mqg_lcc:true" --limit 10 --dry-run\n\n'
+        '  calibre-toolkit tags-enrich "#mqg_lcc:true and not #mqg_tags:true"\n'
+    ),
+)
 def tags_enrich(
     search: Annotated[
         str,
@@ -514,12 +517,6 @@ def tags_enrich(
     Proposed tags replace existing tags. Confidence tiers and review
     flow match the other MQG commands. LCC data (if present) is used
     as context for more accurate subject tagging.
-
-    Examples:
-
-        calibre-toolkit tags-enrich "#mqg_lcc:true" --limit 10 --dry-run
-
-        calibre-toolkit tags-enrich "#mqg_lcc:true and not #mqg_tags:true"
     """
     from .modules.tags import run_tags_enrichment
 
@@ -565,7 +562,15 @@ def tags_enrich(
     )
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit tags-cleanup --dry-run\n\n"
+        "  calibre-toolkit tags-cleanup --skip-ai           # rule-based only\n\n"
+        '  calibre-toolkit tags-cleanup --search "#metadata_queue:true"\n\n'
+        "  calibre-toolkit tags-cleanup --min-books 2\n"
+    ),
+)
 def tags_cleanup(
     config: Annotated[
         Path,
@@ -624,17 +629,6 @@ def tags_cleanup(
     metadata queue) without touching the rest of the library. Frequency
     counts and AI synonym judgements still use the full vocabulary so the
     cleanup remains as accurate as a library-wide run.
-
-    Examples:
-
-        calibre-toolkit tags-cleanup --dry-run
-
-        calibre-toolkit tags-cleanup --skip-ai    # rule-based only
-
-        calibre-toolkit tags-cleanup --search "#metadata_queue:true"
-                                                  # scope to metadata queue
-
-        calibre-toolkit tags-cleanup --min-books 2
     """
     from .modules.tags import run_tags_cleanup
 
@@ -670,7 +664,13 @@ def tags_cleanup(
     )
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        '  calibre-toolkit comments-enrich "#mqg_lcc:true" --limit 5 --dry-run\n\n'
+        '  calibre-toolkit comments-enrich "#mqg_lcc:true and not #mqg_comments:true"\n'
+    ),
+)
 def comments_enrich(
     search: Annotated[
         str,
@@ -708,12 +708,6 @@ def comments_enrich(
     rules/comments.md (fiction vs. non-fiction handled differently) and a
     0–10 must-read score with a short rationale. Voice and angle follow
     rules/reader_profile.md.
-
-    Examples:
-
-        calibre-toolkit comments-enrich "#mqg_lcc:true" --limit 5 --dry-run
-
-        calibre-toolkit comments-enrich "#mqg_lcc:true and not #mqg_comments:true"
     """
     from .modules.comments import run_comments_enrichment
 
@@ -759,7 +753,13 @@ def comments_enrich(
     )
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        '  calibre-toolkit clean-identifiers "all"\n\n'
+        '  calibre-toolkit clean-identifiers "#mqg_identifiers:true"\n'
+    ),
+)
 def clean_identifiers(
     search: Annotated[
         str,
@@ -774,15 +774,7 @@ def clean_identifiers(
         typer.Option("--auto-apply", help="Apply all fixes without prompting"),
     ] = False,
 ):
-    """
-    Scan and fix malformed identifiers (UUIDs, urnisbn/ format, empty values).
-
-    Examples:
-
-        calibre-toolkit clean-identifiers "all"
-
-        calibre-toolkit clean-identifiers "#mqg_identifiers:true"
-    """
+    """Scan and fix malformed identifiers (UUIDs, urnisbn/ format, empty values)."""
     from .modules.clean_identifiers import run_clean_identifiers
 
     cfg = _load_config(config)
@@ -803,7 +795,13 @@ def clean_identifiers(
     run_clean_identifiers(db=db, search_query=search, auto_apply=auto_apply)
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        '  calibre-toolkit unflag-manual "ids:goodreads:12345"\n\n'
+        '  calibre-toolkit unflag-manual "#mqg_identifiers_manual:true" --auto-apply\n'
+    ),
+)
 def unflag_manual(
     search: Annotated[
         str,
@@ -824,12 +822,6 @@ def unflag_manual(
     Use this after manually adding identifiers to books that were auto-flagged
     in the identifiers_manual_column. Clearing the flag re-queues them for the
     next enrich-identifiers run.
-
-    Examples:
-
-        calibre-toolkit unflag-manual "ids:goodreads:12345"
-
-        calibre-toolkit unflag-manual "#mqg_identifiers_manual:true" --auto-apply
     """
     from .modules.identifiers import run_unflag_manual
 
@@ -862,7 +854,15 @@ def unflag_manual(
     run_unflag_manual(db=db, search_query=search, mqg_manual_column=mqg_manual_column, auto_apply=auto_apply)
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit tags-review\n\n"
+        '  calibre-toolkit tags-review "tag:Booker" --limit 20\n\n'
+        "  calibre-toolkit tags-review --no-ai --limit 50\n\n"
+        "  calibre-toolkit tags-review --auto-apply-high --limit 100\n"
+    ),
+)
 def tags_review(
     search: Annotated[
         Optional[str],
@@ -914,16 +914,6 @@ def tags_review(
 
     Books are ordered by tag count ascending (fewest tags first).
     The #tags_reviewed column is set to Yes for every locked book.
-
-    Examples:
-
-        calibre-toolkit tags-review
-
-        calibre-toolkit tags-review "tag:Booker" --limit 20
-
-        calibre-toolkit tags-review --no-ai --limit 50
-
-        calibre-toolkit tags-review --auto-approve --limit 100
     """
     from .modules.tags_review import run_tags_review
 
@@ -975,7 +965,15 @@ def tags_review(
     )
 
 
-@app.command(name="audit-confidence")
+@app.command(
+    name="audit-confidence",
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit audit-confidence\n\n"
+        "  calibre-toolkit audit-confidence --step comments-enrich --sample-size 30\n\n"
+        "  calibre-toolkit audit-confidence --step tags-enrich,lcc-enrich --threshold 0.8\n"
+    ),
+)
 def audit_confidence(
     config: Annotated[
         Path,
@@ -1025,14 +1023,6 @@ def audit_confidence(
     The command is purely observational — it does not change any field
     in Calibre. Results are appended to ~/.calibre-toolkit/calibration.jsonl
     as one JSONL line per session.
-
-    Examples:
-
-        calibre-toolkit audit-confidence
-
-        calibre-toolkit audit-confidence --step comments-enrich --sample-size 30
-
-        calibre-toolkit audit-confidence --step tags-enrich,lcc-enrich --threshold 0.8
     """
     from .commands.audit import run_audit_confidence
 
@@ -1081,7 +1071,13 @@ def audit_confidence(
     )
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit menu\n\n"
+        "  py -m calibre_toolkit.tui\n"
+    ),
+)
 def menu(
     config: Annotated[
         Path,
@@ -1093,18 +1089,18 @@ def menu(
 
     Full-screen two-panel interface showing MQG pipeline progress and
     letting you run any command without remembering CLI syntax.
-
-    Examples:
-
-        calibre-toolkit menu
-
-        py -m calibre_toolkit.tui
     """
     from .tui.app import main as tui_main
     tui_main(config_path=config)
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit library-info\n\n"
+        "  calibre-toolkit library-info --config ./alt-config.json\n"
+    ),
+)
 def library_info(
     config: Annotated[
         Path,
@@ -1171,7 +1167,13 @@ def library_info(
         console.print("\n  [green]✓ SQLite and calibredb counts match — no restriction detected.[/green]")
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit doctor                       # pre-flight check\n\n"
+        "  calibre-toolkit doctor && calibre-toolkit lcc-enrich ...   # gate a batch\n"
+    ),
+)
 def doctor(
     config: Annotated[
         Path,
@@ -1188,7 +1190,13 @@ def doctor(
     raise typer.Exit(run_doctor(config, console))
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit init                          # fresh install\n\n"
+        "  calibre-toolkit init --config ./alt-config.json\n"
+    ),
+)
 def init(
     config: Annotated[
         Path,
@@ -1206,7 +1214,13 @@ def init(
     raise typer.Exit(run_init(config, console))
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit setup-columns                  # create / verify the 14 columns\n\n"
+        "  calibre-toolkit setup-columns --config ./alt-config.json\n"
+    ),
+)
 def setup_columns(
     config: Annotated[
         Path,
