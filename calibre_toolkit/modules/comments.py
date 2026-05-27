@@ -343,11 +343,13 @@ def run_comments_enrichment(
     declined: list[CommentsSuggestion] = []
 
     if high:
+        console.print("[dim]Waiting for input…[/dim]")
         choice = Prompt.ask(
             f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence "
-            f"comment{'s' if len(high) != 1 else ''}?",
-            choices=["all", "review", "skip"], default="all", show_choices=True,
+            f"comment{'s' if len(high) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+            choices=["all", "review", "skip", "a", "r", "s"], default="all", show_choices=False,
         )
+        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
             applied_ids += _apply_batch(db, high)
         elif choice == "review":
@@ -356,11 +358,13 @@ def run_comments_enrichment(
             declined += d
 
     if medium:
+        console.print("[dim]Waiting for input…[/dim]")
         choice = Prompt.ask(
             f"\n[bold yellow]Tier 2:[/bold yellow] Apply {len(medium)} medium-confidence "
-            f"comment{'s' if len(medium) != 1 else ''}?",
-            choices=["all", "review", "skip"], default="review", show_choices=True,
+            f"comment{'s' if len(medium) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+            choices=["all", "review", "skip", "a", "r", "s"], default="review", show_choices=False,
         )
+        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
             applied_ids += _apply_batch(db, medium)
         elif choice == "review":
@@ -369,11 +373,13 @@ def run_comments_enrichment(
             declined += d
 
     if low:
+        console.print("[dim]Waiting for input…[/dim]")
         choice = Prompt.ask(
             f"\n[bold red]Tier 3:[/bold red] Apply {len(low)} low-confidence "
-            f"comment{'s' if len(low) != 1 else ''}?",
-            choices=["all", "review", "skip"], default="skip", show_choices=True,
+            f"comment{'s' if len(low) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+            choices=["all", "review", "skip", "a", "r", "s"], default="skip", show_choices=False,
         )
+        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
             applied_ids += _apply_batch(db, low)
         elif choice == "review":

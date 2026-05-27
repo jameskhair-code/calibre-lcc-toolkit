@@ -351,11 +351,12 @@ def run_clean_identifiers(
         _apply(db, cleanups)
     else:
         choice = Prompt.ask(
-            "\n[bold]Apply fixes?[/bold]",
-            choices=["all", "review", "skip"],
+            "\n[bold]Apply fixes?[/bold]  \\[a]ll / \\[r]eview / \\[s]kip",
+            choices=["all", "review", "skip", "a", "r", "s"],
             default="all",
-            show_choices=True,
+            show_choices=False,
         )
+        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "all":
             _apply(db, cleanups)
         elif choice == "review":
