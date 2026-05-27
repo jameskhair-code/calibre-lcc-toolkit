@@ -101,6 +101,11 @@ def _make_db(cfg: dict):
     )
 
 
+def _apply_confirm_threshold(cfg: dict) -> int:
+    """Read review.apply_confirm_threshold from config (default 20)."""
+    return int(cfg.get("review", {}).get("apply_confirm_threshold", 20))
+
+
 def _infer_fetch_path(cfg: dict) -> str:
     """Infer fetch-ebook-metadata path from config or from calibredb_path sibling."""
     explicit = cfg.get("identifiers", {}).get("fetch_ebook_metadata_path")
@@ -233,6 +238,7 @@ def clean_titles(
         mqg_column=mqg_column,
         limit=limit,
         dry_run=dry_run,
+        apply_confirm_threshold=_apply_confirm_threshold(cfg),
     )
 
 
@@ -327,6 +333,7 @@ def enrich_identifiers(
         mqg_complete_requires=mqg_complete_requires,
         force_lookup=force_lookup,
         max_workers=max_workers,
+        apply_confirm_threshold=_apply_confirm_threshold(cfg),
     )
 
 
@@ -460,6 +467,7 @@ def lcc_enrich(
         description_timeout=description_timeout,
         description_max_retries=description_max_retries,
         google_books_api_key=google_books_api_key,
+        apply_confirm_threshold=_apply_confirm_threshold(cfg),
     )
 
 
@@ -553,6 +561,7 @@ def tags_enrich(
         lcc_summary_column=lcc_cfg.get("lcc_summary_column", "#lcc_summary"),
         lcc_secondary_column=lcc_cfg.get("secondary_class_column", "#lcc_secondary_class"),
         lcc_primary_column=lcc_cfg.get("primary_class_column", "#lcc_primary_class"),
+        apply_confirm_threshold=_apply_confirm_threshold(cfg),
     )
 
 
@@ -746,6 +755,7 @@ def comments_enrich(
         mqg_column=mqg_column,
         mqg_manual_column=mqg_manual_column,
         lcc_summary_column=lcc_summary_column,
+        apply_confirm_threshold=_apply_confirm_threshold(cfg),
     )
 
 

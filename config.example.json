@@ -81,5 +81,10 @@
     "identifiers_manual_column": "#mqg_identifiers_manual",
     "lcc_column": "#mqg_lcc",
     "lcc_manual_column": "#mqg_lcc_manual"
+  },
+
+  "review": {
+    "_comment": "Shared interactive-review settings. apply_confirm_threshold: when the user picks 'apply all' on a batch larger than this, ask one extra time before writing. Set to a very large number to disable.",
+    "apply_confirm_threshold": 20
   }
 }

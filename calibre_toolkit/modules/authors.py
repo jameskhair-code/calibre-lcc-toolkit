@@ -18,6 +18,7 @@ from time import monotonic
 
 from ..db import CalibreDB, Book
 from ..ai import AIClient, CleanupSuggestion
+from ..review_prompts import confirm_bulk_apply
 from ..summary import StepSummary, render_summary_panel
 
 
@@ -74,6 +75,7 @@ def run_cleanup(
     mqg_column: str | None = None,
     limit: int | None = None,
     dry_run: bool = False,
+    apply_confirm_threshold: int = 20,
 ) -> None:
     """Full Author/Title cleanup flow for a given Calibre search string."""
     _started_at = datetime.now()
@@ -210,7 +212,10 @@ def run_cleanup(
             console.print("[dim]No changes applied.[/dim]")
             raise typer.Exit()
         elif choice == "all":
-            applied_ids += _apply_suggestions(db, changes)
+            if confirm_bulk_apply(len(changes), apply_confirm_threshold, console):
+                applied_ids += _apply_suggestions(db, changes)
+            else:
+                console.print("[dim]Bulk apply cancelled. No changes applied.[/dim]")
         elif choice == "high-only":
             if high:
                 applied_ids += _apply_suggestions(db, high)
