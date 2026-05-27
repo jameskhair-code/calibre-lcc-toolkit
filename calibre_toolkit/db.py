@@ -487,6 +487,34 @@ class CalibreDB:
             ).fetchone()
             return result[0] if result else 0
 
+    def count_books_with_all_columns_true(self, labels: list[str]) -> int:
+        """Count books where every named boolean custom column is set to true.
+
+        Any missing column returns 0 — a book cannot be "fully complete"
+        against a gate that doesn't exist in this library. Empty labels
+        list also returns 0.
+        """
+        if not labels:
+            return 0
+        with self._connect() as conn:
+            col_ids: list[int] = []
+            for label in labels:
+                row = conn.execute(
+                    "SELECT id FROM custom_columns WHERE label = ?",
+                    [label.lstrip("#")],
+                ).fetchone()
+                if row is None:
+                    return 0
+                col_ids.append(row[0])
+            clauses = " AND ".join(
+                f"b.id IN (SELECT book FROM custom_column_{cid} WHERE value = 1)"
+                for cid in col_ids
+            )
+            result = conn.execute(
+                f"SELECT COUNT(*) FROM books b WHERE {clauses}"
+            ).fetchone()
+            return result[0] if result else 0
+
     def get_all_tags(self) -> list[tuple[str, int]]:
         """Return [(tag_name, book_count), ...] for every tag in the library, count desc."""
         with self._connect() as conn:
