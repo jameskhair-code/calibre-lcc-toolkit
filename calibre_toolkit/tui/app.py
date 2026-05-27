@@ -479,6 +479,35 @@ class CalibreToolkitApp(App):
     def _steps_only(self) -> list[StepDef]:
         return [m for m in self._menu if isinstance(m, StepDef)]
 
+    def _format_pipeline_status(
+        self,
+        stats: dict[str, tuple[int, int]],
+        total: int,
+        fully_enriched: int,
+    ) -> str:
+        """Single-line cross-step pipeline summary for #left-header.
+
+        Format: 'Pipeline: 1✓ 2◐ 3◐ 4○ 5○  ·  N/M books fully enriched'.
+        ✓ green = all books done · ◐ yellow = some books done · ○ = none done.
+        """
+        parts: list[str] = []
+        for step in self._steps_only():
+            if not step.mqg_column or not step.number:
+                continue
+            done, tot = stats.get(step.key, (0, total))
+            if tot > 0 and done == tot:
+                icon = "[green]✓[/green]"
+            elif done > 0:
+                icon = "[yellow]◐[/yellow]"
+            else:
+                icon = "○"
+            n = step.number.lstrip("0") or "0"
+            parts.append(f"{n}{icon}")
+        return (
+            f"[bold]Pipeline:[/bold] {' '.join(parts)}  ·  "
+            f"[bold]{fully_enriched:,}[/bold]/{total:,} books fully enriched"
+        )
+
     # ── Compose ───────────────────────────────────────────────────────────────
 
     def compose(self) -> ComposeResult:
@@ -518,17 +547,25 @@ class CalibreToolkitApp(App):
     def _load_stats(self) -> None:
         total = self._db.count_books()
         stats: dict[str, tuple[int, int]] = {}
+        gate_labels: list[str] = []
         for step in self._steps_only():
             if step.mqg_column:
                 done = self._db.count_column_true(step.mqg_column)
                 stats[step.key] = (done, total)
+                # Only the numbered MQG steps gate "fully enriched";
+                # maintenance items (no step number) are excluded.
+                if step.number:
+                    gate_labels.append(step.mqg_column)
+        fully_enriched = self._db.count_books_with_all_columns_true(gate_labels)
         # Cumulative cost across every prior session — read from the
         # persisted usage log (item 13). Best-effort; failures yield None
         # and the subtitle just omits the cost suffix.
         from ..usage import replay_usage_log
         usage_aggregate = replay_usage_log()
         cost = usage_aggregate.cost_estimate_usd()
-        self.call_from_thread(self._apply_stats, stats, total, cost, usage_aggregate.call_count)
+        self.call_from_thread(
+            self._apply_stats, stats, total, cost, usage_aggregate.call_count, fully_enriched,
+        )
 
     def _apply_stats(
         self,
@@ -536,6 +573,7 @@ class CalibreToolkitApp(App):
         total: int,
         cumulative_cost: float | None = None,
         call_count: int = 0,
+        fully_enriched: int = 0,
     ) -> None:
         self._total_books = total
         self._stats = stats
@@ -546,6 +584,12 @@ class CalibreToolkitApp(App):
             widget._total = tot
             widget.refresh()
         self._update_right(self._selected_idx)
+        # Cross-step pipeline summary at the top — carries the
+        # whole-library "fully enriched" count the per-step left panel
+        # can't show. (v1.6 item 4; the shape rescued from v1.5 item 22.)
+        self.query_one("#left-header", Static).update(
+            self._format_pipeline_status(stats, total, fully_enriched)
+        )
         subtitle = f"Calibre Toolkit  ·  {total:,} books"
         if cumulative_cost is not None and call_count > 0:
             subtitle += f"  ·  ≈ ${cumulative_cost:.2f} spent ({call_count:,} AI calls)"
