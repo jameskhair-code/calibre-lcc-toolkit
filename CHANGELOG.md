@@ -2,6 +2,63 @@
 
 ---
 
+## v1.6 — Release-week follow-ups & console polish
+
+Per-version charter: `docs/planning/v1.6-charter.md`. Nine items in scope from the v2.0 multi-version roadmap (`docs/planning/v2.0-plan-roadmap-construction.md`). Seven PRs shipped (#32, #33, #34, #35, #36, #37, plus PR #30 rolled in retroactively), one item cut. Test suite from 444 → 450 hermetic tests.
+
+The v1.6 theme is "small polish to the existing layout" — not the refactor cycle. v1.9 (commands/ migration + shared review-prompt helper) will consolidate many of the touch points v1.6 polished; v1.6's edits were deliberately shaped to be cheap to migrate forward once that refactor lands. Eight of the nine items were S-sized; one was M (the TUI cross-step pipeline line). No AI prompt edits, no new commands, no architectural refactors.
+
+### Items shipped
+
+**PR #30 — Windows console utf-8 fix** (released retroactively in v1.6)
+- Merged on `main` after v1.5.0 shipped but before v1.6 began. The post-v1.5 triage memo (`docs/planning/post-v1.5-triage.md`) discovered that `calibre-toolkit clean-titles --help` crashed with `UnicodeEncodeError` on the legacy Windows cp1252 console because typer's Rich help renderer emits a `→` character. `cli.py:13-30` reconfigures stdout/stderr to utf-8 with `errors="replace"` on win32 before any Rich Console is constructed.
+- Rolled into v1.6 rather than shipped as a v1.5.1 patch — patch-release discipline doesn't earn its keep on a single-user project, and the fix has been functionally in service via `main` for the whole cycle.
+
+**3. `--dry-run` wiring + flag-standardisation sweep** (PR #32)
+- The v1.1 standardisation header at `cli.py:35-49` listed `--dry-run` as a canonical flag, but `clean-titles` never had the wiring added. The post-v1.5 triage spotted the gap. Wired `--dry-run` into `clean-titles` and added the dry-run branch to `run_cleanup` in `modules/authors.py` (mirrors the `lcc-enrich` / `tags-enrich` / `comments-enrich` dry-run path: build the review table, render the cyan dry-run summary panel, return before the apply prompt).
+- Audited the full canonical set across every `@app.command()`. The only true gap was `clean-titles --dry-run`. Other "missing" canonical flags on `enrich-identifiers`, `tags-enrich`, `comments-enrich`, `clean-identifiers` are by design — different review patterns or no clear dry-run semantics for the operation those commands perform.
+- Latent bug fixed along the way: the "everything looks good — no changes needed" early-exit in `run_cleanup` called `_mark_complete` unconditionally, which would have written the MQG-complete marker even under `--dry-run`. Guarded with `if not dry_run`.
+
+**2 + 6. Prompt discoverability + single-letter shortcuts** (PR #33 — combined)
+- Items 2 and 6 both touched the same `Prompt.ask` blocks across the five AI-suggest modules. Combined into one PR per the charter to avoid touching the same five files twice.
+- Item 2: a one-line `[dim]Waiting for input…[/dim]` hint now prints immediately before each post-AI-batch bulk-tier prompt. Closes the "screen-goes-blank-then-hangs" failure mode the triage memo documented (the transient progress bar clears on completion, the `Apply changes?` prompt visually disappears).
+- Item 6: every bulk-tier prompt now accepts the first letter (`a`/`h`/`r`/`s`/`e`) in addition to the full word. Letters render inline in `\[bracketed]` form so the shortcut is visible without `--help`. Word forms keep working; default behaviour on Enter is unchanged. 13 prompts across 6 modules (`authors.py`, `lcc.py`, `comments.py`, `tags.py`, `identifiers.py`, `clean_identifiers.py`). Each site does the alias normalisation inline with a small dict so v1.9's shared review helper can collapse them all in one move.
+- Bug caught during smoke testing: Rich's markup parser consumed `[a]` / `[h]` / `[r]` / `[s]` as style tags, eating the letters from the label (rendered as `ll / igh-only / eview / kip`). Escaped to `\\[a]ll / \\[h]igh-only / …` so Rich emits literal brackets.
+
+**8. Bulk-apply confirmation above threshold** (PR #34)
+- When the user picks "apply all" on a batch larger than `review.apply_confirm_threshold` (default 20), a one-line `About to apply to N books. Proceed? [y/N]` confirmation fires before writing. Default `n` so an accidental Enter is safe.
+- New tiny shared helper at `calibre_toolkit/review_prompts.py` (one function, `confirm_bulk_apply(n, threshold, console)`). Below-threshold batches short-circuit to True without prompting. v1.9 item 5 will fold the existing duplicated per-tier `Prompt.ask` blocks into the same module.
+- 12 "all" branches wrapped across the five AI-suggest modules. `--auto-apply-high` paths deliberately unchanged — the flag's whole purpose is to skip the prompt. `tags-cleanup` pattern-group prompts and `clean-identifiers` are out of scope (different review flows).
+- New config knob `review.apply_confirm_threshold` in `config.example.json`, in its own top-level `review` block to match the v1.9 module name. Set very large to disable.
+
+**7. TUI digit/letter jump shortcuts** (PR #35)
+- Seven new `Binding` entries plus one `action_jump(idx)` method in `tui/app.py`. `1`-`5` jump directly to MQG steps 01-05, `m` highlights the Maintenance section header, `t` jumps to Tags Cleanup. Faster than arrow-keying through the step list, particularly when returning to a step you know.
+- All hidden from the footer (`show=False`) to keep it readable — same convention as the existing `j`/`k` vim-style nav. The "01"-"05" badges already on each step row are the discoverability hook.
+
+**4. TUI cross-step pipeline summary line** (PR #36)
+- Replaces the dead `MQG Pipeline` header at the top of the TUI with `Pipeline: 1✓ 2◐ 3◐ 4○ 5○  ·  N/M books fully enriched`. The icon row (`✓` green = all done · `◐` yellow = some done · `○` = none) is a compact digest of per-step progress; the `N/M fully enriched` count is the new signal — the cross-step intersection no per-step row in the left panel can show.
+- This is the shape rescued from the v1.5 item 22 rejection memo, which warned that any top-of-screen pipeline view must add information the left panel cannot. v1.6 item 4 passes that test: the icons are derivable, but the fully-enriched count is not.
+- New `db.count_books_with_all_columns_true(labels)` SQLite method does the cross-step intersection in one query. Missing column returns 0 (a book cannot be "fully complete" against an undefined gate). Gate labels come from the numbered steps in `_build_steps` so column-name overrides in `config.json` flow through automatically. 6 new hermetic tests cover single column, two- and three-column intersect, the `'#'`-prefix-optional convention, missing column, and empty labels.
+
+**9. `Examples:` epilog on every command's `--help`** (PR #37)
+- Moves the existing in-docstring `Examples:` blocks from 11 commands into typer's `epilog=` parameter so they consistently render at the bottom of `--help` (after Arguments + Options), and adds new Examples blocks for the 4 commands that had none (`library-info`, `doctor`, `init`, `setup-columns`). 15 commands × 2-4 example invocations each.
+- The shift in render order: Examples were previously buried mid-help, above the Options table. They now appear at the bottom — the standard CLI convention, easier to scan when you remember roughly what you want but not the exact flag syntax.
+- The `_TIER_DEFAULTS_HELP` block appended via `__doc__` mutation (for the AI-suggest commands) stays in the docstring — it describes behaviour (per-tier review defaults), not usage.
+
+### Items cut
+
+**5. Summary panel coverage for `tags-review` and `clean-identifiers`** — cut
+- v1.5 item 19 deliberately skipped these two commands when shipping the structured `StepSummary` panel: `tags-review` is per-book interactive, `clean-identifiers` is a fix-up utility rather than a batch enrichment, and the panel shape didn't naturally fit either. The v1.6 charter flagged item 5 as a cut candidate to revisit after a cycle of using the panels on the other six commands.
+- Decision: keep the original v1.5 reasoning. The per-book and fix-up shapes still don't have a natural fit for `StepSummary`; forcing them in would either duplicate existing per-book/per-fix output or invent fields that don't match the data. No follow-up scheduled; the parking-lot entry in `docs/planning/v2.0-plan-roadmap-construction.md` is closed against v1.6.
+
+### Known limitations after v1.6
+
+- **TUI tests are still manual-only.** Hermetic Textual `Pilot` smoke tests are v1.9 item 4. v1.6 items 4 and 7 (the two TUI changes) were validated by render-preview script + pytest + James' live inspection, not by automated harness.
+- **Bulk-apply confirm has no `--auto-apply-high` equivalent for "all" interactive choices.** A user who routinely picks "all" on large batches has to confirm each time once they cross the threshold. By design — the gate's whole purpose is preventing accidental large writes; if they want unattended apply, `--auto-apply-high` is the right tool. Revisit only if friction surfaces.
+- **`Examples:` epilog blank-line spacing is collapsed by Rich/Typer.** Examples render tight (one per line) rather than with blank-line separators between them. Readable; matches most CLIs. A formatting tweak would require switching to a different Typer markup mode or a hand-rendered epilog.
+
+---
+
 ## v1.5 — UX Polish
 
 Items 19–22 from ROADMAP.md. Two PRs shipped (#24, #25), one item cut, one item attempted and rejected. Test suite from 415 → 444 hermetic tests.
