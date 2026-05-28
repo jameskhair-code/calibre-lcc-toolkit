@@ -7,6 +7,7 @@ Rich's Prompt.ask.
 
 from __future__ import annotations
 
+import inspect
 import json
 import random
 from pathlib import Path
@@ -18,8 +19,10 @@ from calibre_toolkit.commands.audit import (
     Rating,
     compute_precision,
     flag_below_threshold,
+    grading_order,
     load_audit_records,
     persist_session,
+    run_audit_confidence,
     stratified_sample,
     _values_diverge,
     _truncate,
@@ -153,6 +156,53 @@ def test_stratified_sample_respects_step_filter():
     ]
     sampled = stratified_sample(records, 10, steps_filter=["tags-enrich"])
     assert list(sampled.keys()) == [("tags-enrich", "high")]
+
+
+# ── grading_order ────────────────────────────────────────────────────────────
+
+
+def _ar(book_id: int, step: str, tier: str) -> AuditRecord:
+    return AuditRecord("t", book_id, "f", "v", tier, "ai", step)
+
+
+def test_grading_order_high_tier_first_then_step():
+    sampled = {
+        ("tags-enrich", "low"):        [_ar(1, "tags-enrich", "low")],
+        ("comments-enrich", "high"):   [_ar(2, "comments-enrich", "high")],
+        ("tags-enrich", "high"):       [_ar(3, "tags-enrich", "high")],
+        ("comments-enrich", "medium"): [_ar(4, "comments-enrich", "medium")],
+    }
+    order = grading_order(sampled)
+    keys = [key for key, _ in order]
+    # high tiers first (step alphabetical within tier), then medium, then low.
+    assert keys == [
+        ("comments-enrich", "high"),
+        ("tags-enrich", "high"),
+        ("comments-enrich", "medium"),
+        ("tags-enrich", "low"),
+    ]
+
+
+def test_grading_order_unknown_tier_sorts_last():
+    sampled = {
+        ("comments-enrich", "weird"): [_ar(1, "comments-enrich", "weird")],
+        ("comments-enrich", "high"):  [_ar(2, "comments-enrich", "high")],
+    }
+    keys = [key for key, _ in grading_order(sampled)]
+    assert keys == [("comments-enrich", "high"), ("comments-enrich", "weird")]
+
+
+def test_grading_order_preserves_within_group_order():
+    recs = [_ar(i, "comments-enrich", "high") for i in (5, 3, 9)]
+    sampled = {("comments-enrich", "high"): recs}
+    order = grading_order(sampled)
+    assert [rec.book_id for _, rec in order] == [5, 3, 9]
+
+
+def test_default_sample_size_is_five():
+    # First-run friction reduction: the default per-group sample dropped
+    # from 20 to 5 (v1.8 item 2).
+    assert inspect.signature(run_audit_confidence).parameters["sample_size"].default == 5
 
 
 # ── compute_precision ────────────────────────────────────────────────────────

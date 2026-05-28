@@ -129,6 +129,12 @@ def load_audit_records(path: Path) -> list[AuditRecord]:
 # ── Sample ───────────────────────────────────────────────────────────────────
 
 
+# Grading order priority. High-tier writes dominate volume and are the
+# quickest to rate, so surfacing them first lets signal accrue before the
+# session ends. Unknown tiers sort last.
+_TIER_PRIORITY = {"high": 0, "medium": 1, "low": 2}
+
+
 def stratified_sample(
     records: list[AuditRecord],
     sample_size: int,
@@ -157,6 +163,24 @@ def stratified_sample(
         else:
             sampled[key] = rng.sample(recs, sample_size)
     return sampled
+
+
+def grading_order(
+    sampled: dict[tuple[str, str], list[AuditRecord]],
+) -> list[tuple[tuple[str, str], AuditRecord]]:
+    """Flatten sampled groups into grading order: high tier first, then
+    medium, then low; step alphabetical within a tier; original sample
+    order within a group. Deterministic so a --seed run replays identically.
+    """
+    ordered_keys = sorted(
+        sampled.keys(),
+        key=lambda k: (_TIER_PRIORITY.get(k[1], 99), k[0]),
+    )
+    flat: list[tuple[tuple[str, str], AuditRecord]] = []
+    for key in ordered_keys:
+        for rec in sampled[key]:
+            flat.append((key, rec))
+    return flat
 
 
 # ── Current-value lookup ─────────────────────────────────────────────────────
@@ -392,6 +416,28 @@ def _render_summary(
         )
 
 
+def _render_interim(ratings: list[Rating], threshold: float) -> None:
+    """Compact running precision snapshot mid-session, so a partial
+    trajectory appears before the final summary. One line per (step, tier)
+    graded so far; high tier first to match grading order."""
+    table = compute_precision(ratings)
+    if not table:
+        return
+    graded = sum(v["total"] for v in table.values())
+    console.print()
+    console.rule(f"[dim]interim · {graded} graded so far[/dim]", style="dim")
+    for (step, tier) in sorted(
+        table.keys(), key=lambda k: (_TIER_PRIORITY.get(k[1], 99), k[0])
+    ):
+        v = table[(step, tier)]
+        style = "red" if v["strict_precision"] < threshold else "green"
+        console.print(
+            f"  [dim]{step}[/dim] [bold]{tier}[/bold]  "
+            f"n={v['total']}  "
+            f"[{style}]{v['strict_precision']:.0%}[/{style}] strict"
+        )
+
+
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 
@@ -399,10 +445,11 @@ def run_audit_confidence(
     db: CalibreDB,
     audit_log_path: Path,
     output_path: Path,
-    sample_size: int = 20,
+    sample_size: int = 5,
     threshold: float = 0.7,
     steps_filter: list[str] | None = None,
     seed: int | None = None,
+    interim_every: int = 5,
 ) -> None:
     """Orchestrator: load, sample, prompt, summarise, persist."""
     rng = random.Random(seed) if seed is not None else random.Random()
@@ -439,28 +486,26 @@ def run_audit_confidence(
     ))
 
     ratings: list[Rating] = []
-    quit_early = False
-    idx = 0
-    # Deterministic iteration order so a --seed run replays identically.
-    for key in sorted(sampled.keys()):
-        if quit_early:
+    graded = 0
+    order = grading_order(sampled)
+    for idx, (_key, rec) in enumerate(order, start=1):
+        current = fetch_current_value(db, rec.field, rec.book_id)
+        title, authors = _book_label(db, rec.book_id)
+        _render_rating_prompt(rec, title, authors, current, (idx, total))
+        choice = Prompt.ask(
+            "  Rating",
+            choices=_RATING_CHOICES,
+            default="s",
+            show_choices=True,
+        )
+        label = _RATING_LABEL[choice]
+        if label == "quit":
             break
-        for rec in sampled[key]:
-            idx += 1
-            current = fetch_current_value(db, rec.field, rec.book_id)
-            title, authors = _book_label(db, rec.book_id)
-            _render_rating_prompt(rec, title, authors, current, (idx, total))
-            choice = Prompt.ask(
-                "  Rating",
-                choices=_RATING_CHOICES,
-                default="s",
-                show_choices=True,
-            )
-            label = _RATING_LABEL[choice]
-            if label == "quit":
-                quit_early = True
-                break
-            ratings.append(Rating(record=rec, current_value=current, rating=label))
+        ratings.append(Rating(record=rec, current_value=current, rating=label))
+        if label != "skipped":
+            graded += 1
+            if interim_every and graded % interim_every == 0 and idx < total:
+                _render_interim(ratings, threshold)
 
     precision_table = compute_precision(ratings)
     flagged = flag_below_threshold(precision_table, threshold)
