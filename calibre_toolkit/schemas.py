@@ -73,6 +73,20 @@ class LccItem(BaseModel):
     notes: str = ""
 
 
+class LccSummaryItem(BaseModel):
+    """v1.7 item 5 — summary-only response row.
+
+    Used when the OL catalog has already provided lcc/primary/secondary
+    and the AI is called solely for the prose summary. An empty
+    lcc_summary signals an identity mismatch — the caller keeps the
+    catalog-template summary rather than write prose grounded in the
+    wrong work.
+    """
+    model_config = ConfigDict(extra="ignore")
+    id: int
+    lcc_summary: str = ""
+
+
 class CommentsItem(BaseModel):
     """comments-enrich response row."""
     model_config = ConfigDict(extra="ignore")
@@ -211,6 +225,10 @@ def validate_cleanup(raw: str) -> list[CleanupItem]:
 
 def validate_lcc(raw: str) -> list[LccItem]:
     return _validate_list(raw, LccItem)
+
+
+def validate_lcc_summary(raw: str) -> list[LccSummaryItem]:
+    return _validate_list(raw, LccSummaryItem)
 
 
 def validate_comments(raw: str) -> list[CommentsItem]:
