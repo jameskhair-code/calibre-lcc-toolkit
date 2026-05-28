@@ -126,6 +126,12 @@ for a focused conversation; otherwise local Claude runs the cycle to
 completion. After release, web Claude is used again to scope the next
 version.
 
+The full cycle loop — five phases, the `docs/planning/inbox.md` capture
+buffer, the re-audit ritual, and the "who commits what" rule (code and
+releases are local; documentation can come from either surface) — is codified
+in `docs/planning/workflow.md`. Web Claude reads it at version boundaries;
+local Claude reads it when a workflow question comes up mid-cycle.
+
 ## Repo orientation primitives
 
 - `calibre_toolkit/cli.py` — Typer command surface
