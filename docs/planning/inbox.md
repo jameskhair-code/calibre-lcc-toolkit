@@ -39,3 +39,12 @@ throttling concurrency / batch-size when output-tokens-per-minute is the
 binding limit. Likely affects all AI-suggest steps, not just clean-titles.
 Touch points: `ai.py` `_run_batches_concurrent` / the retry path. Smells like
 v1.10 (cost/perf) unless it recurs often. Surfaced from real use 2026-05-28.
+
+**Consolidate the two parking lots.** Two parking lots currently coexist:
+`ROADMAP.md`'s "Beyond v1.5" section and the parking lot in
+`docs/planning/v2.0-plan-roadmap-construction.md`. `ROADMAP.md` is now mostly
+historical — items 1–22, nearly all shipped through v1.5 — and the v2.0 plan
+has largely superseded it as the forward-looking roadmap. Converge to one
+forward parking lot (likely the v2.0 plan's) and demote `ROADMAP.md` to a
+historical "what shipped through v1.5" record. Docs-only; small standalone
+PR; doesn't block any cycle. Surfaced 2026-05-28 (process simplification).
