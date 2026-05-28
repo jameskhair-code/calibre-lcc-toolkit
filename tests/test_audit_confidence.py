@@ -23,6 +23,7 @@ from calibre_toolkit.commands.audit import (
     grading_order,
     load_audit_records,
     load_calibration_sessions,
+    persist_rule_revisions,
     persist_session,
     run_audit_confidence,
     stratified_sample,
@@ -428,3 +429,33 @@ def test_sparkline_clamps_out_of_range():
 
 def test_sparkline_empty_is_empty():
     assert _sparkline([]) == ""
+
+
+# ── persist_rule_revisions ───────────────────────────────────────────────────
+
+
+def test_persist_rule_revisions_appends_one_line_per_entry(tmp_path: Path):
+    p = tmp_path / "rule-revisions.jsonl"
+    persist_rule_revisions(p, "sess1", 0.7, [
+        ("lcc-enrich", "high", 0.5, "tighten the Cutter guidance"),
+        ("tags-enrich", "low", 0.4, "drop speculative genre tags"),
+    ])
+    lines = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+    assert len(lines) == 2
+    assert lines[0]["step"] == "lcc-enrich" and lines[0]["tier"] == "high"
+    assert lines[0]["note"] == "tighten the Cutter guidance"
+    assert lines[0]["session_id"] == "sess1" and lines[0]["threshold"] == 0.7
+    assert lines[0]["strict_precision"] == 0.5
+    assert "timestamp" in lines[0]
+
+
+def test_persist_rule_revisions_empty_writes_nothing(tmp_path: Path):
+    p = tmp_path / "rule-revisions.jsonl"
+    persist_rule_revisions(p, "sess1", 0.7, [])
+    assert not p.exists()
+
+
+def test_persist_rule_revisions_creates_parent_dir(tmp_path: Path):
+    p = tmp_path / "nested" / "rule-revisions.jsonl"
+    persist_rule_revisions(p, "sess1", 0.7, [("lcc-enrich", "high", 0.5, "note")])
+    assert p.exists()
