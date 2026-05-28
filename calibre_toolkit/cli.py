@@ -983,7 +983,7 @@ def audit_confidence(
         int,
         typer.Option("--sample-size", "-n",
                      help="Max records to sample per (step, tier) group"),
-    ] = 20,
+    ] = 5,
     step: Annotated[
         Optional[str],
         typer.Option("--step",
