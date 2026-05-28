@@ -1104,6 +1104,77 @@ def audit_trajectory(
 
 
 @app.command(
+    name="audit-log",
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit audit-log\n\n"
+        "  calibre-toolkit audit-log --book-id 5417\n\n"
+        "  calibre-toolkit audit-log --step lcc-enrich --since 2026-05-28\n\n"
+        "  calibre-toolkit audit-log --field comments --limit 100\n"
+    ),
+)
+def audit_log_show(
+    field: Annotated[
+        Optional[str],
+        typer.Option("--field",
+                     help='Filter by metadata field (e.g. "comments", "#lcc").'),
+    ] = None,
+    book_id: Annotated[
+        Optional[int],
+        typer.Option("--book-id", help="Filter by Calibre book id."),
+    ] = None,
+    step: Annotated[
+        Optional[str],
+        typer.Option("--step",
+                     help='Filter by pipeline step (e.g. "lcc-enrich"). '
+                          "The audit log carries no session marker, so step is "
+                          "the grouping to query by."),
+    ] = None,
+    since: Annotated[
+        Optional[str],
+        typer.Option("--since",
+                     help="Only entries on/after this ISO date or timestamp "
+                          "(e.g. 2026-05-28)."),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit",
+                     help="Max rows to show, most recent first-in-window "
+                          "(0 = all)."),
+    ] = 50,
+    audit_log: Annotated[
+        Optional[Path],
+        typer.Option("--audit-log",
+                     help="Override audit log path (default: $CALIBRE_TOOLKIT_AUDIT_LOG "
+                          "or ~/.calibre-toolkit/audit.log)"),
+    ] = None,
+):
+    """
+    Query the persistent audit trail without grep.
+
+    Reads ~/.calibre-toolkit/audit.log (one JSONL line per metadata write
+    since v1.1) and renders matching entries as a compact table. Filter by
+    --field, --book-id, --step, and/or --since. Purely read-only — opens one
+    file and writes nothing.
+    """
+    from .commands.audit_log import parse_since, run_audit_log_show
+
+    if audit_log is not None:
+        audit_log_path = audit_log
+    else:
+        env = os.environ.get("CALIBRE_TOOLKIT_AUDIT_LOG")
+        audit_log_path = Path(env).expanduser() if env else (
+            Path.home() / ".calibre-toolkit" / "audit.log"
+        )
+
+    since_dt = parse_since(since) if since else None
+    run_audit_log_show(
+        audit_log_path,
+        field=field, book_id=book_id, step=step, since=since_dt, limit=limit,
+    )
+
+
+@app.command(
     epilog=(
         "Examples:\n\n"
         "  calibre-toolkit menu\n\n"
