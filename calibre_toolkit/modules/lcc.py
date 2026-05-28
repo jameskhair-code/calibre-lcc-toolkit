@@ -422,6 +422,31 @@ def _truncate_ai_only_lcc(suggestions: list[LccSuggestion]) -> None:
             s.proposed["lcc"] = truncated
 
 
+def _build_source_breakdown_extras(
+    cat_stats: _CatalogStats,
+    ai_suggestions: list[LccSuggestion],
+) -> dict[str, dict[str, int]]:
+    """v1.7 item 7: source-provenance rows for the StepSummary extras
+    panel. Returns a dict shaped for `StepSummary.extras` with one
+    `by_source` category whose rows are OL direct / OL cascade /
+    AI-only. Zero rows are dropped (so the panel doesn't print
+    "AI-only: 0" when every book hit a catalog). Returns `{}` when
+    nothing was produced, in which case the panel renders no source
+    row at all.
+
+    AI-only count uses `len(ai_suggestions)` rather than `len(ai_books)`
+    — failures are silent here, matching the rest of the summary,
+    which only reports what was actually produced.
+    """
+    counts = {
+        "OL direct": cat_stats.ol_direct_hits,
+        "OL cascade": cat_stats.ol_cascade_hits,
+        "AI-only": len(ai_suggestions),
+    }
+    nonzero = {k: v for k, v in counts.items() if v > 0}
+    return {"by_source": nonzero} if nonzero else {}
+
+
 def _apply_ai_summary_to_catalog_hits(
     ai: AIClient,
     books: list,
@@ -965,6 +990,10 @@ def run_lcc_enrichment(
         console.print(_build_review_table(low))
     console.print(_LEGEND)
 
+    # v1.7 item 7: source breakdown surfaced in the summary panel.
+    # OL direct / OL cascade / AI-only as discrete extras rows.
+    extras = _build_source_breakdown_extras(cat_stats, ai_suggestions)
+
     # ── 5. Apply (or dry-run) ─────────────────────────────────────────────────
     if dry_run:
         console.print("[bold cyan]── Dry-run: comparing AI proposals to current values ──[/bold cyan]\n")
@@ -979,6 +1008,7 @@ def run_lcc_enrichment(
                 applied_medium=len(medium),
                 applied_low=len(low),
                 skipped_already_done=skipped,
+                extras=extras,
                 usage=ai.usage,
             ),
             dry_run=True,
@@ -1072,6 +1102,7 @@ def run_lcc_enrichment(
             skipped_already_done=skipped,
             skipped_declined=declined_only,
             flagged_manual=flagged,
+            extras=extras,
             usage=ai.usage,
         ),
     ))
