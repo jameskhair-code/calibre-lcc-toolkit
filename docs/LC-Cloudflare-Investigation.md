@@ -41,6 +41,30 @@ What shipped:
 
 Item 12a is closed as **superseded** rather than implemented.
 
+### v1.7 update: AI-only LCC truncation (item 6)
+
+A v1.6 real-library run surfaced a structural problem on books where
+the OL cascade misses and the AI alone produces the LCC fields: the AI
+proposes confident-looking Cutter strings that are demonstrably wrong
+for the author's surname (e.g. `PS3603.O773` proposed for "Correia",
+whose Cutter would land in the `C6…` range). The class letters are
+nearly always right — they come straight out of standard LC subject
+schedules — but the Cutter and date are educated guesses the AI
+cannot verify without catalog access.
+
+**Rule shipped in v1.7 item 6:** when no OL hit confirms the call
+number, truncate the structured `lcc` field to the class portion only
+(letters + class number, e.g. `PS3603`, preserving any decimal
+subdivision such as `PR9619.3`) and drop the unverified Cutter and
+date. `lcc_summary` is preserved verbatim — the AI's full reasoning
+still lives there. Catalog-sourced suggestions are unchanged: their
+Cutter/date strings come from member-library cataloging in OL, not
+from the AI.
+
+Implementation: `_truncate_to_class_portion` plus
+`_truncate_ai_only_lcc` in `calibre_toolkit/modules/lcc.py`. The
+filter key is `LccSuggestion.source_authority == "ai_inference"`.
+
 The rest of this document is the original investigation. If LC ever
 drops Cloudflare and direct LC lookups become attractive again, the
 historical workaround options below are still valid starting points.

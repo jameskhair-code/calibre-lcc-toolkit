@@ -75,6 +75,29 @@ _VALID_SECONDARY = set(_SECONDARY_BY_CODE.values())
 
 _LCC_PREFIX_RE = re.compile(r"^\s*([A-Z]{1,3})\s*(\d+(?:\.\d+)?)?", re.IGNORECASE)
 
+# Matches the LCC "class portion" — letters + class number (with optional
+# decimal class subdivision). Stops before any Cutter or date. Used by the
+# v1.7 item-6 AI-only truncation: when no OL hit confirms the call number,
+# the structured `lcc` field is reduced to the class portion only and the
+# AI's unverified Cutter/year are dropped (the AI's full reasoning still
+# lives in `lcc_summary`).
+_LCC_CLASS_PORTION_RE = re.compile(r"^\s*([A-Z]{1,3}\s*\d+(?:\.\d+)?)", re.IGNORECASE)
+
+
+def _truncate_to_class_portion(call_number: str) -> str:
+    """Return only the class letters + class number (preserving any decimal
+    class subdivision) from an LCC call number. Strips Cutter and date.
+
+    Returns the input unchanged when nothing parses as an LCC class portion,
+    so malformed AI output is preserved verbatim for the validator to flag.
+    """
+    if not call_number:
+        return ""
+    m = _LCC_CLASS_PORTION_RE.match(call_number)
+    if not m:
+        return call_number.strip()
+    return re.sub(r"\s+", "", m.group(1)).upper()
+
 
 def _parse_lcc_prefix(call_number: str) -> tuple[str, int | None]:
     """Return (subclass_letters, integer_class_number_or_None) from a call number.
@@ -371,6 +394,32 @@ def _catalog_lookup_batch(
                 stats.ol_direct_hits += 1
     stats.hits = len(hits)
     return hits, stats
+
+
+def _truncate_ai_only_lcc(suggestions: list[LccSuggestion]) -> None:
+    """In-place: truncate the structured `lcc` field to the class portion
+    for any AI-only suggestion (v1.7 item 6).
+
+    The AI can identify the LC class letters reliably — those come straight
+    out of standard LC subject schedules. The Cutter and date are
+    educated guesses the AI cannot verify without catalog access (a v1.6
+    real-library run found AI Cutters that were structurally wrong for
+    the author's surname). So when no OL hit confirms the call number,
+    drop the unverified Cutter/year and keep only the class portion.
+    `lcc_summary` is preserved verbatim — the AI's full reasoning still
+    lives there.
+
+    Catalog-sourced suggestions (source_authority != "ai_inference") are
+    unchanged: those Cutter/year strings came from member-library
+    cataloging in OL, not the AI.
+    """
+    for s in suggestions:
+        if s.source_authority != "ai_inference":
+            continue
+        full = s.proposed.get("lcc", "")
+        truncated = _truncate_to_class_portion(full)
+        if truncated != full:
+            s.proposed["lcc"] = truncated
 
 
 def _build_catalog_suggestion(
@@ -770,6 +819,10 @@ def run_lcc_enrichment(
             except RuntimeError as e:
                 console.print(Panel(str(e), title="[red]AI lookup failed[/red]", border_style="red"))
                 raise typer.Exit(1)
+
+    # v1.7 item 6: truncate AI-only `lcc` to class letters + class number.
+    # Catalog-sourced suggestions are not touched.
+    _truncate_ai_only_lcc(ai_suggestions)
 
     suggestions = catalog_suggestions + ai_suggestions
 
