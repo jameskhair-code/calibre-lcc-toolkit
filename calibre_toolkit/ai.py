@@ -28,6 +28,7 @@ from .schemas import (
     CleanupItem,
     CommentsItem,
     LccItem,
+    LccSummaryItem,
     SchemaViolation,
     TagCleanupOp,
     TagsItem,
@@ -36,6 +37,7 @@ from .schemas import (
     validate_cleanup,
     validate_comments,
     validate_lcc,
+    validate_lcc_summary,
     validate_tag_cleanup,
     validate_tags,
     validate_tags_review,
@@ -613,6 +615,56 @@ class AIClient:
         )
         return _transform_lcc_items(items, books, current_map)
 
+    def suggest_lcc_summary(
+        self,
+        books: list[Book],
+        catalog_context_map: dict[int, dict[str, str]],
+        description_map: dict[int, "BookDescription"],
+        batch_size: int = 10,
+        progress_callback: Callable[[int, int, int], None] | None = None,
+    ) -> dict[int, str]:
+        """v1.7 item 5: AI-generated lcc_summary prose for catalog-hit books.
+
+        Caller supplies the catalog-confirmed lcc/primary/secondary/source
+        per book in `catalog_context_map`. Description grounding comes from
+        `description_map`. Returns {book_id: lcc_summary} for books the
+        model produced non-empty prose for; books with empty AI output
+        (identity mismatch) or batch failures are simply absent from the
+        result dict and the caller keeps their template summary.
+        """
+        if not books:
+            return {}
+        batches = [books[i : i + batch_size] for i in range(0, len(books), batch_size)]
+
+        def _run(batch):
+            return self._process_lcc_summary_batch(
+                batch, catalog_context_map, description_map,
+            )
+
+        rows: list[LccSummaryItem] = self._run_batches_concurrent(
+            _run, batches, progress_callback,
+        )
+        out: dict[int, str] = {}
+        for row in rows:
+            summary = row.lcc_summary.strip()
+            if summary:
+                out[row.id] = summary
+        return out
+
+    def _process_lcc_summary_batch(
+        self,
+        books: list[Book],
+        catalog_context_map: dict[int, dict[str, str]],
+        description_map: dict[int, "BookDescription"],
+    ) -> list[LccSummaryItem]:
+        system_prompt = _build_lcc_summary_system_prompt()
+        user_msg = _build_lcc_summary_user_message(
+            books, catalog_context_map, description_map,
+        )
+        return self._call_with_validation(
+            user_msg, system_prompt, validate_lcc_summary, max_tokens=2048,
+        )
+
     # ── Tags-review (single book, no batching) ────────────────────────────
 
     def suggest_tags_review(
@@ -855,6 +907,43 @@ def _parse_lcc_response(
     current_map: dict[int, dict[str, str]],
 ) -> list[LccSuggestion]:
     return _transform_lcc_items(validate_lcc(raw), books, current_map)
+
+
+# ── LCC summary-only prompt + parsing (v1.7 item 5) ──────────────────────────
+
+
+def _build_lcc_summary_system_prompt() -> str:
+    preamble = _load_prompt("lcc_summary_preamble.md")
+    rules = _load_rules("lcc_summary.md")
+    output_format = _load_prompt("lcc_summary_output_format.md")
+    return preamble + "\n" + rules + "\n" + output_format
+
+
+def _build_lcc_summary_user_message(
+    books: list[Book],
+    catalog_context_map: dict[int, dict[str, str]],
+    description_map: dict[int, "BookDescription"],
+) -> str:
+    payload = []
+    for b in books:
+        ctx = catalog_context_map.get(b.id, {})
+        item: dict = {
+            "id": b.id,
+            "title": b.title,
+            "authors": b.authors,
+            "lcc": ctx.get("lcc", ""),
+            "lcc_primary_class": ctx.get("lcc_primary_class", ""),
+            "lcc_secondary_class": ctx.get("lcc_secondary_class", ""),
+            "catalog_source": ctx.get("catalog_source", ""),
+        }
+        desc = description_map.get(b.id)
+        if desc is not None and desc.text:
+            item["description"] = desc.text
+            item["description_source"] = desc.source
+            if desc.categories:
+                item["description_categories"] = desc.categories
+        payload.append(item)
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 # ── Comments prompt + parsing ─────────────────────────────────────────────────

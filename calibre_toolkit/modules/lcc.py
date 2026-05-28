@@ -422,6 +422,90 @@ def _truncate_ai_only_lcc(suggestions: list[LccSuggestion]) -> None:
             s.proposed["lcc"] = truncated
 
 
+def _apply_ai_summary_to_catalog_hits(
+    ai: AIClient,
+    books: list,
+    catalog_suggestions: list[LccSuggestion],
+    description_map: dict[int, BookDescription],
+    batch_size: int,
+) -> None:
+    """v1.7 item 5: replace template summaries on catalog hits with
+    description-grounded AI prose.
+
+    Only fires for catalog-hit books that also have a pre-fetched
+    description. Catalog-derived lcc/primary/secondary fields are not
+    touched — only `lcc_summary` is rewritten. Books without a usable
+    AI summary (no description, identity mismatch, AI call failure)
+    keep the catalog-template summary that `_build_catalog_suggestion`
+    already set.
+    """
+    if not catalog_suggestions:
+        return
+
+    book_by_id = {b.id: b for b in books}
+    eligible_books: list = []
+    catalog_context_map: dict[int, dict[str, str]] = {}
+    for s in catalog_suggestions:
+        b = book_by_id.get(s.book_id)
+        if b is None:
+            continue
+        desc = description_map.get(b.id)
+        if desc is None or not desc.text:
+            continue
+        eligible_books.append(b)
+        catalog_context_map[b.id] = {
+            "lcc": s.proposed.get("lcc", ""),
+            "lcc_primary_class": s.proposed.get("lcc_primary_class", ""),
+            "lcc_secondary_class": s.proposed.get("lcc_secondary_class", ""),
+            "catalog_source": s.source,
+        }
+
+    skipped_no_desc = len(catalog_suggestions) - len(eligible_books)
+    if not eligible_books:
+        if skipped_no_desc:
+            console.print(
+                f"[dim]Catalog-hit AI summary: skipped — none of "
+                f"{len(catalog_suggestions)} catalog-hit book(s) had a "
+                "pre-fetched description.[/dim]"
+            )
+        return
+
+    console.print(
+        f"[cyan]Generating description-grounded summaries for "
+        f"[bold]{len(eligible_books)}[/bold] catalog-hit book(s)…[/cyan]"
+    )
+
+    try:
+        summary_map = ai.suggest_lcc_summary(
+            eligible_books,
+            catalog_context_map=catalog_context_map,
+            description_map=description_map,
+            batch_size=batch_size,
+        )
+    except (RuntimeError, Exception) as e:  # noqa: BLE001 — defensive: keep template summaries on any failure
+        _log.warning("Catalog-hit AI summary failed (%s); keeping template summaries.", e)
+        console.print(
+            f"[dim]Catalog-hit AI summary failed ({type(e).__name__}); "
+            "keeping the template summaries for those books.[/dim]"
+        )
+        return
+
+    applied = 0
+    for s in catalog_suggestions:
+        prose = summary_map.get(s.book_id)
+        if prose:
+            s.proposed["lcc_summary"] = prose
+            applied += 1
+
+    parts = [f"{applied}/{len(eligible_books)} replaced with AI prose"]
+    fallbacks = len(eligible_books) - applied
+    if fallbacks:
+        parts.append(f"{fallbacks} kept template (identity mismatch or empty AI)")
+    if skipped_no_desc:
+        parts.append(f"{skipped_no_desc} kept template (no description)")
+    console.print(f"[dim]Catalog-hit summaries: {'; '.join(parts)}.[/dim]")
+
+
 def _build_catalog_suggestion(
     book,
     current: dict[str, str],
@@ -736,56 +820,59 @@ def run_lcc_enrichment(
         )
         console.print(cat_breakdown)
 
-    # ── 3b. Pre-fetch publisher descriptions for AI-bound books (item 11) ─────
-    # Eliminates lcc_summary hallucination on obscure books by giving the AI
-    # an authoritative source to summarise. Graceful degradation: any books
-    # without an ISBN, or whose descriptions cannot be fetched, simply do
-    # not appear in `description_map` and the AI falls back to its prior
-    # training-data behaviour for those rows.
+    # ── 3b. Pre-fetch publisher descriptions for every book with an ISBN ──────
+    # Original purpose (item 11): give the AI an authoritative source to
+    # summarise from, eliminating lcc_summary hallucination on obscure
+    # books. v1.7 item 5 widens the audience: catalog-hit books also get
+    # descriptions so the summary-only AI call can ground its prose.
+    # Graceful degradation: any books without an ISBN, or whose
+    # descriptions cannot be fetched, simply do not appear in
+    # `description_map` and the relevant AI step falls back (AI → training
+    # data; summary-only → template summary).
     description_map: dict[int, BookDescription] = {}
-    if ai_books:
-        isbn_by_book: dict[int, str] = {}
-        for b in ai_books:
-            ids = db.get_identifiers(b.id)
-            isbn = (
-                ids.get("isbn")
-                or ids.get("isbn13")
-                or ids.get("isbn10")
-                or ids.get("ISBN")
-                or ""
-            )
-            if isbn:
-                isbn_by_book[b.id] = isbn
+    isbn_by_book: dict[int, str] = {}
+    for b in books:
+        ids = db.get_identifiers(b.id)
+        isbn = (
+            ids.get("isbn")
+            or ids.get("isbn13")
+            or ids.get("isbn10")
+            or ids.get("ISBN")
+            or ""
+        )
+        if isbn:
+            isbn_by_book[b.id] = isbn
 
-        if isbn_by_book:
-            with console.status(
-                f"[cyan]Pre-fetching descriptions for {len(isbn_by_book)} book(s) "
-                "(Google Books → Open Library)…[/cyan]"
-            ):
-                description_map = fetch_descriptions_batch(
-                    isbn_by_book,
-                    timeout=description_timeout,
-                    max_retries=description_max_retries,
-                    google_books_api_key=google_books_api_key,
-                )
-            sources: dict[str, int] = {}
-            for d in description_map.values():
-                sources[d.source] = sources.get(d.source, 0) + 1
-            no_isbn = len(ai_books) - len(isbn_by_book)
-            missed = len(isbn_by_book) - len(description_map)
-            src_breakdown = ", ".join(
-                f"{n} via {name}" for name, n in sorted(sources.items())
-            ) or "none"
-            console.print(
-                f"[dim]Descriptions: {len(description_map)}/{len(ai_books)} fetched "
-                f"({src_breakdown}); {missed} no description available; "
-                f"{no_isbn} had no ISBN.[/dim]"
+    if isbn_by_book:
+        with console.status(
+            f"[cyan]Pre-fetching descriptions for {len(isbn_by_book)} book(s) "
+            "(Google Books → Open Library)…[/cyan]"
+        ):
+            description_map = fetch_descriptions_batch(
+                isbn_by_book,
+                timeout=description_timeout,
+                max_retries=description_max_retries,
+                google_books_api_key=google_books_api_key,
             )
-        else:
-            console.print(
-                "[dim]No ISBNs available — skipping description pre-fetch; "
-                "AI will fall back to training data.[/dim]"
-            )
+        sources: dict[str, int] = {}
+        for d in description_map.values():
+            sources[d.source] = sources.get(d.source, 0) + 1
+        no_isbn = len(books) - len(isbn_by_book)
+        missed = len(isbn_by_book) - len(description_map)
+        src_breakdown = ", ".join(
+            f"{n} via {name}" for name, n in sorted(sources.items())
+        ) or "none"
+        console.print(
+            f"[dim]Descriptions: {len(description_map)}/{len(books)} fetched "
+            f"({src_breakdown}); {missed} no description available; "
+            f"{no_isbn} had no ISBN.[/dim]"
+        )
+    else:
+        console.print(
+            "[dim]No ISBNs available — skipping description pre-fetch; "
+            "AI will fall back to training data; catalog-hit books "
+            "keep template summaries.[/dim]"
+        )
 
     # ── 3c. AI lookup for the remainder ───────────────────────────────────────
     ai_suggestions: list[LccSuggestion] = []
@@ -823,6 +910,17 @@ def run_lcc_enrichment(
     # v1.7 item 6: truncate AI-only `lcc` to class letters + class number.
     # Catalog-sourced suggestions are not touched.
     _truncate_ai_only_lcc(ai_suggestions)
+
+    # ── 3d. v1.7 item 5: AI-prose lcc_summary for catalog hits with descriptions ─
+    # When a catalog hit gives us trustworthy lcc/primary/secondary AND we
+    # have a pre-fetched description, run one extra small AI call to
+    # replace the terse template summary with description-grounded prose.
+    # Catalog class fields are unchanged; only the summary is rewritten.
+    # Books without a description keep the template summary. AI failures
+    # fall back silently to the template too.
+    _apply_ai_summary_to_catalog_hits(
+        ai, books, catalog_suggestions, description_map, batch_size,
+    )
 
     suggestions = catalog_suggestions + ai_suggestions
 
