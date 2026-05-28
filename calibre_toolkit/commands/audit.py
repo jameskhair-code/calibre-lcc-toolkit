@@ -36,6 +36,7 @@ from rich import box
 
 from ..db import CalibreDB
 from ..logging_config import get_logger
+from .audit_log import read_audit_entries
 
 _log = get_logger(__name__)
 console = Console()
@@ -82,47 +83,37 @@ class Rating:
 
 
 def load_audit_records(path: Path) -> list[AuditRecord]:
-    """Read the persistent JSONL audit log; skip malformed lines.
+    """Read the persistent JSONL audit log as calibration records.
 
-    Filter to records that represent AI-applied writes — those have
-    a non-empty `confidence`, `source`, and `step`. Manual marker
-    writes (mark_mqg_complete and similar) don't carry these and
-    are correctly excluded from the calibration pool.
+    Builds on the shared `read_audit_entries` reader (one parser for the
+    whole toolkit), then filters to records that represent AI-applied writes
+    — those have a non-empty `confidence`, `source`, and `step`. Manual marker
+    writes (mark_mqg_complete and similar) don't carry these and are correctly
+    excluded from the calibration pool.
     """
     records: list[AuditRecord] = []
-    if not path.exists():
-        return records
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                d = json.loads(line)
-            except json.JSONDecodeError:
-                _log.warning("audit.log: skipping malformed JSON line")
-                continue
-            if not (d.get("confidence") and d.get("source") and d.get("step")):
-                continue
-            try:
-                known = {
-                    "timestamp", "book_id", "field", "new_value",
-                    "confidence", "source", "step",
-                }
-                extra = {k: v for k, v in d.items() if k not in known}
-                records.append(AuditRecord(
-                    timestamp=d["timestamp"],
-                    book_id=int(d["book_id"]),
-                    field=d["field"],
-                    new_value=d["new_value"],
-                    confidence=d["confidence"],
-                    source=d["source"],
-                    step=d["step"],
-                    extra=extra,
-                ))
-            except (KeyError, ValueError, TypeError):
-                _log.warning("audit.log: skipping record with bad shape")
-                continue
+    for d in read_audit_entries(path):
+        if not (d.get("confidence") and d.get("source") and d.get("step")):
+            continue
+        try:
+            known = {
+                "timestamp", "book_id", "field", "new_value",
+                "confidence", "source", "step",
+            }
+            extra = {k: v for k, v in d.items() if k not in known}
+            records.append(AuditRecord(
+                timestamp=d["timestamp"],
+                book_id=int(d["book_id"]),
+                field=d["field"],
+                new_value=d["new_value"],
+                confidence=d["confidence"],
+                source=d["source"],
+                step=d["step"],
+                extra=extra,
+            ))
+        except (KeyError, ValueError, TypeError):
+            _log.warning("audit.log: skipping record with bad shape")
+            continue
     return records
 
 
