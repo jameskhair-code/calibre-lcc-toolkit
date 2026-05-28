@@ -299,6 +299,36 @@ def persist_session(
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+def persist_rule_revisions(
+    path: Path,
+    session_id: str,
+    threshold: float,
+    entries: list[tuple[str, str, float, str]],
+) -> None:
+    """Append rule-revision intents to rule-revisions.jsonl, one line each.
+
+    `entries` are (step, tier, strict_precision, note). This is a capture
+    buffer for a future architect pass — accumulated signal about which tier
+    definitions drifted and what the maintainer would change. Nothing reads
+    it automatically yet.
+    """
+    if not entries:
+        return
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        for step, tier, strict, note in entries:
+            f.write(json.dumps({
+                "timestamp": ts,
+                "session_id": session_id,
+                "step": step,
+                "tier": tier,
+                "strict_precision": strict,
+                "threshold": threshold,
+                "note": note,
+            }, ensure_ascii=False) + "\n")
+
+
 # ── Display helpers ──────────────────────────────────────────────────────────
 
 
@@ -414,6 +444,33 @@ def _render_summary(
         console.print(
             f"\n[bold green]All measured tiers met the {threshold:.0%} threshold.[/bold green]"
         )
+
+
+def _prompt_rule_revisions(
+    flagged: list[tuple[str, str]],
+    precision_table: dict[tuple[str, str], dict],
+) -> list[tuple[str, str, float, str]]:
+    """Ask, per flagged tier, what the maintainer would change in the rule.
+
+    Empty answers are dropped. Returns (step, tier, strict, note) entries
+    for persistence. Interactive — exercised manually, not in the suite.
+    """
+    console.print(
+        "\n[bold]Capture rule-revision intent[/bold] for the flagged tier(s). "
+        "[dim]Press enter to skip a tier.[/dim]"
+    )
+    entries: list[tuple[str, str, float, str]] = []
+    for (step, tier) in flagged:
+        strict = precision_table[(step, tier)]["strict_precision"]
+        note = Prompt.ask(
+            f"  [bold]{step}[/bold]/[bold]{tier}[/bold] "
+            f"([red]{strict:.0%}[/red] strict) — what would you change in the rule?",
+            default="",
+            show_default=False,
+        ).strip()
+        if note:
+            entries.append((step, tier, strict, note))
+    return entries
 
 
 def _render_interim(ratings: list[Rating], threshold: float) -> None:
@@ -591,9 +648,12 @@ def run_audit_confidence(
     steps_filter: list[str] | None = None,
     seed: int | None = None,
     interim_every: int = 5,
+    revisions_path: Path | None = None,
 ) -> None:
     """Orchestrator: load, sample, prompt, summarise, persist."""
     rng = random.Random(seed) if seed is not None else random.Random()
+    if revisions_path is None:
+        revisions_path = output_path.parent / "rule-revisions.jsonl"
     records = load_audit_records(audit_log_path)
     if not records:
         console.print(Panel(
@@ -661,6 +721,17 @@ def run_audit_confidence(
             f"\n[dim]Session [bold]{session_id}[/bold] saved to "
             f"{output_path}.[/dim]"
         )
+
+        if flagged:
+            entries = _prompt_rule_revisions(flagged, precision_table)
+            if entries:
+                persist_rule_revisions(
+                    revisions_path, session_id, threshold, entries,
+                )
+                console.print(
+                    f"[dim]Captured {len(entries)} rule-revision note(s) to "
+                    f"{revisions_path}.[/dim]"
+                )
 
 
 def _book_label(db: CalibreDB, book_id: int) -> tuple[str, str]:
