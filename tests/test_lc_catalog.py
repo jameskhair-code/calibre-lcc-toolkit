@@ -22,10 +22,14 @@ from calibre_toolkit.services.lc_catalog import (
     _ol_sibling_isbns_for_work,
     _ol_work_key_for_isbn,
     _pick_lcc_call_number,
+    _workkey_cache_lookup,
+    _workkey_cache_path,
+    _workkey_cache_store,
     lookup_book,
     lookup_by_isbn_openlibrary,
     lookup_by_isbn_with_edition_cascade,
     reset_work_editions_cache,
+    reset_workkey_cache,
 )
 
 
@@ -34,11 +38,19 @@ def _load_fixture(fixtures_dir: Path, name: str) -> dict:
 
 
 @pytest.fixture(autouse=True)
-def _reset_caches():
-    """Cache state must not leak between tests."""
+def _reset_caches(tmp_path, monkeypatch):
+    """Both lc_catalog caches reset between tests; the persistent work-key
+    cache file is redirected to a per-test tmp path so no test ever writes
+    to the user's real ~/.calibre-toolkit/ol-workkey-cache.json."""
+    monkeypatch.setenv(
+        "CALIBRE_TOOLKIT_OL_WORKKEY_CACHE",
+        str(tmp_path / "ol-workkey-cache.json"),
+    )
     reset_work_editions_cache()
+    reset_workkey_cache()
     yield
     reset_work_editions_cache()
+    reset_workkey_cache()
 
 
 @pytest.fixture
@@ -55,7 +67,7 @@ def stub_http(monkeypatch, fixtures_dir):
         else:
             routes[url_substring] = _load_fixture(fixtures_dir, fixture)
 
-    def fake_get(url: str, timeout=10.0, max_retries=3):
+    def fake_get(url: str, timeout=10.0, max_retries=3, treat_4xx_as_empty=False):
         for sub, response in routes.items():
             if sub in url:
                 return response
@@ -156,7 +168,7 @@ class TestBatchedBibkeys:
         """N ISBNs → one HTTP request, not N."""
         call_count = 0
 
-        def counting_get(url, timeout=10.0, max_retries=3):
+        def counting_get(url, timeout=10.0, max_retries=3, treat_4xx_as_empty=False):
             nonlocal call_count
             call_count += 1
             return {"ISBN:9780000000001": {}}
@@ -238,7 +250,7 @@ class TestBatchedBibkeys:
     def test_empty_input_makes_no_http_call(self, monkeypatch):
         call_count = 0
 
-        def counting_get(url, timeout=10.0, max_retries=3):
+        def counting_get(url, timeout=10.0, max_retries=3, treat_4xx_as_empty=False):
             nonlocal call_count
             call_count += 1
             return None
@@ -283,6 +295,161 @@ class TestWorkKey:
     def test_strips_isbn_hyphens(self, stub_http):
         stub_http("9781504026758", "ol_isbn_lookup_with_work.json")
         assert _ol_work_key_for_isbn("978-1-504-02675-8") == "/works/OL999W"
+
+
+# ── Persistent work-key cache ───────────────────────────────────────────────
+
+
+class TestPersistentWorkKeyCache:
+    """v1.7 item 4: ISBN -> work_key resolution persists across runs at
+    ~/.calibre-toolkit/ol-workkey-cache.json (90-day TTL). The autouse
+    `_reset_caches` fixture redirects the cache file to tmp_path."""
+
+    def test_env_override_redirects_cache_file(self, tmp_path, monkeypatch):
+        custom = tmp_path / "custom" / "cache.json"
+        monkeypatch.setenv("CALIBRE_TOOLKIT_OL_WORKKEY_CACHE", str(custom))
+        assert _workkey_cache_path() == custom
+
+    def test_cold_lookup_calls_http_then_persists_positive(self, stub_http, tmp_path):
+        stub_http("openlibrary.org/isbn/9781504026758.json",
+                  "ol_isbn_lookup_with_work.json")
+        # Cold — no cache file exists yet.
+        assert not _workkey_cache_path().exists()
+        result = _ol_work_key_for_isbn("9781504026758")
+        assert result == "/works/OL999W"
+        # File should now exist with the entry.
+        assert _workkey_cache_path().exists()
+        payload = json.loads(_workkey_cache_path().read_text(encoding="utf-8"))
+        assert payload["version"] == 1
+        assert payload["entries"]["9781504026758"]["work_key"] == "/works/OL999W"
+
+    def test_cold_lookup_persists_negative(self, stub_http):
+        stub_http("openlibrary.org/isbn/9780000000001.json",
+                  "ol_isbn_lookup_no_work.json")
+        assert _ol_work_key_for_isbn("9780000000001") is None
+        payload = json.loads(_workkey_cache_path().read_text(encoding="utf-8"))
+        assert payload["entries"]["9780000000001"]["work_key"] is None
+
+    def test_warm_hit_skips_http_positive(self, monkeypatch):
+        # Pre-populate cache directly.
+        _workkey_cache_store("9781504026758", "/works/OL999W")
+        # Any HTTP call would fail the test.
+        def explode(url, timeout=10.0, max_retries=3):
+            raise AssertionError(f"HTTP must not be called when cache is warm: {url}")
+        monkeypatch.setattr(lc_catalog, "_http_get_json", explode)
+        assert _ol_work_key_for_isbn("9781504026758") == "/works/OL999W"
+
+    def test_warm_hit_skips_http_negative(self, monkeypatch):
+        _workkey_cache_store("9780000000001", None)
+        def explode(url, timeout=10.0, max_retries=3):
+            raise AssertionError(f"HTTP must not be called for negative cached entry: {url}")
+        monkeypatch.setattr(lc_catalog, "_http_get_json", explode)
+        assert _ol_work_key_for_isbn("9780000000001") is None
+
+    def test_stale_entry_past_ttl_triggers_refetch(self, stub_http):
+        from datetime import datetime, timedelta, timezone
+        stale = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(timespec="seconds")
+        _workkey_cache_path().parent.mkdir(parents=True, exist_ok=True)
+        _workkey_cache_path().write_text(json.dumps({
+            "version": 1,
+            "entries": {
+                "9781504026758": {"work_key": "/works/OLstale", "fetched_at": stale},
+            },
+        }), encoding="utf-8")
+        # In-memory mirror is None (reset by autouse fixture) — first lookup
+        # loads from disk, finds the stale entry, and refetches.
+        stub_http("openlibrary.org/isbn/9781504026758.json",
+                  "ol_isbn_lookup_with_work.json")
+        assert _ol_work_key_for_isbn("9781504026758") == "/works/OL999W"
+        payload = json.loads(_workkey_cache_path().read_text(encoding="utf-8"))
+        assert payload["entries"]["9781504026758"]["work_key"] == "/works/OL999W"
+
+    def test_http_failure_does_not_poison_cache(self, monkeypatch):
+        # _http_get_json returning None mimics retry-exhausted transient failure.
+        monkeypatch.setattr(
+            lc_catalog, "_http_get_json",
+            lambda url, timeout=10.0, max_retries=3, treat_4xx_as_empty=False: None,
+        )
+        assert _ol_work_key_for_isbn("9780000000002") is None
+        # No entry should have been persisted — next run can retry.
+        if _workkey_cache_path().exists():
+            payload = json.loads(_workkey_cache_path().read_text(encoding="utf-8"))
+            assert "9780000000002" not in (payload.get("entries") or {})
+
+    def test_ol_404_cached_as_negative(self, monkeypatch):
+        """When _http_get_json signals a definite 404 by returning {}
+        (via treat_4xx_as_empty=True), the work-key resolver caches
+        the result as negative so the next run skips the HTTP call."""
+        call_count = 0
+
+        def fake_get_404(url, timeout=10.0, max_retries=3, treat_4xx_as_empty=False):
+            nonlocal call_count
+            if "openlibrary.org/isbn/9780000000003.json" in url:
+                call_count += 1
+                # treat_4xx_as_empty=True is set by _ol_work_key_for_isbn.
+                # Return {} to simulate OL's 404 for an unknown ISBN.
+                return {} if treat_4xx_as_empty else None
+            return None
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", fake_get_404)
+        # First call: HTTP fires, result cached as negative.
+        assert _ol_work_key_for_isbn("9780000000003") is None
+        assert call_count == 1
+        # Persisted as negative.
+        payload = json.loads(_workkey_cache_path().read_text(encoding="utf-8"))
+        assert "9780000000003" in payload["entries"]
+        assert payload["entries"]["9780000000003"]["work_key"] is None
+        # Second call: cache hit, no HTTP.
+        assert _ol_work_key_for_isbn("9780000000003") is None
+        assert call_count == 1
+
+    def test_corrupt_cache_file_degrades_gracefully(self, stub_http):
+        _workkey_cache_path().parent.mkdir(parents=True, exist_ok=True)
+        _workkey_cache_path().write_text("{not valid json", encoding="utf-8")
+        stub_http("openlibrary.org/isbn/9781504026758.json",
+                  "ol_isbn_lookup_with_work.json")
+        # Must not raise; corrupt file is treated as empty.
+        assert _ol_work_key_for_isbn("9781504026758") == "/works/OL999W"
+
+    def test_unknown_schema_version_degrades_gracefully(self, stub_http):
+        _workkey_cache_path().parent.mkdir(parents=True, exist_ok=True)
+        _workkey_cache_path().write_text(json.dumps({
+            "version": 999,
+            "entries": {"9781504026758": {"work_key": "/works/IGNORED",
+                                          "fetched_at": "2099-01-01T00:00:00+00:00"}},
+        }), encoding="utf-8")
+        stub_http("openlibrary.org/isbn/9781504026758.json",
+                  "ol_isbn_lookup_with_work.json")
+        # Must not honour the unknown-version entries.
+        assert _ol_work_key_for_isbn("9781504026758") == "/works/OL999W"
+
+    def test_missing_cache_file_starts_empty(self):
+        assert not _workkey_cache_path().exists()
+        hit, cached = _workkey_cache_lookup("9781504026758")
+        assert hit is False
+        assert cached is None
+
+    def test_hyphenated_isbn_matches_cleaned_cache_key(self, monkeypatch):
+        _workkey_cache_store("9781504026758", "/works/OL999W")
+        monkeypatch.setattr(lc_catalog, "_http_get_json",
+                            lambda url, **kw: pytest.fail("HTTP unexpected"))
+        assert _ol_work_key_for_isbn("978-1-504-02675-8") == "/works/OL999W"
+
+    def test_second_lookup_in_same_run_skips_http(self, monkeypatch):
+        call_count = 0
+
+        def counting_get(url, timeout=10.0, max_retries=3, treat_4xx_as_empty=False):
+            nonlocal call_count
+            if "openlibrary.org/isbn/9781504026758.json" in url:
+                call_count += 1
+                return {"works": [{"key": "/works/OL999W"}]}
+            return None
+
+        monkeypatch.setattr(lc_catalog, "_http_get_json", counting_get)
+        assert _ol_work_key_for_isbn("9781504026758") == "/works/OL999W"
+        # Second call within the same process — must come from the cache.
+        assert _ol_work_key_for_isbn("9781504026758") == "/works/OL999W"
+        assert call_count == 1
 
 
 # ── OL sibling ISBN enumeration ─────────────────────────────────────────────
@@ -340,7 +507,7 @@ class TestWorkEditionsCache:
         call_count = 0
         editions = _load_fixture(fixtures_dir, "ol_work_editions.json")
 
-        def counting_get(url, timeout=10.0, max_retries=3):
+        def counting_get(url, timeout=10.0, max_retries=3, treat_4xx_as_empty=False):
             nonlocal call_count
             if "/works/OL999W/editions.json" in url:
                 call_count += 1
@@ -365,7 +532,7 @@ class TestWorkEditionsCache:
         editions = _load_fixture(fixtures_dir, "ol_work_editions.json")
         call_count = 0
 
-        def counting_get(url, timeout=10.0, max_retries=3):
+        def counting_get(url, timeout=10.0, max_retries=3, treat_4xx_as_empty=False):
             nonlocal call_count
             if "editions.json" in url:
                 call_count += 1
@@ -427,7 +594,7 @@ class TestEditionCascade:
         isbn_lookup = _load_fixture(fixtures_dir, "ol_isbn_lookup_with_work.json")
         api_books_calls = 0
 
-        def counting_get(url, timeout=10.0, max_retries=3):
+        def counting_get(url, timeout=10.0, max_retries=3, treat_4xx_as_empty=False):
             nonlocal api_books_calls
             if "openlibrary.org/api/books?" in url:
                 api_books_calls += 1
