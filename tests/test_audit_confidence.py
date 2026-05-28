@@ -17,13 +17,16 @@ import pytest
 from calibre_toolkit.commands.audit import (
     AuditRecord,
     Rating,
+    build_trajectories,
     compute_precision,
     flag_below_threshold,
     grading_order,
     load_audit_records,
+    load_calibration_sessions,
     persist_session,
     run_audit_confidence,
     stratified_sample,
+    _sparkline,
     _values_diverge,
     _truncate,
 )
@@ -352,3 +355,76 @@ def test_truncate_renders_lists_as_csv():
 
 def test_truncate_handles_none():
     assert _truncate(None) == "(no value)"
+
+
+# ── trajectory ───────────────────────────────────────────────────────────────
+
+
+def _session(session_id: str, timestamp: str, precision: dict, threshold=0.7) -> dict:
+    """A calibration.jsonl session row as persist_session writes it."""
+    return {
+        "session_id": session_id,
+        "timestamp": timestamp,
+        "threshold": threshold,
+        "ratings": [],
+        "precision_table": precision,
+        "flagged": [],
+    }
+
+
+def test_load_calibration_sessions_missing_path_returns_empty(tmp_path: Path):
+    assert load_calibration_sessions(tmp_path / "nope.jsonl") == []
+
+
+def test_load_calibration_sessions_sorts_and_unpacks_keys(tmp_path: Path):
+    p = tmp_path / "calibration.jsonl"
+    _write_jsonl(p, [
+        _session("s2", "2026-05-26T10:00:00+00:00",
+                 {"lcc-enrich|high": {"strict_precision": 0.9, "total": 4}}),
+        _session("s1", "2026-05-25T10:00:00+00:00",
+                 {"lcc-enrich|high": {"strict_precision": 0.8, "total": 5}}),
+    ])
+    sessions = load_calibration_sessions(p)
+    # sorted ascending by timestamp regardless of file order
+    assert [s.session_id for s in sessions] == ["s1", "s2"]
+    # "step|tier" string keys unpacked back to tuples
+    assert ("lcc-enrich", "high") in sessions[0].precision
+
+
+def test_load_calibration_sessions_skips_malformed_lines(tmp_path: Path):
+    p = tmp_path / "calibration.jsonl"
+    p.write_text(
+        json.dumps(_session("ok", "2026-05-25T10:00:00+00:00",
+                            {"tags-enrich|low": {"strict_precision": 0.5, "total": 2}}))
+        + "\n{ this is not json }\n",
+        encoding="utf-8",
+    )
+    sessions = load_calibration_sessions(p)
+    assert [s.session_id for s in sessions] == ["ok"]
+
+
+def test_build_trajectories_groups_chronologically(tmp_path: Path):
+    p = tmp_path / "calibration.jsonl"
+    _write_jsonl(p, [
+        _session("s1", "2026-05-25T10:00:00+00:00",
+                 {"lcc-enrich|high": {"strict_precision": 0.6, "total": 5}}),
+        _session("s2", "2026-05-26T10:00:00+00:00",
+                 {"lcc-enrich|high": {"strict_precision": 0.9, "total": 4},
+                  "tags-enrich|low": {"strict_precision": 0.5, "total": 2}}),
+    ])
+    traj = build_trajectories(load_calibration_sessions(p))
+    assert [pt["strict"] for pt in traj[("lcc-enrich", "high")]] == [0.6, 0.9]
+    # a group only present in the later session has a single point
+    assert len(traj[("tags-enrich", "low")]) == 1
+
+
+def test_sparkline_maps_values_to_blocks():
+    assert _sparkline([0.0, 0.5, 1.0]) == "▁▅█"
+
+
+def test_sparkline_clamps_out_of_range():
+    assert _sparkline([1.5, -0.3]) == "█▁"
+
+
+def test_sparkline_empty_is_empty():
+    assert _sparkline([]) == ""

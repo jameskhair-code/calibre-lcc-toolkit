@@ -438,6 +438,147 @@ def _render_interim(ratings: list[Rating], threshold: float) -> None:
         )
 
 
+# ── Trajectory ───────────────────────────────────────────────────────────────
+
+
+@dataclass
+class CalibrationSession:
+    """One persisted calibration session, parsed from calibration.jsonl."""
+
+    session_id: str
+    timestamp: str
+    threshold: float
+    precision: dict[tuple[str, str], dict]
+
+
+def load_calibration_sessions(path: Path) -> list[CalibrationSession]:
+    """Read calibration.jsonl into sessions sorted by timestamp; skip
+    malformed lines. The on-disk precision_table is keyed "step|tier"
+    (see persist_session); unpack it back to (step, tier) tuples.
+    """
+    sessions: list[CalibrationSession] = []
+    if not path.exists():
+        return sessions
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = json.loads(line)
+            except json.JSONDecodeError:
+                _log.warning("calibration.jsonl: skipping malformed JSON line")
+                continue
+            precision: dict[tuple[str, str], dict] = {}
+            for k, v in (d.get("precision_table") or {}).items():
+                step, sep, tier = k.partition("|")
+                if sep and isinstance(v, dict):
+                    precision[(step, tier)] = v
+            sessions.append(CalibrationSession(
+                session_id=str(d.get("session_id", "")),
+                timestamp=str(d.get("timestamp", "")),
+                threshold=float(d.get("threshold", 0.0) or 0.0),
+                precision=precision,
+            ))
+    sessions.sort(key=lambda s: s.timestamp)
+    return sessions
+
+
+def build_trajectories(
+    sessions: list[CalibrationSession],
+) -> dict[tuple[str, str], list[dict]]:
+    """Per (step, tier): chronological strict-precision points, one per
+    session that measured that group. Sessions must be timestamp-sorted.
+    """
+    traj: dict[tuple[str, str], list[dict]] = {}
+    for s in sessions:
+        for key, v in s.precision.items():
+            traj.setdefault(key, []).append({
+                "timestamp": s.timestamp,
+                "strict": v.get("strict_precision", 0.0),
+                "total": v.get("total", 0),
+            })
+    return traj
+
+
+_SPARK_BLOCKS = "▁▂▃▄▅▆▇█"
+
+
+def _sparkline(values: list[float]) -> str:
+    """Render [0,1] values as a Unicode block sparkline."""
+    chars = []
+    for v in values:
+        v = max(0.0, min(1.0, v))
+        idx = min(len(_SPARK_BLOCKS) - 1, int(v * len(_SPARK_BLOCKS)))
+        chars.append(_SPARK_BLOCKS[idx])
+    return "".join(chars)
+
+
+def _render_trajectory(
+    traj: dict[tuple[str, str], list[dict]],
+    n_sessions: int,
+    threshold: float,
+) -> None:
+    """Per-(step, tier) strict-precision trajectory across sessions, high
+    tier first. Latest value coloured against the most recent threshold."""
+    table = Table(
+        box=box.ROUNDED, show_header=True, header_style="bold cyan",
+        title=f"[bold]Calibration trajectory[/bold]  "
+              f"[dim]({n_sessions} session(s))[/dim]",
+        title_justify="left",
+    )
+    table.add_column("Step",         no_wrap=True)
+    table.add_column("Tier",         no_wrap=True, width=8)
+    table.add_column("Sessions",     justify="right", width=8)
+    table.add_column("Strict trend", no_wrap=True)
+    table.add_column("First",        justify="right", width=6)
+    table.add_column("Latest",       justify="right", width=7)
+    table.add_column("Δ",            justify="right", width=7)
+
+    for (step, tier) in sorted(
+        traj.keys(), key=lambda k: (_TIER_PRIORITY.get(k[1], 99), k[0])
+    ):
+        points = traj[(step, tier)]
+        strict_vals = [p["strict"] for p in points]
+        first, latest = strict_vals[0], strict_vals[-1]
+        latest_style = "green" if latest >= threshold else "red"
+        if len(strict_vals) < 2:
+            delta_str = "[dim]—[/dim]"
+        else:
+            delta = latest - first
+            if delta > 0.0005:
+                delta_str = f"[green]▲ {delta:+.0%}[/green]"
+            elif delta < -0.0005:
+                delta_str = f"[red]▼ {delta:+.0%}[/red]"
+            else:
+                delta_str = "[dim]→ 0%[/dim]"
+        table.add_row(
+            step, tier, str(len(points)),
+            _sparkline(strict_vals),
+            f"{first:.0%}",
+            f"[{latest_style}]{latest:.0%}[/{latest_style}]",
+            delta_str,
+        )
+
+    console.print()
+    console.print(table)
+
+
+def run_trajectory(calibration_path: Path) -> None:
+    """Show per-tier strict-precision trends across calibration sessions."""
+    sessions = load_calibration_sessions(calibration_path)
+    if not sessions:
+        console.print(Panel(
+            f"No calibration history in [bold]{calibration_path}[/bold].\n"
+            "Run [bold]audit-confidence[/bold] a few times first — each "
+            "session appends one line this view trends over.",
+            title="[yellow]No trajectory yet[/yellow]", border_style="yellow",
+        ))
+        return
+    traj = build_trajectories(sessions)
+    _render_trajectory(traj, len(sessions), sessions[-1].threshold)
+
+
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 

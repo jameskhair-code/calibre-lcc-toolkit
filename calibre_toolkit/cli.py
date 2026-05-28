@@ -1072,6 +1072,38 @@ def audit_confidence(
 
 
 @app.command(
+    name="audit-trajectory",
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit audit-trajectory\n\n"
+        "  calibre-toolkit audit-trajectory --calibration ./calibration.jsonl\n"
+    ),
+)
+def audit_trajectory(
+    calibration: Annotated[
+        Optional[Path],
+        typer.Option("--calibration",
+                     help="Path to the calibration session log "
+                          "(default: ~/.calibre-toolkit/calibration.jsonl)"),
+    ] = None,
+):
+    """
+    Show how each confidence tier's strict precision has trended across
+    calibration sessions.
+
+    Reads the history written by audit-confidence and renders a
+    per-(step, tier) sparkline with first/latest strict precision and the
+    change between them. Purely observational — reads one file, writes nothing.
+    """
+    from .commands.audit import run_trajectory
+
+    calibration_path = calibration or (
+        Path.home() / ".calibre-toolkit" / "calibration.jsonl"
+    )
+    run_trajectory(calibration_path)
+
+
+@app.command(
     epilog=(
         "Examples:\n\n"
         "  calibre-toolkit menu\n\n"
