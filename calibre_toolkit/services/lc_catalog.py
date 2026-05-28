@@ -38,17 +38,27 @@ Public endpoints used (no API key needed):
 All functions are best-effort: any network failure, missing field, or
 parse error returns None so the caller can fall through to AI
 classification.
+
+The ISBN → work-key result is persisted across runs at
+~/.calibre-toolkit/ol-workkey-cache.json (90-day TTL, configurable via
+the CALIBRE_TOOLKIT_OL_WORKKEY_CACHE env override). Subsequent runs
+against the same library skip the /isbn/{isbn}.json lookup entirely
+for ISBNs already resolved (positive or negative). The in-process
+work-editions cache (keyed by work_key) is separate and not persisted.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 from ..logging_config import get_logger
@@ -79,12 +89,19 @@ def _http_get_json(
     url: str,
     timeout: float = _DEFAULT_TIMEOUT,
     max_retries: int = _DEFAULT_MAX_RETRIES,
+    treat_4xx_as_empty: bool = False,
 ) -> Optional[dict]:
     """Fetch a URL and parse JSON. Returns None on any non-retryable failure.
 
     Retries 5xx responses, timeouts, and connection errors with exponential
     backoff. 4xx responses and JSON parse errors are returned as None
     immediately — they will not improve on retry.
+
+    When `treat_4xx_as_empty=True`, definitive 4xx responses (e.g. OL's
+    404 for an unknown ISBN) return `{}` instead of None so the caller
+    can distinguish "OL has no record" from "transient HTTP failure" —
+    used by the persistent work-key cache to know when a negative
+    result is safe to cache.
     """
 
     def _attempt() -> Optional[dict]:
@@ -92,12 +109,12 @@ def _http_get_json(
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 if resp.status != 200:
-                    return None
+                    return {} if treat_4xx_as_empty else None
                 data = resp.read()
         except urllib.error.HTTPError as e:
             if 500 <= e.code < 600:
                 raise _TransientHTTPError(f"HTTP {e.code} from {url}") from e
-            return None
+            return {} if treat_4xx_as_empty else None
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             raise _TransientHTTPError(f"network error from {url}: {e}") from e
         try:
@@ -261,27 +278,179 @@ def reset_work_editions_cache() -> None:
         _work_editions_cache.clear()
 
 
+# ── Persistent ISBN → work-key cache (v1.7 item 4) ───────────────────────────
+#
+# Resolving "this ISBN belongs to OL work XYZ" is stable across runs — the OL
+# /isbn/{isbn}.json endpoint returns the same work key today and tomorrow.
+# Pre-v1.7-item-4 the resolution had no cache at all; the v1.7 item 2
+# measurement clocked it at ~3.5–4 s per call and 3.5 s × every cascading book
+# in every fresh run. Persist the result to a JSON file under
+# ~/.calibre-toolkit/ so subsequent runs against the same library skip the
+# lookups they already did.
+#
+# Both outcomes are cached:
+#   - positive — OL returned a work key
+#   - negative — OL responded but had no /works/ entry for this ISBN
+# Negative caching matters because the cascade always tries the work-key
+# resolve, even if the ISBN has been confirmed unresolvable in a prior run.
+#
+# HTTP failures (timeouts, transient 5xx after retry exhaustion) are NOT
+# cached — they may improve on the next run.
+
+_WORKKEY_CACHE_ENV = "CALIBRE_TOOLKIT_OL_WORKKEY_CACHE"
+_DEFAULT_WORKKEY_CACHE_PATH = Path.home() / ".calibre-toolkit" / "ol-workkey-cache.json"
+_WORKKEY_CACHE_TTL_DAYS = 90
+_WORKKEY_CACHE_SCHEMA_VERSION = 1
+
+# In-memory mirror of the on-disk cache. None means "not yet loaded from disk."
+_workkey_cache_data: Optional[dict[str, dict]] = None
+_workkey_cache_lock = threading.Lock()
+
+
+def _workkey_cache_path() -> Path:
+    override = os.environ.get(_WORKKEY_CACHE_ENV)
+    return Path(override).expanduser() if override else _DEFAULT_WORKKEY_CACHE_PATH
+
+
+def _load_workkey_cache() -> dict[str, dict]:
+    """Load (or initialise) the in-memory cache from disk. Caller must hold
+    `_workkey_cache_lock`. Missing or corrupt files return an empty cache —
+    a parse error must not break catalog lookups."""
+    global _workkey_cache_data
+    if _workkey_cache_data is not None:
+        return _workkey_cache_data
+    path = _workkey_cache_path()
+    if not path.exists():
+        _workkey_cache_data = {}
+        return _workkey_cache_data
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError) as e:
+        _log.warning(
+            "OL work-key cache at %s is unreadable (%s); starting fresh", path, e,
+        )
+        _workkey_cache_data = {}
+        return _workkey_cache_data
+    if not isinstance(raw, dict) or raw.get("version") != _WORKKEY_CACHE_SCHEMA_VERSION:
+        _log.warning(
+            "OL work-key cache at %s has unexpected schema; starting fresh", path,
+        )
+        _workkey_cache_data = {}
+        return _workkey_cache_data
+    entries = raw.get("entries") or {}
+    if not isinstance(entries, dict):
+        _workkey_cache_data = {}
+        return _workkey_cache_data
+    _workkey_cache_data = entries
+    return _workkey_cache_data
+
+
+def _save_workkey_cache_locked() -> None:
+    """Atomically dump the in-memory cache to disk. Caller must hold
+    `_workkey_cache_lock`. Failures are logged and swallowed."""
+    path = _workkey_cache_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        payload = {
+            "version": _WORKKEY_CACHE_SCHEMA_VERSION,
+            "entries": _workkey_cache_data or {},
+        }
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as e:
+        _log.warning("OL work-key cache write to %s failed: %s", path, e)
+
+
+def _workkey_cache_lookup(cleaned_isbn: str) -> tuple[bool, Optional[str]]:
+    """Return (hit, work_key_or_None).
+
+    hit=False    — not cached (or cached but past TTL); caller should HTTP.
+    hit=True, work_key=str   — positive cached result.
+    hit=True, work_key=None  — negative cached result (OL has no work for this ISBN).
+    """
+    with _workkey_cache_lock:
+        cache = _load_workkey_cache()
+        entry = cache.get(cleaned_isbn)
+        if not entry:
+            return False, None
+        fetched = entry.get("fetched_at")
+        try:
+            fetched_dt = datetime.fromisoformat(fetched)
+        except (TypeError, ValueError):
+            return False, None
+        if fetched_dt.tzinfo is None:
+            fetched_dt = fetched_dt.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - fetched_dt > timedelta(days=_WORKKEY_CACHE_TTL_DAYS):
+            return False, None
+        work_key = entry.get("work_key")
+        if work_key is not None and not isinstance(work_key, str):
+            return False, None
+        return True, work_key
+
+
+def _workkey_cache_store(cleaned_isbn: str, work_key: Optional[str]) -> None:
+    """Persist a positive or negative cache entry."""
+    with _workkey_cache_lock:
+        cache = _load_workkey_cache()
+        cache[cleaned_isbn] = {
+            "work_key": work_key,
+            "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        _save_workkey_cache_locked()
+
+
+def reset_workkey_cache() -> None:
+    """Test-only helper: drop the in-memory cache and delete the cache file
+    (if it exists at the currently-configured path)."""
+    global _workkey_cache_data
+    with _workkey_cache_lock:
+        _workkey_cache_data = None
+        path = _workkey_cache_path()
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError:
+            pass
+
+
 def _ol_work_key_for_isbn(
     isbn: str,
     timeout: float = _DEFAULT_TIMEOUT,
     max_retries: int = _DEFAULT_MAX_RETRIES,
 ) -> Optional[str]:
-    """Resolve an ISBN to its OL work key (e.g. '/works/OL12345W')."""
+    """Resolve an ISBN to its OL work key (e.g. '/works/OL12345W').
+
+    Checks the persistent ISBN → work-key cache first. On miss (cold or stale),
+    fetches /isbn/{isbn}.json and persists the result. HTTP failures are not
+    cached.
+    """
     if not isbn:
         return None
     cleaned = re.sub(r"[\s\-]", "", isbn.strip())
     if not cleaned:
         return None
+    hit, cached = _workkey_cache_lookup(cleaned)
+    if hit:
+        return cached
     url = f"https://openlibrary.org/isbn/{urllib.parse.quote(cleaned)}.json"
-    data = _http_get_json(url, timeout=timeout, max_retries=max_retries)
-    if not data:
+    data = _http_get_json(
+        url, timeout=timeout, max_retries=max_retries,
+        treat_4xx_as_empty=True,
+    )
+    if data is None:
+        # Transient (network/5xx after retries) — don't poison the cache.
         return None
+    # data is {} for OL 404 (definite negative) or a parsed dict.
     works = data.get("works") or []
+    found: Optional[str] = None
     for entry in works:
         key = (entry or {}).get("key")
         if isinstance(key, str) and key.startswith("/works/"):
-            return key
-    return None
+            found = key
+            break
+    _workkey_cache_store(cleaned, found)
+    return found
 
 
 def _ol_sibling_isbns_for_work(
