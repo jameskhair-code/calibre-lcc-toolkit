@@ -127,6 +127,7 @@ _EXTRAS_LABELS = {
     "by_lookup_method": "By method",
     "by_op": "By operation",
     "by_tag_category": "By category",
+    "by_source": "By source",
 }
 
 
