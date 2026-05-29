@@ -734,52 +734,66 @@ def run_lcc_enrichment(
     description_max_retries: int = 3,
     google_books_api_key: str | None = None,
     apply_confirm_threshold: int = 20,
+    book_ids: list[int] | None = None,
 ) -> None:
     """Full MQG-03 LCC enrichment flow for a Calibre search string.
 
     columns maps logical field name → custom column label:
         {"lcc": "#lcc", "lcc_primary_class": "#lcc_primary_class", ...}
     force=True processes books that already have all four fields populated.
+
+    book_ids, when given, replaces the search: the explicit list is processed
+    verbatim (re-grade path). It bypasses the search-string manual filter and
+    the already-populated skip — the caller is authoritative about which books
+    to (re-)process and owns the manual-flag decision.
     """
     _started_at = datetime.now()
     _t0 = monotonic()
 
-    # ── 1. Search ─────────────────────────────────────────────────────────────
-    # --force overrides the manual-skip exclusion: when re-running on purpose,
-    # the user wants to see books they previously declined as well.
-    effective_query = (
-        f"({search_query}) and not {mqg_manual_column}:true"
-        if mqg_manual_column and not force else search_query
-    )
-    try:
-        with console.status(f"[cyan]Searching library:[/] {search_query}"):
-            books = db.search(effective_query)
-    except RuntimeError as e:
-        console.print(Panel(str(e), title="[red]Cannot access library[/red]", border_style="red"))
-        raise typer.Exit(1)
-
-    if not books:
-        console.print("[yellow]No books matched that search. Nothing to do.[/yellow]")
-        raise typer.Exit()
-
-    total_matched = len(books)
-    if limit and len(books) > limit:
-        books = books[:limit]
-        console.print(
-            f"\n[bold]Found [green]{total_matched}[/green] books "
-            f"— processing first [cyan]{limit}[/cyan] (--limit).[/bold]"
-        )
+    # ── 1. Resolve books ──────────────────────────────────────────────────────
+    if book_ids is not None:
+        books = db.search_by_ids(book_ids)
+        if not books:
+            console.print("[yellow]No matching books for the given ids.[/yellow]")
+            raise typer.Exit()
+        console.print(f"\n[bold]Re-grading [green]{len(books)}[/green] book(s).[/bold]")
     else:
-        console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
+        # --force overrides the manual-skip exclusion: when re-running on
+        # purpose, the user wants to see books they previously declined too.
+        effective_query = (
+            f"({search_query}) and not {mqg_manual_column}:true"
+            if mqg_manual_column and not force else search_query
+        )
+        try:
+            with console.status(f"[cyan]Searching library:[/] {search_query}"):
+                books = db.search(effective_query)
+        except RuntimeError as e:
+            console.print(Panel(str(e), title="[red]Cannot access library[/red]", border_style="red"))
+            raise typer.Exit(1)
+
+        if not books:
+            console.print("[yellow]No books matched that search. Nothing to do.[/yellow]")
+            raise typer.Exit()
+
+        total_matched = len(books)
+        if limit and len(books) > limit:
+            books = books[:limit]
+            console.print(
+                f"\n[bold]Found [green]{total_matched}[/green] books "
+                f"— processing first [cyan]{limit}[/cyan] (--limit).[/bold]"
+            )
+        else:
+            console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
 
     # ── 2. Read current LCC values ────────────────────────────────────────────
-    book_ids = [b.id for b in books]
+    book_id_list = [b.id for b in books]
     with console.status("[cyan]Reading current LCC fields…"):
-        current_map = _read_current(db, book_ids, columns)
+        current_map = _read_current(db, book_id_list, columns)
 
-    # Skip books already fully populated unless --force
+    # Skip books already fully populated unless --force (re-grade processes the
+    # explicit list regardless — that's the whole point).
     skipped = 0
-    if not force:
+    if not force and book_ids is None:
         before = len(books)
         already_populated = [b.id for b in books if all(current_map[b.id][k] for k in _LCC_FIELDS)]
         books = [b for b in books if not all(current_map[b.id][k] for k in _LCC_FIELDS)]

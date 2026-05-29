@@ -89,11 +89,18 @@ def load_audit_records(path: Path) -> list[AuditRecord]:
     whole toolkit), then filters to records that represent AI-applied writes
     — those have a non-empty `confidence`, `source`, and `step`. Manual marker
     writes (mark_mqg_complete and similar) don't carry these and are correctly
-    excluded from the calibration pool.
+    excluded from the calibration pool. Re-grade writes (carrying a `regrade`
+    marker) are also excluded — they re-run a changed rule and would otherwise
+    mix pre- and post-change accuracy in the same tier stats.
     """
     records: list[AuditRecord] = []
     for d in read_audit_entries(path):
         if not (d.get("confidence") and d.get("source") and d.get("step")):
+            continue
+        if d.get("regrade"):
+            # Re-grade writes are re-runs against a changed rule; counting them
+            # as original writes would mix pre- and post-rule accuracy in the
+            # same tier stats. Excluded from calibration (v1.8 PR 6).
             continue
         try:
             known = {

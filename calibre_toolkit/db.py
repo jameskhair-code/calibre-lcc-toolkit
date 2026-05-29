@@ -131,6 +131,17 @@ class CalibreDB:
             return []
         return self._fetch_books(ids)
 
+    def search_by_ids(self, ids: list[int]) -> list[Book]:
+        """Hydrate an explicit list of book IDs to Book objects.
+
+        For callers that already know which books to act on (e.g. re-grade,
+        which resolves IDs from the audit log) and must bypass Calibre search
+        — and therefore any GUI restriction or saved-search filter.
+        """
+        if not ids:
+            return []
+        return self._fetch_books(ids)
+
     def _search_ids(self, query: str) -> list[int]:
         """Resolve a Calibre search string to a list of book IDs.
 

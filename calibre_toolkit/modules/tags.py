@@ -135,57 +135,70 @@ def run_tags_enrichment(
     lcc_secondary_column: str | None = None,
     lcc_primary_column: str | None = None,
     apply_confirm_threshold: int = 20,
+    book_ids: list[int] | None = None,
 ) -> None:
-    """Full MQG-05 Tags enrichment flow for a Calibre search string."""
+    """Full MQG-05 Tags enrichment flow for a Calibre search string.
+
+    book_ids, when given, replaces the search: the explicit list is processed
+    verbatim (re-grade path), bypassing the search-string manual filter. The
+    caller owns the manual-flag decision.
+    """
     _started_at = datetime.now()
     _t0 = monotonic()
 
-    # ── 1. Search ─────────────────────────────────────────────────────────────
-    effective_query = (
-        f"({search_query}) and not {mqg_manual_column}:true"
-        if mqg_manual_column else search_query
-    )
-    try:
-        with console.status(f"[cyan]Searching library:[/] {search_query}"):
-            books = db.search(effective_query)
-    except RuntimeError as e:
-        console.print(Panel(str(e), title="[red]Cannot access library[/red]", border_style="red"))
-        raise typer.Exit(1)
-
-    if not books:
-        console.print("[yellow]No books matched that search. Nothing to do.[/yellow]")
-        raise typer.Exit()
-
-    total_matched = len(books)
-    if limit and len(books) > limit:
-        books = books[:limit]
-        console.print(
-            f"\n[bold]Found [green]{total_matched}[/green] books "
-            f"— processing first [cyan]{limit}[/cyan] (--limit).[/bold]"
-        )
+    # ── 1. Resolve books ──────────────────────────────────────────────────────
+    if book_ids is not None:
+        books = db.search_by_ids(book_ids)
+        if not books:
+            console.print("[yellow]No matching books for the given ids.[/yellow]")
+            raise typer.Exit()
+        console.print(f"\n[bold]Re-grading [green]{len(books)}[/green] book(s).[/bold]")
     else:
-        console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
+        effective_query = (
+            f"({search_query}) and not {mqg_manual_column}:true"
+            if mqg_manual_column else search_query
+        )
+        try:
+            with console.status(f"[cyan]Searching library:[/] {search_query}"):
+                books = db.search(effective_query)
+        except RuntimeError as e:
+            console.print(Panel(str(e), title="[red]Cannot access library[/red]", border_style="red"))
+            raise typer.Exit(1)
+
+        if not books:
+            console.print("[yellow]No books matched that search. Nothing to do.[/yellow]")
+            raise typer.Exit()
+
+        total_matched = len(books)
+        if limit and len(books) > limit:
+            books = books[:limit]
+            console.print(
+                f"\n[bold]Found [green]{total_matched}[/green] books "
+                f"— processing first [cyan]{limit}[/cyan] (--limit).[/bold]"
+            )
+        else:
+            console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
 
     # ── 2. Read current tags, LCC context, and existing comments ──────────────
     # Switched from get_tags_batch to get_book_details_batch so we can
     # also feed an existing-comments excerpt into the tags prompt
     # (item 16 — coherence signal). One round-trip, same query path.
-    book_ids = [b.id for b in books]
+    book_id_list = [b.id for b in books]
     with console.status("[cyan]Reading current tags, LCC context, and existing comments…"):
-        details_map = db.get_book_details_batch(book_ids)
-        tags_map = {bid: details_map[bid].tags for bid in book_ids}
+        details_map = db.get_book_details_batch(book_id_list)
+        tags_map = {bid: details_map[bid].tags for bid in book_id_list}
         comments_excerpt_map = {
             bid: _excerpt_from_comments(details_map[bid].existing_comments)
-            for bid in book_ids
+            for bid in book_id_list
         }
-        context_map: dict[int, dict[str, str]] = {bid: {} for bid in book_ids}
+        context_map: dict[int, dict[str, str]] = {bid: {} for bid in book_id_list}
         for col_key, col_label in [
             ("lcc_summary",        lcc_summary_column),
             ("lcc_secondary_class", lcc_secondary_column),
             ("lcc_primary_class",   lcc_primary_column),
         ]:
             if col_label:
-                batch = db.get_custom_column_batch(book_ids, col_label)
+                batch = db.get_custom_column_batch(book_id_list, col_label)
                 for bid, val in batch.items():
                     context_map[bid][col_key] = val
 

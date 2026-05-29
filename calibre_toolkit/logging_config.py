@@ -26,9 +26,11 @@ import logging
 import os
 import sys
 import threading
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 # ── Logger setup ────────────────────────────────────────────────────────────
 
@@ -99,6 +101,29 @@ def _audit_path() -> Path:
     return Path(override).expanduser() if override else _DEFAULT_AUDIT_PATH
 
 
+# Re-grade marker. When set, every audit_log call within the dynamic scope
+# tags its record with `regrade=<marker>` so the write is distinguishable from
+# an original AI write — calibration excludes these, and they remain queryable.
+# Tagging at the single choke point (audit_log) guarantees no write inside a
+# re-grade run escapes the marker; the apply paths are synchronous, so a
+# ContextVar set around the run-function call is visible at every audit_log.
+_regrade_marker: ContextVar[str | None] = ContextVar("regrade_marker", default=None)
+
+
+@contextmanager
+def regrade_audit(marker: str) -> Iterator[None]:
+    """Within this scope, audit_log tags each record with `regrade=marker`.
+
+    `marker` is the re-grade cutoff (the date the rule changed), recorded so a
+    later analysis knows which rule-boundary a re-grade was run against.
+    """
+    token = _regrade_marker.set(marker)
+    try:
+        yield
+    finally:
+        _regrade_marker.reset(token)
+
+
 def audit_log(
     book_id: int,
     field: str,
@@ -126,6 +151,10 @@ def audit_log(
         record["source"] = source
     if extra:
         record.update(extra)
+
+    marker = _regrade_marker.get()
+    if marker and "regrade" not in record:
+        record["regrade"] = marker
 
     path = _audit_path()
     try:
