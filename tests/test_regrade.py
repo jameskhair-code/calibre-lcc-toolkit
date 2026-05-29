@@ -186,6 +186,69 @@ def test_run_regrade_force_includes_manual_flagged(tmp_path, capsys):
     assert "manually-curated" not in out
 
 
+class _ApplyDB:
+    """No-op write sink — stands in for calibredb so the real apply helpers run
+    without touching a library. Records nothing; the audit log is the artifact."""
+    def apply_comments(self, book_id, html): pass
+    def apply_tags(self, book_id, tags): pass
+    def apply_custom_fields(self, book_id, fields): pass
+
+
+def test_marker_lands_through_real_apply_paths(tmp_path, monkeypatch):
+    """The marker reaches audit_log through each step's REAL apply helper.
+
+    This is the load-bearing guard for the ContextVar design: it drives the
+    actual `_apply_batch` / `_apply_suggestion` functions that call audit_log.
+    If any of those loops is ever moved onto a thread pool, the ContextVar
+    marker drops and this test fails — exactly the failure mode we must catch.
+    """
+    import types
+    from calibre_toolkit.modules import comments as C, tags as T, lcc as L
+    from calibre_toolkit.ai import CommentsSuggestion, TagsSuggestion
+
+    p = tmp_path / "audit.log"
+    monkeypatch.setenv("CALIBRE_TOOLKIT_AUDIT_LOG", str(p))
+    db = _ApplyDB()
+
+    comment = CommentsSuggestion(
+        book_id=1, title="t", authors=["a"], book_type="fiction", sections={},
+        must_read_score=5, must_read_rationale="", html="<p>x</p>", confidence="high",
+    )
+    tagset = TagsSuggestion(
+        book_id=2, title="t", authors=["a"], current_tags=[],
+        proposed_tags=["Fiction"], confidence="high",
+    )
+    lcc_v = types.SimpleNamespace(
+        book_id=3,
+        final_fields={k: "val" for k in L._LCC_FIELDS},
+        suggestion=types.SimpleNamespace(
+            source_authority="ai_inference", source="why", confidence="high",
+            attribution_prefix="AI"),
+    )
+
+    with regrade_audit("2026-05-15"):
+        C._apply_batch(db, [comment])
+        T._apply_batch(db, [tagset])
+        L._apply_suggestion(db, lcc_v, {k: f"#{k}" for k in L._LCC_FIELDS})
+
+    # Control write outside the scope — must NOT be marked.
+    C._apply_batch(db, [CommentsSuggestion(
+        book_id=99, title="t", authors=["a"], book_type="fiction", sections={},
+        must_read_score=5, must_read_rationale="", html="<p>y</p>", confidence="high")])
+
+    marked = {}
+    for e in read_audit_entries(p):
+        marked.setdefault(e["book_id"], e.get("regrade"))
+    assert marked[1] == "2026-05-15"   # comments-enrich
+    assert marked[2] == "2026-05-15"   # tags-enrich
+    assert marked[3] == "2026-05-15"   # lcc-enrich (all four field entries)
+    assert marked[99] is None          # outside scope → unmarked
+
+    # And the marked writes are excluded from calibration.
+    cal_ids = {r.book_id for r in load_audit_records(p)}
+    assert cal_ids == {99}
+
+
 def test_run_regrade_no_stale_books(tmp_path, capsys):
     p = tmp_path / "audit.log"
     _write(p, [_entry(100, ts="2026-06-01T10:00:00+00:00")])  # after cutoff

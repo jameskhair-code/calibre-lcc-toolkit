@@ -251,10 +251,17 @@ class CalibreDB:
         max_workers: int | None = None,
         progress_callback=None,
     ) -> tuple[list[int], list[tuple[int, str]]]:
-        """Apply title/authors updates sequentially via calibredb subprocesses.
+        """Apply title/authors updates via calibredb subprocesses (thread pool).
 
         updates: list of (book_id, title_or_None, authors_or_None) tuples.
         Returns (applied_ids, failures) where failures is list of (book_id, error).
+
+        NOTE: this runs in worker threads. It does not call audit_log, and must
+        not start doing so via the ContextVar-based re-grade marker
+        (logging_config._regrade_marker) — a ContextVar is not copied into these
+        workers, so the marker would silently drop. An auditing caller on this
+        path must pass the marker explicitly. (Today only clean-titles uses this
+        path, and it writes no audit trail.)
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
