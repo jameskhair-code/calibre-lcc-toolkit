@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "calibre-metadata-toolkit"
-version = "1.7.0"
+version = "1.8.0"
 description = "AI-assisted metadata enrichment pipeline for Calibre libraries"
 requires-python = ">=3.11"
 dependencies = [

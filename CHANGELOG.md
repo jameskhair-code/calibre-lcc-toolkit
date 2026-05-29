@@ -2,6 +2,66 @@
 
 ---
 
+## v1.8 — Calibration Action Loop
+
+Per-version charter: `docs/planning/v1.8-charter.md`. Seven core items scoped. Six PRs shipped (#52, #53, #54, #55, #56, #57); one item (subject coherence) attempted, measured, and deferred; three display-layer items deferred up front. Test suite from 528 → 581 hermetic tests.
+
+The v1.8 theme is turning the v1.4 measurement loop into an **action loop**. Since v1.4, `audit-confidence` could *show* when a confidence tier drifts from observed accuracy, but acting on what it showed was manual or impossible. This cycle closes that gap: reduce first-run friction, surface calibration trends across sessions, capture rule-edit intent at the moment of friction, make the audit log queryable, gate the one AI change class that can silently corrupt data (authorship), and — the spine — re-grade stale writes after a rule changes. The one coherence-depth item (subject-level coherence) was the cycle's high-risk bet; it was prototyped, measured against the real library, and deferred on the evidence.
+
+Two of the seven items carried a mandatory two-phase pause (prototype/measure → report → go-ahead → build): the re-grade workflow (shipped) and subject coherence (deferred).
+
+### Items shipped
+
+**Item 2 — audit-confidence first-run friction reduction** (PR #52)
+- The calibration command's first run on a fresh library was the highest-friction: it asked for a large initial sample before showing anything useful. Reduced the default initial sample to 5/tier, ordered grading high-tier-first (`_TIER_PRIORITY`), and surfaced an interim per-(step, tier) trajectory after a handful of grades rather than only at session end (`commands/audit.py`). Signal now accrues before the session is over.
+
+**Item 3 — Calibration trajectory visualization** (PR #53)
+- Multi-session calibration data accumulates in `~/.calibre-toolkit/calibration.jsonl`, but there was no view of whether a tier is getting more accurate over time. New `audit-trajectory` command renders a per-(step, tier) Unicode-block sparkline with first/latest strict precision and the change between them, high-tier-first, latest value coloured against the most recent threshold (`commands/audit.py`: `load_calibration_sessions`, `build_trajectories`, `_render_trajectory`, `run_trajectory`). Purely observational — reads one file, writes nothing.
+
+**Item 5 — Per-tier rule-edit prompts** (PR #54)
+- When `audit-confidence` flags a tier whose strict precision dropped below threshold, session-end now prompts "what would you change in the rule?" and appends the captured intent to `~/.calibre-toolkit/rule-revisions.jsonl` (`persist_rule_revisions`, `_prompt_rule_revisions`). A capture buffer of accumulated signal for a future architect pass — nothing reads it automatically yet.
+
+**Item 6 — Audit-log query CLI** (PR #55)
+- The audit log (`~/.calibre-toolkit/audit.log`, JSONL since v1.1) was grep-only. New read-only `audit-log` command renders matching entries as a compact Rich table with `--field` / `--book-id` / `--step` / `--since` filters (AND semantics) and a `--limit` recent-window (default 50). Opens one file, writes nothing.
+- **Charter deviation, recorded:** the charter named a `--session` filter, but the audit log carries **no session marker** — the writer (`logging_config.py`) emits `timestamp/book_id/field/new_value/confidence/source/step` plus per-write extras, never a session id. `--step` (the grouping the data actually has) was substituted and documented in the command's help. Shipped as a flat `audit-log` command rather than `audit-log show`, matching the repo's existing `audit-*` command style.
+- **Enabler for the re-grade item.** Extracted the canonical low-level reader (`read_audit_entries`) and filter (`filter_entries`) into `commands/audit_log.py` so there is exactly one audit-log parser. Calibration's `load_audit_records` now builds on it instead of re-opening the file; the re-grade workflow reuses it.
+
+**Inbox item — Author-change review gating** (PR #56)
+- From the 500-book `clean-titles` run (2026-05-28): the AI removed a real co-author from "J R" (Joy Williams & William Gaddis → William Gaddis only) on its own training knowledge, marked it medium confidence, and it auto-applied under "apply all." Authorship deletions from model memory are a high-risk class that can silently corrupt data.
+- `CleanupSuggestion.removes_author` detects an author drop or substitution via a normalization-aware key (diacritic-, case-, punctuation-, order-insensitive, built on `remove_diacritics`), so legitimate fixes (capitalisation, García → Garcia, "Williams, Joy" → "Joy Williams") are **not** flagged. Removals are capped to low confidence and review-only (`modules/authors.py`: `_gate_author_removals`): they fall out of every auto-apply path (`--auto-apply-high`, high-only, and the bulk "all" branch, which now routes them through per-book review) and are flagged red in the review table and prompt. Confidence semantics change for one field class only; legitimate author fixes flow through unblocked (confirmed on the real library).
+
+**Item 4 — Re-grade workflow** (PR #57, two-phase)
+- When you edit a rule (e.g. `rules/lcc.md`) to fix a calibration miss, every AI write made before that edit is stale relative to the new rule. New `regrade --step <step> --before <date>` finds the affected books and re-runs just those against the current prompt, reusing each step's existing review/apply flow with an explicit book-id list (`commands/regrade.py`, `db.search_by_ids`, `book_ids` params on the lcc/comments/tags run functions). Scope: the three audited, rule-driven steps — lcc-enrich, comments-enrich, tags-enrich. (clean-titles and enrich-identifiers write no audit trail, so their stale books can't be found this way — see limitations.)
+- **Staleness keys off a timestamp cutoff, not a session** — the audit log has no session marker. A book is stale when its *latest* audit entry for the step predates `--before`; the selector aggregates to latest-per-book, so a book already re-graded after the cutoff drops out (no double re-grading). Built on item 6's reader — no second parser.
+- **Re-grade audit-entry semantics (per charter DoD):** the run executes inside a `regrade_audit(cutoff)` context (`logging_config.py`) so every resulting audit entry is tagged `regrade=<cutoff>` at the single `audit_log` choke point — guaranteeing no fan-out write escapes the marker. Marked entries are **excluded from calibration** (`load_audit_records`) so a re-run against a changed rule doesn't mix pre/post-change accuracy in the same tier stats. (Calibrating re-grades as a separate cohort was considered and deferred.) The marker uses a `ContextVar`, which is correct because the three audited apply paths write on the main thread (sequential `for` loops); a load-bearing guard comment and a regression test (`test_marker_lands_through_real_apply_paths`) fail if any of those loops is ever moved onto a thread pool, where the ContextVar would silently drop.
+- **Manual flags respected:** re-grade bypasses Calibre search, so it re-applies the steps' `not <manual>:true` exclusion itself via the id path — manually-curated books are skipped by default; `--force` includes them. Proven on the real library (45 flagged books correctly skipped). The `book_ids` run path also bypasses the already-populated skip, since the explicit list is authoritative.
+
+### Item attempted, measured, and deferred
+
+**Item 1 — Subject coherence checking** — prototyped, measured, deferred (not shipped, not even opt-in)
+- The goal was to extend `coherence.py` from period-only to subject-level ("the comment discusses jazz but no jazz tag"), shipping opt-in-first and promoting to default only if the real-library false-positive rate proved low enough to trust. Designed precision-first: high-bar, low-recall, fire only when nearly certain.
+- **Phase A measurement (the decision driver):** a `check_subject_coherence` prototype with a curated 15-subject keyword map (Slavery, Holocaust, Jazz, Espionage, Civil Rights, Pandemic, …), reusing the production matchers, was run against the real batch of **4,428 books that have both comments and tags**. It fired 499 times across 458 books (10.3% of the batch). A classified sample put the **false-positive rate at ~70%**, and crucially the FPs are **intrinsic to keyword-matching prose**, not fixable map gaps: metaphor/idiom ("a *chess game* of a novel", "an *epidemic* of loneliness", "*Boxing* Day"), incidental mention (a character's job/hobby; theme litanies), comparison ("rivaled only by the *Holocaust*"), and blurb boilerplate. Only ~15% of FPs were the fixable kind (book adequately tagged under a variant not in the map); strip those and the intrinsic FP rate is still ~60%. Even the best subjects (Slavery, Holocaust) missed the "nearly certain" bar at ~25–35% FP.
+- **Disposition: deferred.** ~70% FP fails the charter's "fire only when nearly certain"; shipping it even opt-in would risk eroding trust in the period checks that *do* work. This confirms the v1.4 reasoning that excluded subjects from `coherence.py` in the first place ("too many ways for a comment to discuss a thing without it deserving a tag"). The keyword approach is the wrong tool, not a tuning problem.
+- **Candidate future direction:** AI-judgment-based subject coherence (ask the model whether the prose's central subject is reflected in the tags), not keyword matching. That would need its own cost/FP measurement before adoption. No follow-up scheduled; this disposition is the record.
+
+### Deferred this cycle (decided up front)
+
+Held back from the v2.0 plan's v1.8 section and the inbox to keep the cycle on its action-loop spine — not cut, parked for a lighter follow-on (per the charter's "Deferred this cycle" section):
+
+- **v1.8 item 7 — Per-step warnings rollup** (S, display-layer).
+- **v1.8 item 8 — TUI since-last-session sidebar** (M, display-layer; would reuse item 6's audit-log reader).
+- **Inbox: TUI selected-step highlight** (pairs with item 8).
+
+These cluster naturally (all `tui/app.py` / display-layer) and could ride a polish mini-cycle if appetite remains.
+
+### Known limitations after v1.8
+
+- **Re-grade covers lcc/comments/tags only.** clean-titles and enrich-identifiers write no audit trail (only lcc/comments/tags call `audit_log`), so re-grade can't find their stale books. A cheap future add would be to give clean-titles an audit trail first; enrich-identifiers is web-lookup, not rule-driven, so it's a poorer fit.
+- **The re-grade marker relies on main-thread apply.** The `ContextVar` design is correct today and guarded by a regression test, but it is a deliberate constraint, not a free property — see the guard comments in `logging_config.py` and `db.apply_metadata_batch`.
+- **Subject coherence remains period-only.** No subject-level coherence shipped; the period checks (`_PERIOD_KEYWORDS`) are unchanged. Revisiting requires the AI-judgment approach above, with its own measurement.
+
+---
+
 ## v1.7 — Catalog Reach, Take 2
 
 Per-version charter: `docs/planning/v1.7-charter.md`. Seven items allocated in the v2.0 multi-version roadmap (`docs/planning/v2.0-plan-roadmap-construction.md:206-331`). Five PRs shipped (#41, #43, #44, #45, #46), one item retracted as superseded in v1.3, one item cut after measurement. Test suite from 444 → 528 hermetic tests.
