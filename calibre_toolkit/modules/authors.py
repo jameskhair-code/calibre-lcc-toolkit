@@ -43,6 +43,25 @@ def _diff_text(original: str, suggested: str) -> Text:
     return t
 
 
+def _gate_author_removals(suggestions: list[CleanupSuggestion]) -> int:
+    """Cap any author-removal suggestion to low confidence (review-only).
+
+    Author deletions from model memory are the one clean-titles change class
+    that can silently corrupt data (the 2026-05-28 "J R" run dropped a real
+    co-author at medium confidence and it auto-applied under "all"). Capping
+    removals to low drops them out of every auto-apply path — high-only,
+    --auto-apply-high, and the bulk "all" branch — and flags them red in the
+    review table. Legitimate fixes (capitalisation, diacritics, ordering) are
+    not removals and pass through untouched. Returns the count capped.
+    """
+    n = 0
+    for s in suggestions:
+        if s.removes_author and s.confidence != "low":
+            s.confidence = "low"
+            n += 1
+    return n
+
+
 def _build_review_table(suggestions: list[CleanupSuggestion]) -> Table:
     table = Table(
         box=box.ROUNDED,
@@ -62,7 +81,11 @@ def _build_review_table(suggestions: list[CleanupSuggestion]) -> Table:
         conf_text = Text(icon, style=style)
         title_cell = _diff_text(s.original_title, s.suggested_title)
         author_cell = _diff_text(s.original_authors_display, s.suggested_authors_display)
-        table.add_row(str(i), conf_text, title_cell, author_cell, s.notes or "")
+        notes_cell = Text()
+        if s.removes_author:
+            notes_cell.append("removes author — review  ", style="bold red")
+        notes_cell.append(s.notes or "", style="dim")
+        table.add_row(str(i), conf_text, title_cell, author_cell, notes_cell)
     return table
 
 
@@ -137,6 +160,8 @@ def run_cleanup(
             "  [dim]Books in failed batches will not be marked complete — re-run to retry them.[/dim]\n"
         )
 
+    gated_count = _gate_author_removals(all_suggestions)
+
     changes = [s for s in all_suggestions if s.any_change]
     no_changes = [s for s in all_suggestions if not s.any_change]
 
@@ -145,6 +170,12 @@ def run_cleanup(
         f"[green]{len(changes)} changes suggested[/green], "
         f"[dim]{len(no_changes)} already clean[/dim].\n"
     )
+
+    if gated_count:
+        console.print(
+            f"[yellow]⚠ {gated_count} suggestion(s) remove an author — capped to "
+            "low confidence and review-only; they will not auto-apply.[/yellow]\n"
+        )
 
     # Books already clean → mark MQG complete immediately
     clean_ids = [s.book_id for s in no_changes]
@@ -212,10 +243,21 @@ def run_cleanup(
             console.print("[dim]No changes applied.[/dim]")
             raise typer.Exit()
         elif choice == "all":
-            if confirm_bulk_apply(len(changes), apply_confirm_threshold, console):
-                applied_ids += _apply_suggestions(db, changes)
-            else:
-                console.print("[dim]Bulk apply cancelled. No changes applied.[/dim]")
+            gated = [s for s in changes if s.removes_author]
+            bulk = [s for s in changes if not s.removes_author]
+            proceed = True
+            if bulk:
+                if confirm_bulk_apply(len(bulk), apply_confirm_threshold, console):
+                    applied_ids += _apply_suggestions(db, bulk)
+                else:
+                    console.print("[dim]Bulk apply cancelled. No changes applied.[/dim]")
+                    proceed = False
+            if proceed and gated:
+                console.print(
+                    f"\n[yellow]{len(gated)} author-removal change(s) are never "
+                    "bulk-applied — review each:[/yellow]\n"
+                )
+                applied_ids += _prompt_and_apply(db, gated)
         elif choice == "high-only":
             if high:
                 applied_ids += _apply_suggestions(db, high)
@@ -301,6 +343,11 @@ def _prompt_and_apply(db: CalibreDB, suggestions: list[CleanupSuggestion]) -> li
         if s.authors_changed:
             console.print(
                 f"  Authors: {_diff_text(' & '.join(s.original_authors), ' & '.join(s.suggested_authors))}"
+            )
+        if s.removes_author:
+            console.print(
+                "  [bold red]⚠ This removes an author — verify against a trusted "
+                "source before applying.[/bold red]"
             )
         if s.notes:
             console.print(f"  Notes:   [dim]{s.notes}[/dim]")
