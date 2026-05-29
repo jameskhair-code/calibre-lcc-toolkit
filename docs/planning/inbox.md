@@ -14,21 +14,10 @@ selected-state treatment — hard to confirm focus at a glance when navigating
 with arrows or digit-jumps. Display-only CSS change in `tui/app.py`
 (`StepItem` highlighted/focused styling). Low risk. Pairs with v1.8 item 8
 (both touch the TUI render path). Surfaced from real use 2026-05-28.
-
-**AI author changes (especially removals) should be review-gated, not
-auto-applied.** In a 500-book `clean-titles` run the AI removed an author
-from "J R" (Joy Williams → William Gaddis only) based on its own training
-knowledge, marked medium confidence, and it auto-applied under "apply all."
-Correct in that instance, but authorship deletions from model memory are a
-high-risk category that can silently corrupt data when wrong. Contrast: a
-sibling entry in the same run correctly *flagged* a suspicious authorship
-pairing ("The Tree of Life") for verification rather than changing it — that
-is the desired behaviour. Make author-field changes consistent: flag /
-review-gate rather than auto-apply at medium+, arguably cap authorship
-removals at low/review-only. Touch points: confidence-tier assignment for
-author-field changes in the clean-titles AI path (`rules/` for authors +
-`modules/authors.py` tier handling). Smells like v1.8 (correctness theme).
-Surfaced from real use 2026-05-28.
+- *Routed 2026-05-29 (post-v1.8 re-audit):* held for a later TUI/polish pass,
+  not v1.9 (a pure-refactor cycle takes no display-layer features). Clusters
+  with the deferred v1.8 items 7 (warnings rollup) and 8 (since-last-session
+  sidebar) and the v2.0-plan diff-view item — all display-layer.
 
 **`clean-titles` 429 rate-limit on large runs.** A 500-book run (50 batches,
 5 in flight) hit the org's 8,000-output-tokens-per-minute cap; 1 of 50
@@ -48,6 +37,9 @@ v1.10 (cost/perf) unless it recurs often. Surfaced from real use 2026-05-28.
   5,000-book enrichment runs. The code-side pacing/backoff above is the
   *secondary* fix for runs that exceed even the higher tier; it makes the tool
   well-behaved at any tier but is no longer the primary lever. Keep at v1.10.
+- *Routed 2026-05-29 (post-v1.8 re-audit):* confirmed → v1.10 (cost/perf
+  cycle). Operational mitigation (tier bump) is primary; code-side pacing is
+  the secondary lever, scoped there.
 
 **Consolidate the two parking lots.** Two parking lots currently coexist:
 `ROADMAP.md`'s "Beyond v1.5" section and the parking lot in
@@ -57,6 +49,8 @@ has largely superseded it as the forward-looking roadmap. Converge to one
 forward parking lot (likely the v2.0 plan's) and demote `ROADMAP.md` to a
 historical "what shipped through v1.5" record. Docs-only; small standalone
 PR; doesn't block any cycle. Surfaced 2026-05-28 (process simplification).
+- *Routed 2026-05-29 (post-v1.8 re-audit):* remains a standalone docs PR, any
+  time; blocks nothing. Noted in the v1.9 charter's parking-lot delta.
 
 **AI-judgment subject coherence (the replacement for the deferred keyword
 approach).** v1.8 item 1 (keyword-based subject coherence) was prototyped and
@@ -72,6 +66,9 @@ Slavery / Holocaust / Colonialism are the high-value targets (~25–35% FP even
 with keywords); the rest are noise. Needs its own cost + FP measurement before
 adoption. Candidate for v1.9+/v2.0. Surfaced from v1.8 item 1 Phase A,
 2026-05-28.
+- *Routed 2026-05-29 (post-v1.8 re-audit):* stays parked → v1.9+/v2.0. Not
+  v1.9 (a pure-refactor cycle adds no AI behaviour). Needs its own cost/FP
+  measurement before it earns a slot; the Phase A seed data above carries.
 
 **Post-v2.0: major architect pass — full A-Z library-completeness model + UX
 overhaul.** James's vision for after v2.0: rework the tool toward "every book
@@ -85,3 +82,5 @@ columns, `count_books_with_all_columns_true`, the TUI pipeline line) — an
 extension of the completeness model plus a UX rebuild, not a from-scratch
 rewrite. This is a v2.0-plan-scale architect pass (multi-version), to be scoped
 at the post-v2.0 boundary in a web-Claude session. Surfaced 2026-05-28.
+- *Routed 2026-05-29 (post-v1.8 re-audit):* unchanged — a pointer, scoped at
+  the post-v2.0 boundary. Not a v1.9 item.
