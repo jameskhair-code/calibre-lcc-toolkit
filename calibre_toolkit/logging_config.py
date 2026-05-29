@@ -26,9 +26,11 @@ import logging
 import os
 import sys
 import threading
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 # ── Logger setup ────────────────────────────────────────────────────────────
 
@@ -88,15 +90,49 @@ def get_logger(name: str) -> logging.Logger:
 _AUDIT_ENV = "CALIBRE_TOOLKIT_AUDIT_LOG"
 _DEFAULT_AUDIT_PATH = Path.home() / ".calibre-toolkit" / "audit.log"
 
-# Single global lock guards the append: multiple threads (e.g. apply_metadata_batch
-# in db.py) can write concurrently; one open-append-close per event keeps the
-# file structurally JSONL even on crash.
+# Single global lock guards the append so concurrent callers can't interleave a
+# line; one open-append-close per event keeps the file structurally JSONL even
+# on crash. The lock is defensive: today every audit_log call happens on the
+# main thread (the auditing apply paths — lcc/comments/tags — are sequential
+# `for` loops). db.apply_metadata_batch uses a thread pool but does NOT audit;
+# if that ever changes, see the regrade-marker note below.
 _audit_lock = threading.Lock()
 
 
 def _audit_path() -> Path:
     override = os.environ.get(_AUDIT_ENV)
     return Path(override).expanduser() if override else _DEFAULT_AUDIT_PATH
+
+
+# Re-grade marker. When set, every audit_log call within the dynamic scope
+# tags its record with `regrade=<marker>` so the write is distinguishable from
+# an original AI write — calibration excludes these, and they remain queryable.
+# Tagging at the single choke point (audit_log) guarantees no write inside a
+# re-grade run escapes the marker.
+#
+# THREADING CONSTRAINT (load-bearing): a ContextVar is NOT copied into
+# ThreadPoolExecutor worker threads. This works only because the auditing apply
+# paths (lcc/comments/tags `_apply_batch`) are sequential and call audit_log on
+# the same thread that entered `regrade_audit`. If any of those apply loops is
+# ever moved onto a thread pool, the marker will silently drop here and re-grade
+# writes will pollute calibration — pass the marker explicitly instead.
+# `tests/test_regrade.py::test_marker_lands_through_real_apply_paths` drives the
+# real apply helpers and will fail if this invariant breaks.
+_regrade_marker: ContextVar[str | None] = ContextVar("regrade_marker", default=None)
+
+
+@contextmanager
+def regrade_audit(marker: str) -> Iterator[None]:
+    """Within this scope, audit_log tags each record with `regrade=marker`.
+
+    `marker` is the re-grade cutoff (the date the rule changed), recorded so a
+    later analysis knows which rule-boundary a re-grade was run against.
+    """
+    token = _regrade_marker.set(marker)
+    try:
+        yield
+    finally:
+        _regrade_marker.reset(token)
 
 
 def audit_log(
@@ -126,6 +162,10 @@ def audit_log(
         record["source"] = source
     if extra:
         record.update(extra)
+
+    marker = _regrade_marker.get()
+    if marker and "regrade" not in record:
+        record["regrade"] = marker
 
     path = _audit_path()
     try:
