@@ -48,3 +48,31 @@ has largely superseded it as the forward-looking roadmap. Converge to one
 forward parking lot (likely the v2.0 plan's) and demote `ROADMAP.md` to a
 historical "what shipped through v1.5" record. Docs-only; small standalone
 PR; doesn't block any cycle. Surfaced 2026-05-28 (process simplification).
+
+**AI-judgment subject coherence (the replacement for the deferred keyword
+approach).** v1.8 item 1 (keyword-based subject coherence) was prototyped and
+deferred — ~70% false positives on a real 4,428-book batch, with the FPs
+intrinsic to keyword-matching prose (metaphor: "a chess game of a novel";
+incidental mention; comparison: "rivaled only by the Holocaust"; blurb
+boilerplate), confirming the v1.4 reasoning. Candidate replacement: ask the AI
+itself whether a book's *central* subject is substantive enough to warrant a
+tag it lacks, rather than keyword-matching the prose. Likely better as an
+opt-in *sweep tool* (scan the library for under-tagged books on high-value
+subjects) than inline per-book warnings. Tonight's data seeds it:
+Slavery / Holocaust / Colonialism are the high-value targets (~25–35% FP even
+with keywords); the rest are noise. Needs its own cost + FP measurement before
+adoption. Candidate for v1.9+/v2.0. Surfaced from v1.8 item 1 Phase A,
+2026-05-28.
+
+**Post-v2.0: major architect pass — full A-Z library-completeness model + UX
+overhaul.** James's vision for after v2.0: rework the tool toward "every book
+fully complete, every tracked dimension green." Includes a full
+library-landscape view; tracking *every* aspect of a book A-to-Z including
+currently-manual dimensions (e.g. covers — track completion status even if
+editing stays manual, via a flag column that shows green in the menu); faster
+menu navigation / button flow; an end-to-end workflow that "makes perfect
+sense." Builds on existing primitives (the `#mqg_*` completion + manual flag
+columns, `count_books_with_all_columns_true`, the TUI pipeline line) — an
+extension of the completeness model plus a UX rebuild, not a from-scratch
+rewrite. This is a v2.0-plan-scale architect pass (multi-version), to be scoped
+at the post-v2.0 boundary in a web-Claude session. Surfaced 2026-05-28.
