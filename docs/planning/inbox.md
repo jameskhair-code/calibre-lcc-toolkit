@@ -39,6 +39,15 @@ throttling concurrency / batch-size when output-tokens-per-minute is the
 binding limit. Likely affects all AI-suggest steps, not just clean-titles.
 Touch points: `ai.py` `_run_batches_concurrent` / the retry path. Smells like
 v1.10 (cost/perf) unless it recurs often. Surfaced from real use 2026-05-28.
+- *Update 2026-05-29:* an Anthropic Console email confirmed this is recurring,
+  not a fluke — the org exceeded its Sonnet rate limit **65 times in 24h**
+  during the heavy testing day. This is the *current usage tier's* ceiling
+  (8k output-tokens/min), not a code bug. Primary mitigation is operational:
+  bump the usage tier (auto-advances past $40 in total credit purchases,
+  raising limits across all models immediately) — necessary anyway for real
+  5,000-book enrichment runs. The code-side pacing/backoff above is the
+  *secondary* fix for runs that exceed even the higher tier; it makes the tool
+  well-behaved at any tier but is no longer the primary lever. Keep at v1.10.
 
 **Consolidate the two parking lots.** Two parking lots currently coexist:
 `ROADMAP.md`'s "Beyond v1.5" section and the parking lot in
