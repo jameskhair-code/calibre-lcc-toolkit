@@ -10,6 +10,7 @@ file portion of the prompt.
 from __future__ import annotations
 import html
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
@@ -19,7 +20,7 @@ from typing import TYPE_CHECKING, Callable, Literal
 from .db import Book, BookDetails
 from .logging_config import get_logger
 from .models import resolve_model
-from .normalize import normalize_text
+from .normalize import normalize_text, remove_diacritics
 from .usage import UsageAggregate, log_usage, parse_usage
 
 if TYPE_CHECKING:
@@ -291,6 +292,15 @@ class CommentsSuggestion:
         return " & ".join(self.authors)
 
 
+def _author_compare_key(name: str) -> str:
+    """Normalized key for deciding whether two author strings name the same
+    person. Diacritic-, case-, punctuation-, and order-insensitive so that
+    legitimate fixes (García → Garcia, "Williams, Joy" → "Joy Williams")
+    compare equal and are not mistaken for removals."""
+    base = remove_diacritics(name).casefold()
+    return " ".join(sorted(re.findall(r"\w+", base)))
+
+
 @dataclass
 class CleanupSuggestion:
     book_id: int
@@ -306,6 +316,24 @@ class CleanupSuggestion:
     @property
     def any_change(self) -> bool:
         return self.title_changed or self.authors_changed
+
+    @property
+    def removes_author(self) -> bool:
+        """True when an author present in the original has no counterpart in
+        the suggestion — a genuine drop or substitution, not a spelling fix.
+
+        Author deletions from model memory are the one clean-titles change
+        class that can silently corrupt data, so callers gate this to
+        review-only regardless of the AI's stated tier.
+        """
+        if not self.authors_changed:
+            return False
+        suggested_keys = {_author_compare_key(a) for a in self.suggested_authors}
+        for a in self.original_authors:
+            key = _author_compare_key(a)
+            if key and key not in suggested_keys:
+                return True
+        return False
 
     @property
     def original_authors_display(self) -> str:
