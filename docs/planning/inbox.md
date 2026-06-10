@@ -23,6 +23,12 @@ flag history can't be reconstructed. Touch points: `db.py:clear_mqg_flag`,
 `commands/unflag_manual.py`, possibly `regrade.py`'s `{manual}:true` check.
 Pre-existing (since v1.1-era code), not introduced by the v1.9 refactors.
 Surfaced 2026-06-09.
+- *Fixed 2026-06-09* (`fix/unflag-manual-requeue`): `clear_mqg_flag` now
+  deletes the row; full decline → flag → unflag → re-queue loop verified on
+  the real library. Library measurement found zero stale 0-rows, so no data
+  migration was needed. **Still open from this entry:** manual-flag writes
+  are not audit-logged (flag history can't be reconstructed) — route at the
+  re-audit.
 
 **TUI: highlight the selected pipeline step in the left panel.** The active
 step shows in the right detail panel but the left ListView rows have no clear

@@ -318,7 +318,15 @@ class CalibreDB:
             conn.commit()
 
     def clear_mqg_flag(self, book_id: int, column: str) -> None:
-        """Clear (set to false) a custom boolean MQG column for a single book."""
+        """Clear a custom boolean MQG column for a single book.
+
+        Deletes the row rather than writing value=0: Calibre's bool-column
+        search treats `#col:true` as "column is defined" (0 and 1 both
+        match it), so a 0-value row would still match the steps'
+        `not #<manual>:true` exclusion and the book would never be
+        re-queued. Removing the row restores the undefined state that
+        `not #col:true` matches.
+        """
         label = column.lstrip("#")
         with self._connect() as ro:
             row = ro.execute(
@@ -329,10 +337,7 @@ class CalibreDB:
         col_id = row[0]
         table = f"custom_column_{col_id}"
         with self._connect_rw() as conn:
-            conn.execute(
-                f"INSERT OR REPLACE INTO {table} (book, value) VALUES (?, 0)",
-                (book_id,),
-            )
+            conn.execute(f"DELETE FROM {table} WHERE book = ?", (book_id,))
             conn.commit()
 
     def get_identifiers(self, book_id: int) -> dict[str, str]:
