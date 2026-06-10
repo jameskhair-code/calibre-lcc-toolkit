@@ -8,6 +8,22 @@ routing is decided at version boundaries. See `docs/planning/workflow.md`
 
 ---
 
+**`unflag-manual` doesn't actually re-queue books — `clear_mqg_flag` writes
+0 instead of deleting the row.** Discovered during the v1.9 item-2 real-library
+smoke. On this Calibre version, bool-column search `#col:true` matches any
+*defined* value (0 or 1) and `#col:false` matches *undefined* — `:yes`/`:checked`
+are the value tests. `db.clear_mqg_flag` writes `value=0`, which still matches
+`#col:true`, so the steps' `not #<manual>:true` exclusion keeps "unflagged"
+books out of every subsequent run: the command's whole purpose (re-queueing)
+silently fails. Fix: DELETE the row (restore the undefined state) instead of
+writing 0 — and audit the toolkit for other `:true`/`:false` searches that
+assume value semantics. Related observation: manual-flag writes
+(`mark_mqg_complete` on the `*_manual` columns) are not audit-logged, so
+flag history can't be reconstructed. Touch points: `db.py:clear_mqg_flag`,
+`commands/unflag_manual.py`, possibly `regrade.py`'s `{manual}:true` check.
+Pre-existing (since v1.1-era code), not introduced by the v1.9 refactors.
+Surfaced 2026-06-09.
+
 **TUI: highlight the selected pipeline step in the left panel.** The active
 step shows in the right detail panel but the left ListView rows have no clear
 selected-state treatment — hard to confirm focus at a glance when navigating

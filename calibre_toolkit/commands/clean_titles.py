@@ -28,7 +28,7 @@ from ..modules.authors import (
     _diff_text,
     _gate_author_removals,
 )
-from ..review_prompts import confirm_bulk_apply
+from ..review_prompts import ask_apply_choice, bulk_apply_with_review_gate
 from ..summary import StepSummary, render_summary_panel
 
 if TYPE_CHECKING:
@@ -244,33 +244,34 @@ def run_cleanup(
             )
             applied_ids += _prompt_and_apply(db, medium_low)
     else:
-        console.print("[dim]Waiting for input…[/dim]")
-        choice = Prompt.ask(
+        choice = ask_apply_choice(
+            console,
             "[bold]Apply changes?[/bold]  \\[a]ll / \\[h]igh-only / \\[r]eview / \\[s]kip",
-            choices=["all", "high-only", "review", "skip", "a", "h", "r", "s"],
+            choices=["all", "high-only", "review", "skip"],
             default="review",
-            show_choices=False,
         )
-        choice = {"a": "all", "h": "high-only", "r": "review", "s": "skip"}.get(choice, choice)
         if choice == "skip":
             console.print("[dim]No changes applied.[/dim]")
             raise typer.Exit()
         elif choice == "all":
-            gated = [s for s in changes if s.removes_author]
-            bulk = [s for s in changes if not s.removes_author]
-            proceed = True
-            if bulk:
-                if confirm_bulk_apply(len(bulk), apply_confirm_threshold, console):
-                    applied_ids += _apply_suggestions(db, bulk)
-                else:
-                    console.print("[dim]Bulk apply cancelled. No changes applied.[/dim]")
-                    proceed = False
-            if proceed and gated:
-                console.print(
-                    f"\n[yellow]{len(gated)} author-removal change(s) are never "
+            # Author removals are the v1.8 data-corruption guard: detection
+            # (removes_author, the low-confidence cap) lives in
+            # modules/authors.py; the helper owns the routing that keeps them
+            # out of every bulk-apply path.
+            a, _ = bulk_apply_with_review_gate(
+                changes,
+                console=console,
+                apply_confirm_threshold=apply_confirm_threshold,
+                apply_batch=lambda s: _apply_suggestions(db, s),
+                review=lambda s: (_prompt_and_apply(db, s), []),
+                is_review_only=lambda s: s.removes_author,
+                gate_notice=lambda n: (
+                    f"\n[yellow]{n} author-removal change(s) are never "
                     "bulk-applied — review each:[/yellow]\n"
-                )
-                applied_ids += _prompt_and_apply(db, gated)
+                ),
+                cancel_message="[dim]Bulk apply cancelled. No changes applied.[/dim]",
+            )
+            applied_ids += a
         elif choice == "high-only":
             if high:
                 applied_ids += _apply_suggestions(db, high)

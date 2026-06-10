@@ -25,7 +25,7 @@ from ._common import (
 from ..coherence import check_tags_coherence
 from ..logging_config import audit_log
 from ..modules.tags import _CONF_DISPLAY, _build_review_table, _excerpt_from_comments
-from ..review_prompts import confirm_bulk_apply
+from ..review_prompts import apply_tier
 from ..summary import StepSummary, render_summary_panel
 
 if TYPE_CHECKING:
@@ -274,61 +274,29 @@ def run_tags_enrichment(
     applied_ids: list[int] = []
     declined: list[TagsSuggestion] = []
 
-    if high:
-        console.print("[dim]Waiting for input…[/dim]")
-        choice = Prompt.ask(
-            f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence "
-            f"tag set{'s' if len(high) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
-            choices=["all", "review", "skip", "a", "r", "s"], default="all", show_choices=False,
+    for tier, label, default, on_skip in (
+        (high,   f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence "
+                 f"tag set{'s' if len(high) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+         "all", False),
+        (medium, f"\n[bold yellow]Tier 2:[/bold yellow] Apply {len(medium)} medium-confidence "
+                 f"tag set{'s' if len(medium) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+         "review", False),
+        (low,    f"\n[bold red]Tier 3:[/bold red] Apply {len(low)} low-confidence "
+                 f"tag set{'s' if len(low) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+         "skip", True),
+    ):
+        a, d = apply_tier(
+            tier,
+            console=console,
+            prompt=label,
+            default=default,
+            apply_confirm_threshold=apply_confirm_threshold,
+            apply_batch=lambda s: _apply_batch(db, s),
+            review=lambda s: _prompt_and_apply(db, s),
+            declined_on_skip=on_skip,
         )
-        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
-        if choice == "all":
-            if confirm_bulk_apply(len(high), apply_confirm_threshold, console):
-                applied_ids += _apply_batch(db, high)
-            else:
-                console.print("[dim]Bulk apply cancelled.[/dim]")
-        elif choice == "review":
-            a, d = _prompt_and_apply(db, high)
-            applied_ids += a
-            declined += d
-
-    if medium:
-        console.print("[dim]Waiting for input…[/dim]")
-        choice = Prompt.ask(
-            f"\n[bold yellow]Tier 2:[/bold yellow] Apply {len(medium)} medium-confidence "
-            f"tag set{'s' if len(medium) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
-            choices=["all", "review", "skip", "a", "r", "s"], default="review", show_choices=False,
-        )
-        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
-        if choice == "all":
-            if confirm_bulk_apply(len(medium), apply_confirm_threshold, console):
-                applied_ids += _apply_batch(db, medium)
-            else:
-                console.print("[dim]Bulk apply cancelled.[/dim]")
-        elif choice == "review":
-            a, d = _prompt_and_apply(db, medium)
-            applied_ids += a
-            declined += d
-
-    if low:
-        console.print("[dim]Waiting for input…[/dim]")
-        choice = Prompt.ask(
-            f"\n[bold red]Tier 3:[/bold red] Apply {len(low)} low-confidence "
-            f"tag set{'s' if len(low) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
-            choices=["all", "review", "skip", "a", "r", "s"], default="skip", show_choices=False,
-        )
-        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
-        if choice == "all":
-            if confirm_bulk_apply(len(low), apply_confirm_threshold, console):
-                applied_ids += _apply_batch(db, low)
-            else:
-                console.print("[dim]Bulk apply cancelled.[/dim]")
-        elif choice == "review":
-            a, d = _prompt_and_apply(db, low)
-            applied_ids += a
-            declined += d
-        else:
-            declined += low
+        applied_ids += a
+        declined += d
 
     # ── 6. Mark MQG ───────────────────────────────────────────────────────────
     high_applied = [s.book_id for s in high if s.book_id in applied_ids]
