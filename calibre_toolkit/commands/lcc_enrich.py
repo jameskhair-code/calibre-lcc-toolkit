@@ -48,7 +48,7 @@ from ..modules.lcc import (
     _truncate_ai_only_lcc,
     _validate,
 )
-from ..review_prompts import confirm_bulk_apply
+from ..review_prompts import apply_tier
 from ..services.book_description import fetch_descriptions_batch
 from ..summary import StepSummary, render_summary_panel
 
@@ -548,60 +548,44 @@ def run_lcc_enrichment(
     applied_ids: list[int] = []
     declined: list[ValidatedSuggestion] = []
 
-    if high:
-        if auto_apply_high:
-            console.print(f"[bold]--auto-apply-high[/bold]: applying {len(high)} high-confidence enrichments.\n")
-            applied_ids += _apply_batch(db, high, columns)
-        else:
-            console.print("[dim]Waiting for input…[/dim]")
-            choice = Prompt.ask(
-                f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence enrichment{'s' if len(high) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
-                choices=["all", "review", "skip", "a", "r", "s"], default="all", show_choices=False,
-            )
-            choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
-            if choice == "all":
-                if confirm_bulk_apply(len(high), apply_confirm_threshold, console):
-                    applied_ids += _apply_batch(db, high, columns)
-                else:
-                    console.print("[dim]Bulk apply cancelled.[/dim]")
-            elif choice == "review":
-                a, d = _prompt_and_apply(db, high, columns)
-                applied_ids += a; declined += d
-
-    if medium:
-        console.print("[dim]Waiting for input…[/dim]")
-        choice = Prompt.ask(
-            f"\n[bold yellow]Tier 2:[/bold yellow] Apply {len(medium)} medium-confidence enrichment{'s' if len(medium) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
-            choices=["all", "review", "skip", "a", "r", "s"], default="review", show_choices=False,
+    if high and auto_apply_high:
+        console.print(f"[bold]--auto-apply-high[/bold]: applying {len(high)} high-confidence enrichments.\n")
+        applied_ids += _apply_batch(db, high, columns)
+    else:
+        a, d = apply_tier(
+            high,
+            console=console,
+            prompt=f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence enrichment{'s' if len(high) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+            default="all",
+            apply_confirm_threshold=apply_confirm_threshold,
+            apply_batch=lambda v: _apply_batch(db, v, columns),
+            review=lambda v: _prompt_and_apply(db, v, columns),
         )
-        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
-        if choice == "all":
-            if confirm_bulk_apply(len(medium), apply_confirm_threshold, console):
-                applied_ids += _apply_batch(db, medium, columns)
-            else:
-                console.print("[dim]Bulk apply cancelled.[/dim]")
-        elif choice == "review":
-            a, d = _prompt_and_apply(db, medium, columns)
-            applied_ids += a; declined += d
+        applied_ids += a; declined += d
 
-    if low:
-        console.print("[dim]Waiting for input…[/dim]")
-        choice = Prompt.ask(
-            f"\n[bold red]Tier 3:[/bold red] Apply {len(low)} low-confidence enrichment{'s' if len(low) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
-            choices=["all", "review", "skip", "a", "r", "s"], default="skip", show_choices=False,
-        )
-        choice = {"a": "all", "r": "review", "s": "skip"}.get(choice, choice)
-        if choice == "all":
-            if confirm_bulk_apply(len(low), apply_confirm_threshold, console):
-                applied_ids += _apply_batch(db, low, columns)
-            else:
-                console.print("[dim]Bulk apply cancelled.[/dim]")
-        elif choice == "review":
-            a, d = _prompt_and_apply(db, low, columns)
-            applied_ids += a; declined += d
-        else:
-            # Auto-flag skipped low-confidence books for manual curation
-            declined += low
+    a, d = apply_tier(
+        medium,
+        console=console,
+        prompt=f"\n[bold yellow]Tier 2:[/bold yellow] Apply {len(medium)} medium-confidence enrichment{'s' if len(medium) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+        default="review",
+        apply_confirm_threshold=apply_confirm_threshold,
+        apply_batch=lambda v: _apply_batch(db, v, columns),
+        review=lambda v: _prompt_and_apply(db, v, columns),
+    )
+    applied_ids += a; declined += d
+
+    # Skipped low-confidence books are auto-flagged for manual curation.
+    a, d = apply_tier(
+        low,
+        console=console,
+        prompt=f"\n[bold red]Tier 3:[/bold red] Apply {len(low)} low-confidence enrichment{'s' if len(low) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+        default="skip",
+        apply_confirm_threshold=apply_confirm_threshold,
+        apply_batch=lambda v: _apply_batch(db, v, columns),
+        review=lambda v: _prompt_and_apply(db, v, columns),
+        declined_on_skip=True,
+    )
+    applied_ids += a; declined += d
 
     # ── 6. Mark MQG / flag manual ─────────────────────────────────────────────
     # All applied books are marked MQG-03 complete — applied_ids already

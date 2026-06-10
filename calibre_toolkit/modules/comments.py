@@ -43,10 +43,6 @@ _SECTION_LABELS = [
 ]
 
 
-def _strip_html(text: str) -> str:
-    return re.sub(r"<[^>]+>", "", text)
-
-
 def _truncate(text: str, max_chars: int = 130) -> str:
     if len(text) <= max_chars:
         return text

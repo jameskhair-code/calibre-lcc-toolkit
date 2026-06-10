@@ -32,7 +32,7 @@ from ..modules.identifiers import (
     _is_sufficient,
     _parallel_lookup,
 )
-from ..review_prompts import confirm_bulk_apply
+from ..review_prompts import apply_tier
 from ..summary import StepSummary, render_summary_panel
 
 if TYPE_CHECKING:
@@ -348,32 +348,24 @@ def run_enrichment(
     manually_declined: list[IdentifierSuggestion] = []
 
     # --- Tier 1: high confidence ---
-    if high:
-        if auto_apply_high:
-            console.print(
-                f"[bold]--auto-apply-high[/bold]: applying [green]{len(high)}[/green] "
-                "high-confidence enrichments automatically.\n"
-            )
-            applied_ids += _apply_suggestions(db, high)
-        else:
-            console.print("[dim]Waiting for input…[/dim]")
-            choice_high = Prompt.ask(
-                f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence enrichment{'s' if len(high) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
-                choices=["all", "review", "skip", "a", "r", "s"],
-                default="all",
-                show_choices=False,
-            )
-            choice_high = {"a": "all", "r": "review", "s": "skip"}.get(choice_high, choice_high)
-            if choice_high == "all":
-                if confirm_bulk_apply(len(high), apply_confirm_threshold, console):
-                    applied_ids += _apply_suggestions(db, high)
-                else:
-                    console.print("[dim]Bulk apply cancelled.[/dim]")
-            elif choice_high == "review":
-                ids, declined = _prompt_and_apply(db, high)
-                applied_ids += ids
-                manually_declined += declined
-            # skip: do nothing
+    if high and auto_apply_high:
+        console.print(
+            f"[bold]--auto-apply-high[/bold]: applying [green]{len(high)}[/green] "
+            "high-confidence enrichments automatically.\n"
+        )
+        applied_ids += _apply_suggestions(db, high)
+    else:
+        ids, declined = apply_tier(
+            high,
+            console=console,
+            prompt=f"\n[bold]Tier 1:[/bold] Apply {len(high)} high-confidence enrichment{'s' if len(high) != 1 else ''}?  \\[a]ll / \\[r]eview / \\[s]kip",
+            default="all",
+            apply_confirm_threshold=apply_confirm_threshold,
+            apply_batch=lambda s: _apply_suggestions(db, s),
+            review=lambda s: _prompt_and_apply(db, s),
+        )
+        applied_ids += ids
+        manually_declined += declined
 
     # --- Tier 2: low confidence ---
     if low:
@@ -381,25 +373,18 @@ def run_enrichment(
             f"\n[bold yellow]Tier 2:[/bold yellow] {len(low)} low-confidence enrichment{'s' if len(low) != 1 else ''} "
             "— title/author match (wrong ISBN will affect run 2):\n"
         )
-        console.print("[dim]Waiting for input…[/dim]")
-        low_choice = Prompt.ask(
-            "[bold]Tier 2:[/bold] Apply low-confidence enrichments?  \\[a]ll / \\[r]eview / \\[s]kip",
-            choices=["all", "review", "skip", "a", "r", "s"],
+        ids, declined = apply_tier(
+            low,
+            console=console,
+            prompt="[bold]Tier 2:[/bold] Apply low-confidence enrichments?  \\[a]ll / \\[r]eview / \\[s]kip",
             default="review",
-            show_choices=False,
+            apply_confirm_threshold=apply_confirm_threshold,
+            apply_batch=lambda s: _apply_suggestions(db, s),
+            review=lambda s: _prompt_and_apply(db, s),
+            skip_message=f"[dim]{len(low)} low-confidence enrichment(s) skipped. Run again to review.[/dim]",
         )
-        low_choice = {"a": "all", "r": "review", "s": "skip"}.get(low_choice, low_choice)
-        if low_choice == "all":
-            if confirm_bulk_apply(len(low), apply_confirm_threshold, console):
-                applied_ids += _apply_suggestions(db, low)
-            else:
-                console.print("[dim]Bulk apply cancelled.[/dim]")
-        elif low_choice == "review":
-            ids, declined = _prompt_and_apply(db, low)
-            applied_ids += ids
-            manually_declined += declined
-        else:
-            console.print(f"[dim]{len(low)} low-confidence enrichment(s) skipped. Run again to review.[/dim]")
+        applied_ids += ids
+        manually_declined += declined
 
     # ── 6. Mark MQG complete ─────────────────────────────────────────────────
     # Three-way split for enriched books:

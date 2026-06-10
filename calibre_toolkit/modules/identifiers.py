@@ -27,7 +27,7 @@ from rich.text import Text
 from rich import box
 
 from ..db import Book
-from ..fetcher import IdentifierFetcher, IDENTIFIER_TYPES
+from ..fetcher import IdentifierFetcher
 from ..logging_config import get_logger
 
 _log = get_logger(__name__)
