@@ -274,13 +274,99 @@ def _check_columns(cfg: dict) -> list[CheckResult]:
     return results
 
 
+# ── State-file checks (v1.9 item 5) ─────────────────────────────────────────
+
+
+def _check_jsonl_state_file(name: str, path: Path) -> CheckResult:
+    """One toolkit JSONL state file: exists → readable → parses cleanly.
+
+    Absence is normal (fresh install, or a feature not yet used) and is
+    reported ok with a note, not an error. Malformed lines are counted by
+    comparing the canonical reader's parse count against the raw non-empty
+    line count — the same parser audit-log / regrade / calibration use
+    (read_audit_entries), not a second one.
+    """
+    from .commands.audit_log import read_audit_entries
+
+    if not path.exists():
+        return CheckResult(name, "ok", "not created yet — normal on a fresh install")
+    try:
+        entries = read_audit_entries(path)
+        with open(path, "r", encoding="utf-8") as f:
+            total = sum(1 for line in f if line.strip())
+    except Exception as e:
+        return CheckResult(name, "fail", f"unreadable: {type(e).__name__}: {e}")
+    malformed = total - len(entries)
+    if malformed:
+        return CheckResult(
+            name, "warn",
+            f"{malformed} of {total} line(s) malformed in {path} — "
+            "well-formed entries still parse; inspect the file",
+        )
+    return CheckResult(
+        name, "ok",
+        f"{len(entries)} entr{'y' if len(entries) == 1 else 'ies'} ({path})",
+    )
+
+
+def _check_workkey_cache() -> CheckResult:
+    """The OL work-key cache — a single JSON object, not JSONL.
+
+    Corruption is a warning, not a failure: catalog lookups silently rebuild
+    a corrupt cache from scratch, so nothing is blocked — but the user should
+    know cache hits are being lost.
+    """
+    from .services.lc_catalog import _WORKKEY_CACHE_SCHEMA_VERSION, _workkey_cache_path
+
+    name = "state: ol-workkey-cache.json"
+    path = _workkey_cache_path()
+    if not path.exists():
+        return CheckResult(name, "ok", "not created yet — normal on a fresh install")
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return CheckResult(
+            name, "warn",
+            f"corrupt ({type(e).__name__}) — lookups rebuild it from scratch; "
+            f"delete {path} to clear this warning",
+        )
+    if not isinstance(raw, dict) or raw.get("version") != _WORKKEY_CACHE_SCHEMA_VERSION:
+        return CheckResult(
+            name, "warn",
+            "unexpected schema — lookups rebuild it from scratch; "
+            f"delete {path} to clear this warning",
+        )
+    entries = raw.get("entries") or {}
+    n = len(entries) if isinstance(entries, dict) else 0
+    return CheckResult(
+        name, "ok",
+        f"{n} cached work-key entr{'y' if n == 1 else 'ies'} ({path})",
+    )
+
+
+def _check_state_files() -> list[CheckResult]:
+    """The toolkit's ~/.calibre-toolkit/ state files: the audit trail, the
+    calibration and rule-revision logs, and the OL work-key cache. Paths
+    resolve through the same env-aware helpers the writers use."""
+    from .logging_config import _audit_path
+
+    state_dir = Path.home() / ".calibre-toolkit"
+    return [
+        _check_jsonl_state_file("state: audit.log", _audit_path()),
+        _check_jsonl_state_file("state: calibration.jsonl", state_dir / "calibration.jsonl"),
+        _check_jsonl_state_file("state: rule-revisions.jsonl", state_dir / "rule-revisions.jsonl"),
+        _check_workkey_cache(),
+    ]
+
+
 def run_doctor(config_path: Path, console: Console | None = None) -> int:
     """Run all health checks and print a report. Returns 0 on success, 1 on any failure."""
     console = console or Console()
 
     console.print(Panel(
         "[bold cyan]Calibre Toolkit — Doctor[/bold cyan]\n"
-        "Read-only validation of your config, library, and Anthropic credentials.",
+        "Read-only validation of your config, library, Anthropic credentials, "
+        "and toolkit state files.",
         border_style="cyan",
     ))
 
@@ -296,6 +382,9 @@ def run_doctor(config_path: Path, console: Console | None = None) -> int:
             all_results.extend(_check_columns(cfg))
         all_results.append(_check_calibredb(cfg))
         all_results.append(_check_api_key(cfg))
+
+    # State files are config-independent — checked even when config is broken.
+    all_results.extend(_check_state_files())
 
     table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
     table.add_column("", width=4)
