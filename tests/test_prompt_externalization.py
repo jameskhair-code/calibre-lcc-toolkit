@@ -8,12 +8,9 @@ ai.py.
 """
 
 from __future__ import annotations
-from pathlib import Path
 
 import calibre_toolkit.ai as ai
-
-_RULES_DIR = Path(ai.__file__).parent.parent / "rules"
-_PROMPTS_DIR = _RULES_DIR / "prompts"
+from calibre_toolkit.ai import _PROMPTS_DIR, _RULES_DIR
 
 
 def test_confidence_rules_file_exists():
