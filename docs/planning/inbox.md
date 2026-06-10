@@ -92,6 +92,62 @@ adoption. Candidate for v1.9+/v2.0. Surfaced from v1.8 item 1 Phase A,
   v1.9 (a pure-refactor cycle adds no AI behaviour). Needs its own cost/FP
   measurement before it earns a slot; the Phase A seed data above carries.
 
+**Title/Author rules audit — fixes and improvements for
+`rules/author_title.md` and its prompt wrappers.** Requested deep dive
+(web session, 2026-06-10). Findings, in priority order:
+
+1. *Contradictory example in T-SER-02* (`rules/author_title.md:289`): the
+   WRONG line shows the **correct** transformation — `"Eon (The Way Book 1)"
+   → "Eon"` — and the RIGHT line on 290 is byte-identical. The WRONG line
+   was clearly meant to show the *unchanged* title (the "[leaving unchanged
+   is also wrong]" note confirms the intent). As written it tells the model
+   the correct answer is wrong. Fix: WRONG example → `"Eon (The Way Book 1)"`
+   unchanged.
+2. *Duplicated alternative in T-SUB-07* (`rules/author_title.md:234`):
+   `separated by " / " (or " / ")` — both strings are byte-identical
+   (verified via hexdump). Probably meant a non-spaced `"/"` as the
+   alternative. Fix or drop the parenthetical.
+3. *GEN-01 conflicts with the output format*: GEN-01 says note
+   `"No changes needed."` on unchanged rows; `author_title_output_format.md`
+   says write `"Already correctly formatted."` and **never** write "No
+   changes needed". The prompt argues with itself. Code tolerates both
+   (`ai/authors.py:128`), so this is prompt-only: align GEN-01 (and the
+   GEN-07 examples) to "Already correctly formatted."
+4. *GEN-07 vs output-format notes style*: output format wants rule-ID
+   citations ("Removed generic subtitle per T-SUB-02"); GEN-07's examples
+   cite no rules. Harmonize on the rule-citation style — it makes review
+   and calibration traceable.
+5. *A-MUL section assumes a single-string author field*, but the output
+   schema is a JSON array (one element per author). " & " separators are a
+   display concern; the model should never need them. Add a bridge note to
+   A-MUL: each `authors` array element is exactly one person; never put
+   "&" inside an element except corporate names (A-ROL-11 / A-SPE-07).
+   Code-side fallback: `ai/authors.py:110` splits returned strings on ";"
+   but not on " & " or " and " — consider extending the split if mis-packed
+   elements show up in practice.
+6. *A-MUL-05 condition oddity*: "more than three authors AND contains
+   'et al.'" — the flag should trigger on "et al." alone.
+7. *T-CAP-10's stylistic-lowercase example is an author, not a title*
+   ("bell hooks — author name, not title" — the rule is about titles).
+   Replace with a real lowercase-title example or drop the parenthetical.
+8. *`rules/confidence.md` SECTION CONF index omits author_title.md*
+   (lists lcc/comments/tags/tags_cleanup only). One-line fix: note that
+   author/title confidence guidance lives in GEN-02..05.
+9. *Code-side candidate (separate small PR)*: `normalize.py` Americanizes
+   dashes and diacritics but not typographic quotes/apostrophes
+   (`’ ‘ “ ”` → `' "`) or the ellipsis char (`…` → `...`), despite the
+   stated plain-ASCII intent — curly apostrophes are common in titles
+   ("Where’d You Go, Bernadette"). Add to `normalize_text` + a T-FMT rule
+   mirroring the dash treatment, with `test_normalize.py` coverage. Needs
+   James's sign-off on the mapping before landing.
+
+Items 1–8 are a single docs/rules PR (no code). All are prompt-content
+changes → per the test ritual they need a small real-library smoke run
+before being declared done; pytest alone can't verify prompt behaviour.
+Items 1–2 are outright defects worth pulling forward. Requested by James
+2026-06-10 (web session research; explicit intent — don't drop silently
+at re-audit).
+
 **Post-v2.0: major architect pass — full A-Z library-completeness model + UX
 overhaul.** James's vision for after v2.0: rework the tool toward "every book
 fully complete, every tracked dimension green." Includes a full
