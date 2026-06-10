@@ -134,12 +134,16 @@ local Claude reads it when a workflow question comes up mid-cycle.
 
 ## Repo orientation primitives
 
-- `calibre_toolkit/cli.py` — Typer command surface
+- `calibre_toolkit/cli.py` — CLI entry point; imports each command module
+  for its registration side-effect
 - `calibre_toolkit/tui/app.py` — Textual TUI
-- `calibre_toolkit/modules/` — per-step implementations (`lcc.py`,
-  `comments.py`, `tags.py`, `identifiers.py`, `authors.py`, `tags_review.py`)
-- `calibre_toolkit/commands/` — new in v1.4; `audit.py` is currently the only
-  occupant. Other top-level commands will migrate here over time.
+- `calibre_toolkit/commands/` — one module per CLI command (since v1.9):
+  the Typer handler, `run_*` orchestration, and the review/apply flow.
+  `_common.py` holds the shared `app`, console, and config/db/AI factories.
+- `calibre_toolkit/modules/` — per-step pure domain logic (`lcc.py`,
+  `comments.py`, `tags.py`, `identifiers.py`, `authors.py`, `tags_review.py`):
+  schemas, validators, renderable builders — no user prompts, no Calibre
+  writes
 - `calibre_toolkit/services/` — external service clients (`lc_catalog.py`,
   `book_description.py`)
 - `calibre_toolkit/coherence.py` — cross-step coherence checks (new in v1.4)

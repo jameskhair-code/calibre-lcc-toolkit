@@ -36,7 +36,6 @@ from rich import box
 
 from ..db import CalibreDB
 from ..logging_config import get_logger
-from .audit_log import read_audit_entries
 
 _log = get_logger(__name__)
 console = Console()
@@ -93,6 +92,11 @@ def load_audit_records(path: Path) -> list[AuditRecord]:
     marker) are also excluded — they re-run a changed rule and would otherwise
     mix pre- and post-change accuracy in the same tier stats.
     """
+    # Deferred import: pulling in .audit_log at module top would register its
+    # audit-log CLI handler before this module's audit-confidence handler,
+    # reordering the command listing in `calibre-toolkit --help`.
+    from .audit_log import read_audit_entries
+
     records: list[AuditRecord] = []
     for d in read_audit_entries(path):
         if not (d.get("confidence") and d.get("source") and d.get("step")):
@@ -742,3 +746,147 @@ def _book_label(db: CalibreDB, book_id: int) -> tuple[str, str]:
         return ("(deleted from library)", "")
     b = books[0]
     return (b.title, " & ".join(b.authors))
+
+
+# ── CLI handlers ──────────────────────────────────────────────────────────────
+
+import os as _os
+from typing import Optional, Annotated
+
+from rich.text import Text
+
+from ._common import app, console as _cli_console, DEFAULT_CONFIG_PATH, _load_config, _make_db
+
+
+@app.command(
+    name="audit-confidence",
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit audit-confidence\n\n"
+        "  calibre-toolkit audit-confidence --step comments-enrich --sample-size 30\n\n"
+        "  calibre-toolkit audit-confidence --step tags-enrich,lcc-enrich --threshold 0.8\n"
+    ),
+)
+def audit_confidence(
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    sample_size: Annotated[
+        int,
+        typer.Option("--sample-size", "-n",
+                     help="Max records to sample per (step, tier) group"),
+    ] = 5,
+    step: Annotated[
+        Optional[str],
+        typer.Option("--step",
+                     help='Comma-separated step filter (e.g. "comments-enrich,tags-enrich"). '
+                          'Default: all steps in the audit log.'),
+    ] = None,
+    threshold: Annotated[
+        float,
+        typer.Option("--threshold",
+                     help="Strict-precision floor; tiers below this are flagged"),
+    ] = 0.7,
+    audit_log: Annotated[
+        Optional[Path],
+        typer.Option("--audit-log",
+                     help="Override audit log path (default: $CALIBRE_TOOLKIT_AUDIT_LOG "
+                          "or ~/.calibre-toolkit/audit.log)"),
+    ] = None,
+    output: Annotated[
+        Optional[Path],
+        typer.Option("--output", "-o",
+                     help="Where to append the calibration session record "
+                          "(default: ~/.calibre-toolkit/calibration.jsonl)"),
+    ] = None,
+    seed: Annotated[
+        Optional[int],
+        typer.Option("--seed", help="Random seed for reproducible sampling"),
+    ] = None,
+):
+    """
+    Measure how well confidence tiers predict accuracy.
+
+    Samples applied AI writes from ~/.calibre-toolkit/audit.log, prompts
+    you to rate each as correct / minor / wrong, and computes per-tier
+    strict and lenient precision. Tiers whose strict precision falls
+    below --threshold are flagged for rule review.
+
+    The command is purely observational — it does not change any field
+    in Calibre. Results are appended to ~/.calibre-toolkit/calibration.jsonl
+    as one JSONL line per session.
+    """
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+
+    if audit_log is not None:
+        audit_log_path = audit_log
+    else:
+        env = _os.environ.get("CALIBRE_TOOLKIT_AUDIT_LOG")
+        audit_log_path = Path(env).expanduser() if env else (
+            Path.home() / ".calibre-toolkit" / "audit.log"
+        )
+    output_path = output or (Path.home() / ".calibre-toolkit" / "calibration.jsonl")
+
+    steps_filter: Optional[list[str]] = None
+    if step:
+        steps_filter = [s.strip() for s in step.split(",") if s.strip()]
+
+    _cli_console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — audit-confidence\n\n",
+                ("Audit log: ", "dim"),
+                (str(audit_log_path), "bold"),
+                ("\nOutput:    ", "dim"),
+                (str(output_path), "bold"),
+                ("\nSample:    ", "dim"),
+                (f"{sample_size} per (step, tier)", "bold"),
+                ("\nThreshold: ", "dim"),
+                (f"{threshold:.0%} strict precision", "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_audit_confidence(
+        db=db,
+        audit_log_path=audit_log_path,
+        output_path=output_path,
+        sample_size=sample_size,
+        threshold=threshold,
+        steps_filter=steps_filter,
+        seed=seed,
+    )
+
+
+@app.command(
+    name="audit-trajectory",
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit audit-trajectory\n\n"
+        "  calibre-toolkit audit-trajectory --calibration ./calibration.jsonl\n"
+    ),
+)
+def audit_trajectory(
+    calibration: Annotated[
+        Optional[Path],
+        typer.Option("--calibration",
+                     help="Path to the calibration session log "
+                          "(default: ~/.calibre-toolkit/calibration.jsonl)"),
+    ] = None,
+):
+    """
+    Show how each confidence tier's strict precision has trended across
+    calibration sessions.
+
+    Reads the history written by audit-confidence and renders a
+    per-(step, tier) sparkline with first/latest strict precision and the
+    change between them. Purely observational — reads one file, writes nothing.
+    """
+    calibration_path = calibration or (
+        Path.home() / ".calibre-toolkit" / "calibration.jsonl"
+    )
+    run_trajectory(calibration_path)

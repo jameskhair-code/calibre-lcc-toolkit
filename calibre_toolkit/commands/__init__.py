@@ -1,7 +1,8 @@
-"""Subcommand implementations.
+"""Per-command Typer handlers + orchestration.
 
-This subpackage was introduced for the `audit-confidence` command
-(roadmap item 17). Future work: migrate the other top-level commands
-in `cli.py` into this directory for consistency. Captured as a
-parking-lot item in ROADMAP.md "Beyond v1.5".
+One module per CLI command (v1.9 item 1). Each module registers its
+handlers on the shared `app` in `_common.py` as an import side-effect;
+`cli.py` imports every module here in help-listing order. Orchestration
+(prompts, Calibre writes, review/apply flow) lives in these modules;
+pure domain logic stays in `calibre_toolkit/modules/`.
 """
