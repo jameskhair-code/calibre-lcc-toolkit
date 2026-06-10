@@ -167,7 +167,7 @@ def _dispatch(
     """Invoke the step's existing run function with the explicit book-id list."""
     if step == "lcc-enrich":
         import os
-        from ..modules.lcc import run_lcc_enrichment
+        from .lcc_enrich import run_lcc_enrichment
         lcc_cfg = cfg.get("lcc", {})
         columns = {
             "lcc": lcc_cfg.get("lcc_column", "#lcc"),
@@ -196,7 +196,7 @@ def _dispatch(
             book_ids=book_ids,
         )
     elif step == "comments-enrich":
-        from ..modules.comments import run_comments_enrichment
+        from .comments_enrich import run_comments_enrichment
         comments_cfg = cfg.get("comments", {})
         run_comments_enrichment(
             db=db, ai=ai, search_query="",
@@ -207,7 +207,7 @@ def _dispatch(
             book_ids=book_ids,
         )
     elif step == "tags-enrich":
-        from ..modules.tags import run_tags_enrichment
+        from .tags_enrich import run_tags_enrichment
         tags_cfg = cfg.get("tags", {})
         lcc_cfg = cfg.get("lcc", {})
         run_tags_enrichment(
@@ -220,3 +220,118 @@ def _dispatch(
             apply_confirm_threshold=apply_confirm_threshold,
             book_ids=book_ids,
         )
+
+
+# ── CLI handler ───────────────────────────────────────────────────────────────
+
+import os as _os
+from typing import Optional, Annotated
+
+from rich.text import Text
+
+from ._common import (
+    app, console as _cli_console, DEFAULT_CONFIG_PATH,
+    _load_config, _make_db, _make_ai, _apply_confirm_threshold,
+)
+from .audit_log import parse_since
+
+
+@app.command(
+    epilog=(
+        "Examples:\n\n"
+        "  calibre-toolkit regrade --step lcc-enrich --before 2026-05-15 --dry-run\n\n"
+        "  calibre-toolkit regrade --step lcc-enrich --before 2026-05-15\n\n"
+        "  calibre-toolkit regrade --step tags-enrich --before 2026-05-01 --force\n"
+    ),
+)
+def regrade(
+    step: Annotated[
+        str,
+        typer.Option("--step",
+                     help="Enrichment step to re-grade: lcc-enrich, "
+                          "comments-enrich, or tags-enrich."),
+    ],
+    before: Annotated[
+        str,
+        typer.Option("--before",
+                     help="Re-grade books whose latest write for this step "
+                          "predates this ISO date/timestamp (the date the rule "
+                          "changed). e.g. 2026-05-15"),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to config.json"),
+    ] = DEFAULT_CONFIG_PATH,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="List the stale books without re-running."),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Include manually-curated books (skipped by default)."),
+    ] = False,
+    limit: Annotated[
+        Optional[int],
+        typer.Option("--limit", "-n", help="Cap how many stale books to re-grade."),
+    ] = None,
+    audit_log: Annotated[
+        Optional[Path],
+        typer.Option("--audit-log",
+                     help="Override audit log path (default: $CALIBRE_TOOLKIT_AUDIT_LOG "
+                          "or ~/.calibre-toolkit/audit.log)"),
+    ] = None,
+    ai_model: Annotated[
+        Optional[str],
+        typer.Option("--ai-model", help="Override AI model (alias fast/latest/legacy or a literal id)."),
+    ] = None,
+):
+    """
+    Re-run an enrichment step on books made stale by a rule change.
+
+    Finds books whose latest audit entry for --step predates --before (the date
+    you changed the rule) and re-runs just those against the current prompt,
+    reusing the step's normal review/apply flow. Re-grade writes are marked so
+    they don't pollute calibration, and manually-curated books are skipped
+    unless --force. Scope: lcc-enrich, comments-enrich, tags-enrich.
+    """
+    if step not in STEPS:
+        raise typer.BadParameter(
+            f"'{step}' is not a re-gradable step. Choose one of: {', '.join(STEPS)}"
+        )
+    before_dt = parse_since(before)
+
+    cfg = _load_config(config)
+    db = _make_db(cfg)
+
+    if audit_log is not None:
+        audit_log_path = audit_log
+    else:
+        env = _os.environ.get("CALIBRE_TOOLKIT_AUDIT_LOG")
+        audit_log_path = Path(env).expanduser() if env else (
+            Path.home() / ".calibre-toolkit" / "audit.log"
+        )
+
+    # AI client is only needed for an actual run; a dry-run shouldn't require
+    # an API key. command_key is the step prefix (lcc/comments/tags).
+    ai = None
+    if not dry_run:
+        ai = _make_ai(cfg, command_key=step.removesuffix("-enrich"), model_override=ai_model)
+
+    _cli_console.print(
+        Panel(
+            Text.assemble(
+                ("Calibre Toolkit", "bold cyan"),
+                " — Re-grade\n\n",
+                ("Step:    ", "dim"), (step, "bold"),
+                ("\nBefore:  ", "dim"), (before, "bold"),
+            ),
+            border_style="cyan",
+        )
+    )
+
+    run_regrade(
+        db, ai, cfg,
+        step=step, before=before_dt, before_label=before,
+        audit_path=audit_log_path, dry_run=dry_run, force=force, limit=limit,
+        apply_confirm_threshold=_apply_confirm_threshold(cfg),
+    )

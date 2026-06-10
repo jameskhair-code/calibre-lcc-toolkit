@@ -203,7 +203,8 @@ def test_marker_lands_through_real_apply_paths(tmp_path, monkeypatch):
     marker drops and this test fails — exactly the failure mode we must catch.
     """
     import types
-    from calibre_toolkit.modules import comments as C, tags as T, lcc as L
+    from calibre_toolkit.commands import comments_enrich as C, tags_enrich as T, lcc_enrich as L
+    from calibre_toolkit.modules.lcc import _LCC_FIELDS
     from calibre_toolkit.ai import CommentsSuggestion, TagsSuggestion
 
     p = tmp_path / "audit.log"
@@ -220,7 +221,7 @@ def test_marker_lands_through_real_apply_paths(tmp_path, monkeypatch):
     )
     lcc_v = types.SimpleNamespace(
         book_id=3,
-        final_fields={k: "val" for k in L._LCC_FIELDS},
+        final_fields={k: "val" for k in _LCC_FIELDS},
         suggestion=types.SimpleNamespace(
             source_authority="ai_inference", source="why", confidence="high",
             attribution_prefix="AI"),
@@ -229,7 +230,7 @@ def test_marker_lands_through_real_apply_paths(tmp_path, monkeypatch):
     with regrade_audit("2026-05-15"):
         C._apply_batch(db, [comment])
         T._apply_batch(db, [tagset])
-        L._apply_suggestion(db, lcc_v, {k: f"#{k}" for k in L._LCC_FIELDS})
+        L._apply_suggestion(db, lcc_v, {k: f"#{k}" for k in _LCC_FIELDS})
 
     # Control write outside the scope — must NOT be marked.
     C._apply_batch(db, [CommentsSuggestion(
