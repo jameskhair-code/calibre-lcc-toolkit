@@ -738,7 +738,23 @@ def main(config_path: Optional[Path] = None) -> None:
         print("Copy config.example.json to config.json and fill in your values.")
         sys.exit(1)
 
-    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    try:
+        cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        print(f"Error: {config_path} is not valid JSON: {e}")
+        sys.exit(1)
+
+    from ..config_schema import ConfigValidationError, validate_config
+    try:
+        warnings = validate_config(cfg)
+    except ConfigValidationError as e:
+        print(f"Error: {config_path} failed validation:")
+        for line in e.errors:
+            print(f"  - {line}")
+        print("Fix the field(s) above — config.example.json documents the expected shape.")
+        sys.exit(1)
+    for key in warnings:
+        print(f"Warning: config.json: unknown key '{key}' — ignored.")
 
     try:
         db = CalibreDB(

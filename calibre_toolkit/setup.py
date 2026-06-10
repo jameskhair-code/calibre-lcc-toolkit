@@ -173,11 +173,27 @@ def _check_config_parses(config_path: Path) -> tuple[CheckResult, dict | None]:
                         f"{config_path} is not valid JSON: {e}"),
             None,
         )
+    # Schema validation (v1.9 item 6). A shape failure skips the deeper
+    # checks — they would only crash on the same bad fields.
+    from .config_schema import ConfigValidationError, validate_config
+    try:
+        unknown = validate_config(cfg)
+    except ConfigValidationError as e:
+        return (
+            CheckResult("config.json validates", "fail", "; ".join(e.errors)),
+            None,
+        )
     missing = [k for k in ("library_path", "calibredb_path") if not cfg.get(k)]
     if missing:
         return (
             CheckResult("config.json required keys", "fail",
                         f"Missing keys: {', '.join(missing)}"),
+            cfg,
+        )
+    if unknown:
+        return (
+            CheckResult("config.json validates", "warn",
+                        f"unknown key(s) ignored: {', '.join(unknown)}"),
             cfg,
         )
     return (CheckResult("config.json parses", "ok", str(config_path)), cfg)

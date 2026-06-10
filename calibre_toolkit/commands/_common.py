@@ -81,6 +81,16 @@ DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent / "config.json"
 
 
 def _load_config(config_path: Path) -> dict:
+    """Load and validate config.json; return the parsed dict unchanged.
+
+    Validation (v1.9 item 6) is a typing layer only — the dict the commands
+    receive is exactly what json.load produced, so every access-site
+    `.get` default and cross-block fallback behaves as before. Shape errors
+    fail loudly here with field-precise messages instead of a KeyError
+    deep in a run.
+    """
+    from ..config_schema import ConfigValidationError, validate_config
+
     if not config_path.exists():
         console.print(
             Panel(
@@ -92,8 +102,37 @@ def _load_config(config_path: Path) -> dict:
             )
         )
         raise typer.Exit(1)
-    with open(config_path) as f:
-        return json.load(f)
+    try:
+        with open(config_path) as f:
+            cfg = json.load(f)
+    except json.JSONDecodeError as e:
+        console.print(
+            Panel(
+                f"[red]{config_path} is not valid JSON:[/red] {e}",
+                title="Invalid config",
+                border_style="red",
+            )
+        )
+        raise typer.Exit(1)
+    try:
+        warnings = validate_config(cfg)
+    except ConfigValidationError as e:
+        console.print(
+            Panel(
+                f"[red]{config_path} failed validation:[/red]\n\n"
+                + "\n".join(f"  • {line}" for line in e.errors)
+                + "\n\nFix the field(s) above — [bold]config.example.json[/bold] "
+                "documents the expected shape.",
+                title="Invalid config",
+                border_style="red",
+            )
+        )
+        raise typer.Exit(1)
+    for key in warnings:
+        console.print(
+            f"[yellow]config.json: unknown key '{key}' — ignored.[/yellow]"
+        )
+    return cfg
 
 
 def _make_db(cfg: dict):
