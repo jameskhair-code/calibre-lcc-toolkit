@@ -2,6 +2,63 @@
 
 ---
 
+## v1.9 — Architecture Refactor & TUI Test Coverage
+
+Per-version charter: `docs/planning/v1.9-charter.md`. Six core items scoped. Six item PRs shipped (#62, #64, #65, #67, #68, #69) plus a standalone mid-cycle bugfix (#66). Test suite from 581 → 639 hermetic tests.
+
+**This was a pure-refactor cycle. No behaviour changes.** The v1.1→v1.8 arc built every primitive the toolkit needs; v1.9 paid down the structural debt those cycles deliberately deferred: the 1486-line `cli.py` and 1440-line `ai.py` split into packages, the duplicated per-tier review/apply blocks consolidated, the TUI got its first hermetic tests, and config gained a typed validator. The risk shape was inverted from a feature cycle — the danger was never "does the new behaviour work" but "is the behaviour byte-identical after the move" — so the Definition of Done was behaviour-identity: every refactor PR proved its `--help` output byte-identical (19 outputs captured before/after and byte-compared), the suite never shrank, and the two L-items carried real-library smoke runs confirming identical pipelines and token telemetry. The two high-blast L-items (commands migration, ai.py split) were strictly sequenced — never an open diff at the same time — and both went through a two-phase plan → go-ahead → build pause with independent review before merge, as did typed config.
+
+### Items shipped
+
+**Item 4 — Hermetic TUI smoke tests** (PR #62, landed first as the migration's regression net)
+- First programmatic coverage of `tui/app.py` (752 lines, manual-tested only until now) via Textual's `Pilot` harness: mount, BINDINGS, `action_jump`, the v1.6 digit/letter navigation, step list and action panels. Landed deliberately *before* the commands migration so TUI behaviour drift during the refactor would fail tests rather than wait for a manual session. Suite 581 → 588.
+
+**Item 1 — Commands migration** (PR #64, L, two-phase)
+- All 18 inline `@app.command()` handlers extracted from `cli.py` and their `run_*` orchestration moved out of `modules/`, per the charter's Option-2 topology: **`commands/<step>.py` owns the Typer handler + orchestration + review/apply flow (prompts, Calibre writes, audit logging); `modules/<step>.py` keeps pure domain logic** (parsers, validators, `_build_*` renderable builders, the catalog/parallel lookups). 15 new command modules; handlers added to the existing `commands/{audit,audit_log,regrade}.py`; `cli.py` collapsed 1486 → 36 lines of registration imports.
+- New `commands/_common.py` holds the shared Typer `app` + callback, console, `DEFAULT_CONFIG_PATH` (repointed one level deeper), the win32 stdout/stderr reconfigure (still guaranteed to run before any `Console()` on every entry path), and the `_load_config`/`_make_db`/`_make_ai` factories — breaking the cli ↔ commands circular-import risk.
+- The Phase A cut-rule refinements applied as decided: `_build_*` (returns a renderable) → `modules/`; `_print_*`/`_display_*`/`_show_*` (console I/O) → `commands/`, classified by behaviour (no renames proved necessary); `_gate_author_removals` and `removes_author` detection stayed in `modules/authors.py` with zero churn on their tests; `commands/menu.py` created as a 2-line delegate.
+- One wrinkle worth the record: `commands/audit.py`'s top-level import of the `.audit_log` reader registered the `audit-log` handler before `audit-confidence`, reordering `--help` (Typer lists commands in registration order). Caught by the byte-diff, fixed with a deferred import + guard comment. Only test churn: `test_regrade.py` repointed to the migrated apply helpers, exactly as planned.
+
+**Item 2 — Shared review-prompt helper** (PR #65, M)
+- `review_prompts.py` became the single home for the tiered apply flow, as three honest seams rather than one over-general entry point: `ask_apply_choice` (the letter-alias prompt, also serving clean-titles' 4-choice variant), `bulk_apply_with_review_gate` (the v1.6 `confirm_bulk_apply` gate + the v1.8 author-removal routing; a cancelled bulk skips the gated review; degenerates to plain confirm-apply with no gate), and `apply_tier` (one tier's full block, with `declined_on_skip` and `skip_message` as the two real per-step variants). The 11 duplicated tier blocks across comments/tags/lcc/identifiers collapsed to helper calls; clean-titles' "all" branch folded its author-gate routing into the helper (detection stayed in `modules/authors.py`). Per the charter constraint, `tags_review`'s per-book flow, `tags_cleanup`'s per-group flow, and `clean_identifiers` were deliberately not generalised over.
+- 24 new contract tests lock letters, word forms, Enter-defaults, the bulk-confirm threshold both ways, skip-vs-declined semantics, and the author-removal guard matrix (gated items never reach a bulk apply; high confidence doesn't buy a removal back in; the detection→routing chain holds). Real-library verification drove the interactive tier prompts via scripted stdin — letters, words, Enter-default, invalid-input re-ask, per-item declines — with zero applies and smoke flags cleaned after.
+- Also deleted two dead-code bits flagged in #64: `modules/comments.py:_strip_html` and the unused `IDENTIFIER_TYPES` import in `modules/identifiers.py`.
+
+**Standalone fix — `unflag-manual` never re-queued books** (PR #66, found in the item-2 smoke; broken since the v1.0-era code; fixed mid-cycle per the PR #30 precedent)
+- `clear_mqg_flag` wrote `value=0`, but Calibre's bool-column search treats `#col:true` as "column is *defined*" — 0 and 1 both match (real-library probe: `:true`=48 vs `:yes`=45; `:false` matches only undefined). So an "unflagged" book still matched the steps' `not #<manual>:true` exclusion and was never re-queued — the command's whole purpose silently failed. Fix: delete the row, restoring the undefined state. Measured before fixing; a sweep of all 15 bool custom columns found zero stale 0-rows (no migration needed); every other `:true` use audited as correct once the 0-state can't exist; the full flag → excluded → `unflag-manual` → re-queued loop verified end-to-end on the real library.
+
+**Item 3 — `ai.py` → `ai/` package** (PR #67, L, two-phase)
+- The 1440-line single file became a six-module package: `ai/_client.py` (AIClient **whole** — telemetry, retries, batching, schema-validation retry, the `suggest_*` surface as thin glue), `ai/_prompts.py` (rules/prompt loading, its own module so the step modules avoid a cycle), and `ai/{authors,lcc,tags,comments}.py` (per-step dataclasses, prompt assembly, parse/validate/transform). `ai/__init__.py` re-exports the full union of the former module-level names, so every existing `from calibre_toolkit.ai import X` — including the 30+ private names tests use — resolves unchanged; the only test churn was `test_prompt_externalization.py`'s `ai.__file__`-derived path.
+- **Charter premise correction, recorded:** the charter listed `ai/identifiers.py`, but the identifiers step uses `fetcher.py` (calibredb's metadata fetch), not the AI client — `ai.py` contained zero identifier code. Four step modules cover the five AI-suggest steps, the three tag flows sharing `ai/tags.py`.
+- Verbatim-move proof: an AST byte-comparison of all 45 top-level defs/classes against the old file — 44 identical, the 45th differing only by the deletion of an unreachable duplicate `return` (old `ai.py:1440`). Real-library dry-runs for lcc, tags, and comments ran the full suggest pipelines through the new package with intact token-telemetry panels.
+
+**Item 5 — Doctor state-file checks** (PR #68)
+- `doctor` now verifies the four `~/.calibre-toolkit/` state files: `audit.log`, `calibration.jsonl`, `rule-revisions.jsonl`, and the OL work-key cache. Per file: absence is an ok-with-note (normal on a fresh install); well-formed reports entry counts; corrupted lines warn with "N of M line(s) malformed" (warn, not fail, so `doctor && batch` gating still passes on a degraded-but-usable log); binary garbage fails without crashing. No second parser — the JSONL checks reuse `read_audit_entries` and derive the malformed count as raw non-empty lines minus parsed entries; paths resolve through the same env-aware helpers the writers use. Verified against the real state files plus a deliberately truncated line in a copy. The one intentional `--help` change of the cycle (doctor's summary names the state files).
+
+**Item 6 — Typed config** (PR #69, two-phase)
+- New `config_schema.py`: a Pydantic `ToolkitConfig` mirroring `config.example.json` exactly. **Validate-at-load design:** the model runs at the three load sites (`_load_config`, the TUI entry, doctor's config check) and the loaders return the *original parsed dict unchanged* — behaviour byte-identical by construction, every access-site `.get` default and cross-block fallback (description → catalog timeouts) untouched. What changes is the failure mode: a malformed config fails loudly at startup with field-precise messages (`review.apply_confirm_threshold: Input should be a valid integer (got 'twenty')`) instead of a `KeyError` deep in a run; broken JSON gets a clean panel instead of a traceback.
+- **Premise correction, recorded:** the charter's "only 3 files access `cfg[...]`" was measured pre-migration; post-item-1 it's 3 *load sites* but ~100 access sites across 12 files. That stale number is exactly why the approved design validates at load rather than converting access sites to attributes — the attribute conversion would have been the "touches every module" shape the charter downsized away from, and `model_dump()` would have silently broken the description → catalog fallback chain.
+- Policy: `library_path` is the only required field (`calibredb_path` follows runtime truth; doctor's stricter check untouched); `_`-prefixed keys silently ignored (the example's comment convention — the example file is now a permanent validation fixture); other unknown keys warn with the full dotted path, never reject; credential-bearing fields never echo values in error output. Side fix on-path: a config missing `library_path` used to crash doctor mid-table with a `KeyError`; validation failure now short-circuits the deeper checks.
+
+### Deferred this cycle (decided up front)
+
+Held for a later TUI/polish pass — all display-layer, none belonging in a behaviour-neutral refactor cycle (unchanged from the v1.8 deferral list, plus the diff view):
+
+- **Side-by-side diff view for proposed changes** (v2.0-plan item; depends on item 2's shared helper, which now exists).
+- **v1.8 item 7 — Per-step warnings rollup** (S, display-layer).
+- **v1.8 item 8 — TUI since-last-session sidebar** (M; reuses the audit-log reader).
+- **Inbox: TUI selected-step highlight** (display-only CSS).
+
+These cluster naturally into a polish mini-cycle; appetite to be assessed at the v1.9 re-audit.
+
+### Known limitations after v1.9
+
+- **Manual-flag writes are still not audit-logged.** Discovered alongside the unflag-manual fix: `mark_mqg_complete` on the `*_manual` columns writes no audit entry, so flag history can't be reconstructed after the fact. Captured in `docs/planning/inbox.md` for routing at the re-audit.
+- **Cosmetic leftovers from the split:** three separate `_strip_html` helpers remain (`coherence.py`, `commands/audit.py`, `modules/tags_review.py` — each genuinely local, but a candidate for one shared home), and `fetcher.py`'s `IDENTIFIER_TYPES` definition is orphaned (its one import was deleted in item 2).
+- **AIClient was kept whole, deliberately.** The mixin alternative (per-step method classes composing the client) was considered in the item-3 Phase A and rejected as over-abstraction — the `suggest_*` methods are 8–15-line glue. If a future streamlining cycle wants the methods per-step too, mixins from the current layout are the natural next step; recorded so the option survives.
+
+---
+
 ## v1.8 — Calibration Action Loop
 
 Per-version charter: `docs/planning/v1.8-charter.md`. Seven core items scoped. Six PRs shipped (#52, #53, #54, #55, #56, #57); one item (subject coherence) attempted, measured, and deferred; three display-layer items deferred up front. Test suite from 528 → 581 hermetic tests.
