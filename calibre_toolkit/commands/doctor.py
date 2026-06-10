@@ -24,7 +24,9 @@ def doctor(
     ] = DEFAULT_CONFIG_PATH,
 ):
     """
-    Validate config, library, calibredb, API key, and custom columns.
+    Validate config, library, calibredb, API key, custom columns, and the
+    toolkit state files (audit log, calibration and rule-revision logs,
+    OL work-key cache).
 
     Read-only. Exits non-zero on any failure so it can be used in CI or as a
     pre-flight check before running a batch.
