@@ -210,7 +210,7 @@ def run_tags_enrichment(
 
     budget_guardrail(
         usage_step="tags", n_books=len(books), model=ai.model,
-        threshold=confirm_above_usd, dry_run=dry_run,
+        threshold=confirm_above_usd,
     )
 
     # ── 3. AI generation ───────────────────────────────────────────────────────

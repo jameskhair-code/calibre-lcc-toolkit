@@ -255,7 +255,7 @@ def run_comments_enrichment(
 
     budget_guardrail(
         usage_step="comments", n_books=len(books), model=ai.model,
-        threshold=confirm_above_usd, dry_run=dry_run,
+        threshold=confirm_above_usd,
     )
 
     # ── 4. AI generation ───────────────────────────────────────────────────────

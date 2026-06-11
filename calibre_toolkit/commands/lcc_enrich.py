@@ -437,7 +437,7 @@ def run_lcc_enrichment(
     # whole step, so n is the full batch.
     budget_guardrail(
         usage_step="lcc", n_books=len(books), model=ai.model,
-        threshold=confirm_above_usd, dry_run=dry_run,
+        threshold=confirm_above_usd,
     )
 
     # ── 3c. AI lookup for the remainder ───────────────────────────────────────

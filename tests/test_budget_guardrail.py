@@ -3,7 +3,9 @@
 project_step_cost projects a batch's AI cost from per-step usage history
 (when the sample is large enough) or a static conservative estimate, and
 budget_guardrail prompts above usage.confirm_above_usd — declining exits
-before any AI call, --dry-run shows the projection without prompting.
+before any AI call. There is no dry-run bypass: dry-runs make real AI
+calls, so the spend gate fires on them too (PR #76 review correction to
+the charter's wording).
 """
 
 from __future__ import annotations
@@ -135,11 +137,16 @@ def test_decline_exits_before_ai(monkeypatch, tmp_path: Path):
                          model="claude-sonnet-4-6", threshold=1.0)
 
 
-def test_dry_run_never_prompts(monkeypatch, tmp_path: Path):
+def test_dry_runs_get_no_bypass(monkeypatch, tmp_path: Path):
+    """Dry-runs make real AI calls, so the gate has no dry_run knob at all —
+    the prompt fires for a dry-run exactly as for a live run."""
+    import inspect
+    assert "dry_run" not in inspect.signature(budget_guardrail).parameters
     calls = _patch_confirm(monkeypatch, answer=False)
-    budget_guardrail(usage_step="comments", n_books=5000,
-                     model="claude-sonnet-4-6", threshold=1.0, dry_run=True)
-    assert calls == []
+    with pytest.raises(typer.Exit):
+        budget_guardrail(usage_step="comments", n_books=5000,
+                         model="claude-sonnet-4-6", threshold=1.0)
+    assert len(calls) == 1
 
 
 def test_unpriced_model_never_prompts(monkeypatch, tmp_path: Path):

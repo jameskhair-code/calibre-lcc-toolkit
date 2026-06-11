@@ -139,7 +139,7 @@ def run_cleanup(
 
     budget_guardrail(
         usage_step="title_author", n_books=len(books), model=ai.model,
-        threshold=confirm_above_usd, dry_run=dry_run,
+        threshold=confirm_above_usd,
     )
 
     # ── 2. AI analysis (concurrent batches, partial-failure tolerant) ────────

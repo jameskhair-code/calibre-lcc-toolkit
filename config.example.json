@@ -89,7 +89,7 @@
   },
 
   "usage": {
-    "_comment": "Budget guardrail. Before a step's AI phase begins, the projected batch cost (from usage history, or a static estimate when history is thin) is compared against confirm_above_usd: above it, the run asks 'N books ≈ $X — proceed?' before any AI call. At or below it, no prompt. --dry-run shows the projection without prompting. Raise to a very large number to disable.",
+    "_comment": "Budget guardrail. Before a step's AI phase begins, the projected batch cost (from usage history, or a static estimate when history is thin) is compared against confirm_above_usd: above it, the run asks 'N books ≈ $X — proceed?' before any AI call. At or below it, no prompt. Dry-runs make real AI calls, so the gate fires on them too. Raise to a very large number to disable.",
     "confirm_above_usd": 1.0
   }
 }

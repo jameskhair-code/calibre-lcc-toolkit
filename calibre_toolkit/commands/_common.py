@@ -159,15 +159,15 @@ def budget_guardrail(
     n_books: int,
     model: str,
     threshold: float,
-    dry_run: bool = False,
 ) -> None:
     """Cost-confirm gate before a step's AI phase (v1.10 item 4).
 
     Projects the batch cost (usage history when the sample allows, else a
     static conservative estimate — the basis is shown) and prompts when the
     projection exceeds `threshold`. Declining exits cleanly before any AI
-    call. Projections at or below the threshold pass silently; --dry-run
-    shows the projection but never prompts.
+    call. Projections at or below the threshold pass silently. There is no
+    --dry-run bypass: dry-runs make real AI calls, so the spend gate fires
+    on them too.
     """
     from ..usage import project_step_cost
 
@@ -178,9 +178,6 @@ def budget_guardrail(
         f"This batch: {n_books} books ≈ ${projection.estimated_usd:.2f} "
         f"({projection.basis})"
     )
-    if dry_run:
-        console.print(f"[dim]{line} — dry-run, proceeding without prompt.[/dim]")
-        return
     if not typer.confirm(f"{line} — proceed?"):
         console.print("[yellow]Aborted — no AI calls made.[/yellow]")
         raise typer.Exit()
