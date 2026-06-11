@@ -2,6 +2,46 @@
 
 ---
 
+## v1.10 — Campaign Preflight
+
+Per-version charter: `docs/planning/v1.10-charter.md`. Four preflight items scoped, four item PRs shipped (#73, #74, #75, #76). Test suite from 639 → 659 hermetic tests.
+
+**The fork decision, recorded:** at the post-v1.9 re-audit, instead of building the old plan's six speculative cost/perf/scale items, v1.10 points the toolkit at its actual job — the first systematic enrichment campaign over the real ~5,000-book library, run in per-step waves after this release. The old items were demoted to a triggered pull-list (`docs/planning/roadmap.md`), built only when the run demonstrates the need. This release is the campaign's preflight: the four known instances of campaign risk (prompt defects at scale, stale prices, unreconstructible flag history, unbounded spend) taken off the table before wave 1. The campaign itself is v1.10's Phase 2 — wave log in `docs/planning/v1.10-campaign-log.md`, which is the v1.11 re-audit's primary input.
+
+**Campaign model decision (item 2's deliverable):** **Sonnet 4.6** runs the campaign — the model `config.json` already pins. Decided from the PR #74 projected-cost table (full four-step sweep ≈ $209 Opus 4.8 / $97 Sonnet 4.6 / $32 Haiku 4.5): all calibration data, prompt tuning, and rate-limit history were earned on Sonnet; the pipeline structurally bounds model quality everywhere except comments prose; and regrade + the audit log make a future model upgrade a re-run, not a do-over. **Carve-out:** the comments-enrich model is revisited at that wave's boundary — a ~50-book Opus 4.8 vs Sonnet 4.6 dry-run comparison (~$1) before the first full comments wave; steps 1–3 are committed to Sonnet now. Recorded in the campaign log.
+
+### Items shipped
+
+**Item 1 — Title/author rules-audit fixes** (PR #73, rules-content only)
+- The eight prompt-content findings from the 2026-06-10 audit of `rules/author_title.md`: the T-SER-02 WRONG example that showed the *correct* transformation (now shows the left-unchanged failure mode), the T-SUB-07 duplicated separator alternative, GEN-01/GEN-07 aligned to the output format's "Already correctly formatted." and rule-ID-citation notes style, an A-MUL bridge note mapping the single-string parse rules onto the JSON authors-array output shape, A-MUL-05's flag triggering on "et al." alone, T-CAP-10's stylistic-lowercase example replaced with a real title, and `rules/confidence.md`'s SECTION CONF index gaining the author_title pointer. No code; `ai/authors.py:128` already tolerated both no-change note strings.
+- Audit item 9 (`normalize.py` typographic quotes) stays parked on the pull-list pending the mapping sign-off.
+- Real-library smoke (the charter's gate before any clean-titles wave): two dry-run batches; 6/6 proposals correct with notes in the new rule-ID-citation style.
+
+**Item 2 — Price-table + model-alias refresh** (PR #74)
+- `usage.py:_PRICES` verified against the live Anthropic pricing docs (2026-06-10), not memory. Two real errors: Opus 4.5–4.8 bill at $5/$25 but the single `claude-opus-4` prefix entry carried the 4.0/4.1-era $15/$75 — everything billed at `latest` was over-estimated 3× — and Haiku 4.5 carried Haiku 3.5 rates ($0.80/$4 vs the real $1/$5). Per-version Opus entries now take longest-prefix precedence; the bare prefix keeps legacy rates for 4.0/4.1 dated IDs. Sonnet was already correct.
+- `models.py`: `latest` rolls `claude-opus-4-7` → `claude-opus-4-8`; `_DEPRECATED_MODELS` seeded from Anthropic's deprecation schedule (opus-4-1, the 4-20250514 dated IDs, claude-3-haiku).
+- Produced the per-model campaign cost table (per-step per-book averages from 228 calls of real `usage.jsonl` history) that drove the model decision above.
+
+**Item 3 — Manual-flag audit logging** (PR #75)
+- Closes v1.9's one live correctness gap: `mark_mqg_complete` / `clear_mqg_flag` now write one audit entry per book through the existing `audit_log` choke point — `source="flag"`, `step="flag:<command>"`, `new_value` true/null, no confidence. Logged in the db methods so all 11 call sites across 8 commands (including `tags-review`'s per-book lock) are covered for free.
+- The `flag:` step namespace is load-bearing: the regrade staleness selector filters on exact AI step names, so a bare command name would have made a flagged book look freshly enriched and silently dropped it from regrade. No confidence keeps flag entries out of the calibration pool. Both reader contracts plus the regrade-marker ride-along are locked by contract tests.
+- New autouse test fixture isolates `CALIBRE_TOOLKIT_AUDIT_LOG` to tmp for every test — db-level tests no longer touch the real audit log.
+- Real-library flag → unflag loop verified: both entries visible in `audit-log`, library state net-unchanged.
+
+**Item 4 — Budget guardrail** (PR #76)
+- Before each AI command's AI phase: *"This batch: N books ≈ $X (basis) — proceed?"* above `usage.confirm_above_usd` (new config knob, default $1.00; in `config.example.json` + `config_schema.py`). Projection basis is per-step usage history when ≥ 10 calls exist (converted per-book via the step's default batch size — the stated assumption, since the log doesn't record per-call book counts), else a static conservative estimate; the basis is labelled in the prompt line. Declining exits cleanly before any AI call; unpriced models can't fire the gate. Wired into clean-titles, lcc-enrich (covering both its AI paths), comments-enrich, tags-enrich, and the regrade dispatch; entirely outside the review/apply flow.
+- **Charter correction (PR #76 review):** the charter's "--dry-run must bypass" wording conflated write-safety with spend-safety — dry-runs make real AI calls, so the gate fires on them too. No bypass path exists. `--auto-apply-high` deliberately does not bypass either: the guardrail fronts every campaign run.
+- Charter verification note: `enrich-identifiers` constructs no AI client at all — nothing to gate there.
+- Real-library verification: a 1,000-book run prompted "≈ $1.84 (usage history, 158 calls)"; declining wrote nothing (audit and usage logs byte-identical); an under-threshold run produced no prompt.
+
+### Known limitations after v1.10
+
+- **`tags-cleanup` is not covered by the budget guardrail.** It makes AI calls but wasn't in the charter's touch-point list; exposure is small (150-book batches, few calls). Captured in `docs/planning/inbox.md` — candidate to extend at a campaign wave boundary.
+- **The guardrail's history basis assumes default batch sizes.** Runs with overridden `--batch-size` skew the per-book conversion slightly; the projection is an estimate, not a bill.
+- **The campaign has not started.** Wave 1 (clean-titles) begins only after this release is tagged and the Anthropic usage-tier bump (the 2026-05-28 429 incident's primary mitigation) is confirmed — both operator steps, per the charter's operational gate.
+
+---
+
 ## v1.9 — Architecture Refactor & TUI Test Coverage
 
 Per-version charter: `docs/planning/v1.9-charter.md`. Six core items scoped. Six item PRs shipped (#62, #64, #65, #67, #68, #69) plus a standalone mid-cycle bugfix (#66). Test suite from 581 → 639 hermetic tests.
