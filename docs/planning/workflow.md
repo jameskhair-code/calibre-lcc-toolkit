@@ -19,8 +19,8 @@ motivation, touch points, sizing, risk, dependencies.
 Translate the brief into the right documents. The per-version charter
 (`docs/planning/v1.x-charter.md`) is the contract for the cycle: shipping
 order, sequencing notes where items overlap, cut candidates flagged up front.
-The charter can be drafted by either surface; ROADMAP / v2.0-plan updates
-happen here too if scope shifted.
+The charter can be drafted by either surface; `docs/planning/roadmap.md`
+updates happen here too if scope shifted.
 
 ### 3. Implement (local Claude, in Cursor)
 Run the cycle item by item. One PR per item. Smoke-test every user-visible
@@ -38,8 +38,9 @@ unsorted; no triage at capture time. Add freely. (See "The inbox" below.)
 ### 5. Re-audit (web Claude)
 After the version ships, return to web Claude before spinning up the next
 cycle. Read what shipped (the CHANGELOG entry), read the inbox, and:
-- Triage and route every inbox entry — into the next cycle, into the ROADMAP
-  parking lot for a later cycle, or out as a quick standalone fix.
+- Triage and route every inbox entry — into the next cycle, into the
+  roadmap's LATER layer (`docs/planning/roadmap.md`) for a later cycle, or
+  out as a quick standalone fix.
 - Grade the prior plan's accuracy against what actually happened (items
   retracted, cut, re-scoped — and why).
 - Shape the next theme.
