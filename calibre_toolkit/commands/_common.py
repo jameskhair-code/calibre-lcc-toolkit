@@ -148,6 +148,44 @@ def _apply_confirm_threshold(cfg: dict) -> int:
     return int(cfg.get("review", {}).get("apply_confirm_threshold", 20))
 
 
+def _confirm_above_usd(cfg: dict) -> float:
+    """Read usage.confirm_above_usd from config (default $1.00)."""
+    return float(cfg.get("usage", {}).get("confirm_above_usd", 1.0))
+
+
+def budget_guardrail(
+    *,
+    usage_step: str,
+    n_books: int,
+    model: str,
+    threshold: float,
+    dry_run: bool = False,
+) -> None:
+    """Cost-confirm gate before a step's AI phase (v1.10 item 4).
+
+    Projects the batch cost (usage history when the sample allows, else a
+    static conservative estimate — the basis is shown) and prompts when the
+    projection exceeds `threshold`. Declining exits cleanly before any AI
+    call. Projections at or below the threshold pass silently; --dry-run
+    shows the projection but never prompts.
+    """
+    from ..usage import project_step_cost
+
+    projection = project_step_cost(usage_step, n_books, model)
+    if projection is None or projection.estimated_usd <= threshold:
+        return
+    line = (
+        f"This batch: {n_books} books ≈ ${projection.estimated_usd:.2f} "
+        f"({projection.basis})"
+    )
+    if dry_run:
+        console.print(f"[dim]{line} — dry-run, proceeding without prompt.[/dim]")
+        return
+    if not typer.confirm(f"{line} — proceed?"):
+        console.print("[yellow]Aborted — no AI calls made.[/yellow]")
+        raise typer.Exit()
+
+
 def _infer_fetch_path(cfg: dict) -> str:
     """Infer fetch-ebook-metadata path from config or from calibredb_path sibling."""
     explicit = cfg.get("identifiers", {}).get("fetch_ebook_metadata_path")

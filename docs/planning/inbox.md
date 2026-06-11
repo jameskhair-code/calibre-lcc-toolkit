@@ -15,3 +15,11 @@ to the pull-list / LATER layer; the parking-lot consolidation was executed;
 the A-Z vision became the LATER layer's destination).*
 
 ---
+
+- **2026-06-11 (v1.10 item 4):** `tags-cleanup` makes AI calls
+  (step_label "tags-cleanup") but was not in the charter's
+  budget-guardrail touch-point list, so it has no cost gate. Its batches
+  are large (150/call) and call counts low, so exposure is small —
+  consider extending the guardrail at a campaign wave boundary. Also
+  verified: `enrich-identifiers` constructs no AI client at all (the
+  charter's "verify" note) — nothing to gate there.

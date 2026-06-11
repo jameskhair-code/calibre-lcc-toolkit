@@ -32,6 +32,7 @@ from time import monotonic
 from ._common import (
     app, console, DEFAULT_CONFIG_PATH,
     _load_config, _make_db, _make_ai, _apply_confirm_threshold,
+    _confirm_above_usd, budget_guardrail,
 )
 from ..logging_config import audit_log, get_logger
 from ..modules.lcc import (
@@ -190,6 +191,7 @@ def lcc_enrich(
         description_max_retries=description_max_retries,
         google_books_api_key=google_books_api_key,
         apply_confirm_threshold=_apply_confirm_threshold(cfg),
+        confirm_above_usd=_confirm_above_usd(cfg),
     )
 
 
@@ -250,6 +252,7 @@ def run_lcc_enrichment(
     description_max_retries: int = 3,
     google_books_api_key: str | None = None,
     apply_confirm_threshold: int = 20,
+    confirm_above_usd: float = 1.0,
     book_ids: list[int] | None = None,
 ) -> None:
     """Full MQG-03 LCC enrichment flow for a Calibre search string.
@@ -428,6 +431,14 @@ def run_lcc_enrichment(
             "AI will fall back to training data; catalog-hit books "
             "keep template summaries.[/dim]"
         )
+
+    # Guardrail covers both AI paths below (3c remainder lookup and the
+    # 3d catalog-hit summary rewrite); the projection is per-book over the
+    # whole step, so n is the full batch.
+    budget_guardrail(
+        usage_step="lcc", n_books=len(books), model=ai.model,
+        threshold=confirm_above_usd, dry_run=dry_run,
+    )
 
     # ── 3c. AI lookup for the remainder ───────────────────────────────────────
     ai_suggestions: list[LccSuggestion] = []

@@ -56,6 +56,15 @@ def test_wrong_type_names_the_dotted_path():
     assert any("'twenty'" in line for line in exc.value.errors)
 
 
+def test_wrong_type_in_usage_block():
+    cfg = _example()
+    cfg["usage"]["confirm_above_usd"] = "one dollar"
+    with pytest.raises(ConfigValidationError) as exc:
+        validate_config(cfg)
+    assert any(line.startswith("usage.confirm_above_usd:")
+               for line in exc.value.errors)
+
+
 def test_wrong_type_in_nested_ai_override():
     cfg = _example()
     cfg["ai"]["lcc"]["model"] = 123

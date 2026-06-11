@@ -21,6 +21,7 @@ from time import monotonic
 from ._common import (
     app, console, DEFAULT_CONFIG_PATH,
     _load_config, _make_db, _make_ai, _apply_confirm_threshold,
+    _confirm_above_usd, budget_guardrail,
 )
 from ..modules.authors import (
     _build_review_table,
@@ -99,6 +100,7 @@ def clean_titles(
         limit=limit,
         dry_run=dry_run,
         apply_confirm_threshold=_apply_confirm_threshold(cfg),
+        confirm_above_usd=_confirm_above_usd(cfg),
     )
 
 
@@ -112,6 +114,7 @@ def run_cleanup(
     limit: int | None = None,
     dry_run: bool = False,
     apply_confirm_threshold: int = 20,
+    confirm_above_usd: float = 1.0,
 ) -> None:
     """Full Author/Title cleanup flow for a given Calibre search string."""
     _started_at = datetime.now()
@@ -133,6 +136,11 @@ def run_cleanup(
         books = books[:limit]
 
     console.print(f"\n[bold]Found [green]{len(books)}[/green] books.[/bold]")
+
+    budget_guardrail(
+        usage_step="title_author", n_books=len(books), model=ai.model,
+        threshold=confirm_above_usd, dry_run=dry_run,
+    )
 
     # ── 2. AI analysis (concurrent batches, partial-failure tolerant) ────────
     total_batches = (len(books) + batch_size - 1) // batch_size

@@ -193,6 +193,7 @@ def _dispatch(
                 "max_retries", catalog_cfg.get("max_retries", 3))),
             google_books_api_key=google_books_api_key,
             apply_confirm_threshold=apply_confirm_threshold,
+            confirm_above_usd=_confirm_above_usd(cfg),
             book_ids=book_ids,
         )
     elif step == "comments-enrich":
@@ -204,6 +205,7 @@ def _dispatch(
             mqg_manual_column=comments_cfg.get("mqg_manual_column"),
             lcc_summary_column=comments_cfg.get("lcc_summary_column", "#lcc_summary"),
             apply_confirm_threshold=apply_confirm_threshold,
+            confirm_above_usd=_confirm_above_usd(cfg),
             book_ids=book_ids,
         )
     elif step == "tags-enrich":
@@ -218,6 +220,7 @@ def _dispatch(
             lcc_secondary_column=lcc_cfg.get("secondary_class_column", "#lcc_secondary_class"),
             lcc_primary_column=lcc_cfg.get("primary_class_column", "#lcc_primary_class"),
             apply_confirm_threshold=apply_confirm_threshold,
+            confirm_above_usd=_confirm_above_usd(cfg),
             book_ids=book_ids,
         )
 
@@ -232,6 +235,7 @@ from rich.text import Text
 from ._common import (
     app, console as _cli_console, DEFAULT_CONFIG_PATH,
     _load_config, _make_db, _make_ai, _apply_confirm_threshold,
+    _confirm_above_usd,
 )
 from .audit_log import parse_since
 

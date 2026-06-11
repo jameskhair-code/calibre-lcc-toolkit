@@ -21,6 +21,7 @@ from time import monotonic
 from ._common import (
     app, console, DEFAULT_CONFIG_PATH,
     _load_config, _make_db, _make_ai, _apply_confirm_threshold,
+    _confirm_above_usd, budget_guardrail,
 )
 from ..coherence import check_tags_coherence
 from ..logging_config import audit_log
@@ -122,6 +123,7 @@ def tags_enrich(
         lcc_secondary_column=lcc_cfg.get("secondary_class_column", "#lcc_secondary_class"),
         lcc_primary_column=lcc_cfg.get("primary_class_column", "#lcc_primary_class"),
         apply_confirm_threshold=_apply_confirm_threshold(cfg),
+        confirm_above_usd=_confirm_above_usd(cfg),
     )
 
 
@@ -138,6 +140,7 @@ def run_tags_enrichment(
     lcc_secondary_column: str | None = None,
     lcc_primary_column: str | None = None,
     apply_confirm_threshold: int = 20,
+    confirm_above_usd: float = 1.0,
     book_ids: list[int] | None = None,
 ) -> None:
     """Full MQG-05 Tags enrichment flow for a Calibre search string.
@@ -204,6 +207,11 @@ def run_tags_enrichment(
                 batch = db.get_custom_column_batch(book_id_list, col_label)
                 for bid, val in batch.items():
                     context_map[bid][col_key] = val
+
+    budget_guardrail(
+        usage_step="tags", n_books=len(books), model=ai.model,
+        threshold=confirm_above_usd, dry_run=dry_run,
+    )
 
     # ── 3. AI generation ───────────────────────────────────────────────────────
     with console.status(

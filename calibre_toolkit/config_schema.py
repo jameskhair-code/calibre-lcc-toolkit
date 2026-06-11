@@ -108,6 +108,10 @@ class ReviewConfig(_Section):
     apply_confirm_threshold: Optional[int] = None
 
 
+class UsageConfig(_Section):
+    confirm_above_usd: Optional[float] = None
+
+
 class ToolkitConfig(_Section):
     library_path: str
     # Optional to follow runtime truth (every access site defaults to
@@ -124,6 +128,7 @@ class ToolkitConfig(_Section):
     tags: Optional[TagsConfig] = None
     mqg: Optional[MqgConfig] = None
     review: Optional[ReviewConfig] = None
+    usage: Optional[UsageConfig] = None
 
 
 def _format_errors(e: ValidationError) -> list[str]:
