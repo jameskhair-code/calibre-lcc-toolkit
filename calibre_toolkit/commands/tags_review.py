@@ -185,9 +185,9 @@ def _prompt_action(has_ai: bool) -> str:
 
 def _lock(db: CalibreDB, book_id: int, reviewed_column: str, mqg_column: str | None) -> None:
     """Mark a book as reviewed and (if configured) as MQG-05 complete."""
-    db.mark_mqg_complete([book_id], reviewed_column)
+    db.mark_mqg_complete([book_id], reviewed_column, audit_step="tags-review")
     if mqg_column:
-        db.mark_mqg_complete([book_id], mqg_column)
+        db.mark_mqg_complete([book_id], mqg_column, audit_step="tags-review")
 
 
 def _inline_edit(current: list[str], suggested: list[str] | None) -> list[str]:

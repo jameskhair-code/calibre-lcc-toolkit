@@ -16,6 +16,18 @@ import pytest
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(autouse=True)
+def _isolated_audit_log(tmp_path: Path, monkeypatch):
+    """Keep every test's audit trail out of ~/.calibre-toolkit/audit.log.
+
+    Flag writes audit through db.mark_mqg_complete / clear_mqg_flag since
+    v1.10, so any test touching those methods would otherwise append to the
+    user's real audit log. Tests that need a specific path still win — their
+    own monkeypatch.setenv overwrites this one.
+    """
+    monkeypatch.setenv("CALIBRE_TOOLKIT_AUDIT_LOG", str(tmp_path / "audit.log"))
+
+
 @pytest.fixture
 def fixtures_dir() -> Path:
     """Absolute path to the per-suite fixtures directory."""

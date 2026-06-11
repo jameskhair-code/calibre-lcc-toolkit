@@ -376,7 +376,7 @@ def run_comments_enrichment(
             f"[bold]{mqg_manual_column}[/bold] for manual review."
         )
         with console.status("Flagging…"):
-            db.mark_mqg_complete(manual_ids, mqg_manual_column)
+            db.mark_mqg_complete(manual_ids, mqg_manual_column, audit_step="comments-enrich")
 
     applied_ids_set = set(applied_ids)
     applied_suggestions = [s for s in suggestions if s.book_id in applied_ids_set]
@@ -453,7 +453,7 @@ def _mark_complete(
     if not mqg_column or not book_ids:
         return
     with console.status(f"[cyan]Marking {len(book_ids)} books as {label} complete…"):
-        db.mark_mqg_complete(book_ids, mqg_column)
+        db.mark_mqg_complete(book_ids, mqg_column, audit_step="comments-enrich")
     console.print(
         f"[dim]Marked {len(book_ids)} books complete in [bold]{mqg_column}[/bold].[/dim]"
     )
