@@ -553,7 +553,7 @@ def _mark_complete(
     if not mqg_column or not book_ids:
         return
     with console.status(f"[cyan]Marking {len(book_ids)} {label} books as MQG-02 complete…"):
-        db.mark_mqg_complete(book_ids, mqg_column)
+        db.mark_mqg_complete(book_ids, mqg_column, audit_step="enrich-identifiers")
     console.print(
         f"[dim]Marked {len(book_ids)} books as complete in [bold]{mqg_column}[/bold].[/dim]"
     )
@@ -567,4 +567,4 @@ def _mark_manual(
     if not book_ids:
         return
     with console.status(f"[cyan]Flagging {len(book_ids)} books for manual curation…"):
-        db.mark_mqg_complete(book_ids, mqg_manual_column)
+        db.mark_mqg_complete(book_ids, mqg_manual_column, audit_step="enrich-identifiers")

@@ -397,7 +397,7 @@ def _mark_complete(
     if not mqg_column or not book_ids:
         return
     with console.status(f"[cyan]Marking {len(book_ids)} {label} books as MQG-01 complete…"):
-        db.mark_mqg_complete(book_ids, mqg_column)
+        db.mark_mqg_complete(book_ids, mqg_column, audit_step="clean-titles")
     console.print(
         f"[dim]Marked {len(book_ids)} books as complete in [bold]{mqg_column}[/bold].[/dim]"
     )

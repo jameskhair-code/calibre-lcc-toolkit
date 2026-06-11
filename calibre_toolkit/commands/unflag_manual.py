@@ -123,7 +123,7 @@ def run_unflag_manual(
     with console.status(f"Clearing flags for {len(books)} book(s)…"):
         for book in books:
             try:
-                db.clear_mqg_flag(book.id, mqg_manual_column)
+                db.clear_mqg_flag(book.id, mqg_manual_column, audit_step="unflag-manual")
                 cleared += 1
             except RuntimeError as e:
                 console.print(f"[red]Error on book {book.id}: {e}[/red]")

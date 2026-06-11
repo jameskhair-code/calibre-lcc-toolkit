@@ -10,7 +10,7 @@ import unicodedata
 from pathlib import Path
 from dataclasses import dataclass, field
 
-from .logging_config import get_logger
+from .logging_config import audit_log, get_logger
 
 _log = get_logger(__name__)
 
@@ -291,12 +291,21 @@ class CalibreDB:
                     progress_callback(done, len(updates), len(failures))
         return applied, failures
 
-    def mark_mqg_complete(self, book_ids: list[int], column: str) -> None:
+    def mark_mqg_complete(
+        self, book_ids: list[int], column: str, audit_step: str = "",
+    ) -> None:
         """Mark a list of books as complete for a given MQG column.
 
         Writes directly to SQLite in a single transaction — avoids spawning
         one calibredb process per book, which is prohibitively slow for
         large batches.
+
+        `audit_step` names the command performing the flag write; each book
+        gets one audit entry with source="flag" and step="flag:<audit_step>".
+        The "flag:" namespace is load-bearing: the regrade staleness selector
+        filters on exact AI step names ("lcc-enrich" etc.), so a bare command
+        name here would make a flagged book look freshly enriched. Entries
+        carry no confidence, which keeps them out of the calibration pool.
         """
         label = column.lstrip("#")
         with self._connect() as ro:
@@ -317,7 +326,13 @@ class CalibreDB:
             )
             conn.commit()
 
-    def clear_mqg_flag(self, book_id: int, column: str) -> None:
+        step = f"flag:{audit_step}" if audit_step else "flag"
+        for bid in book_ids:
+            audit_log(bid, column, True, source="flag", step=step)
+
+    def clear_mqg_flag(
+        self, book_id: int, column: str, audit_step: str = "",
+    ) -> None:
         """Clear a custom boolean MQG column for a single book.
 
         Deletes the row rather than writing value=0: Calibre's bool-column
@@ -326,6 +341,10 @@ class CalibreDB:
         `not #<manual>:true` exclusion and the book would never be
         re-queued. Removing the row restores the undefined state that
         `not #col:true` matches.
+
+        Audited the same way as mark_mqg_complete (source="flag",
+        step="flag:<audit_step>"), with new_value=None recording the
+        cleared state.
         """
         label = column.lstrip("#")
         with self._connect() as ro:
@@ -339,6 +358,9 @@ class CalibreDB:
         with self._connect_rw() as conn:
             conn.execute(f"DELETE FROM {table} WHERE book = ?", (book_id,))
             conn.commit()
+
+        step = f"flag:{audit_step}" if audit_step else "flag"
+        audit_log(book_id, column, None, source="flag", step=step)
 
     def get_identifiers(self, book_id: int) -> dict[str, str]:
         """Return {type: value} for all identifiers currently on a book."""
