@@ -77,7 +77,8 @@ ceremony. The rule follows from that:
   relative to what has shipped.
 - **Tag refs and GitHub Releases → local only.** The web sandbox blocks
   tag-ref pushes; tag creation and Release publication happen on the
-  maintainer's machine.
+  maintainer's machine — run by local Claude after James merges the release
+  PR (delegated 2026-06-11; the merge is the go-ahead).
 
 ## Cross-cutting principles
 

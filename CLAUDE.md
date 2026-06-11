@@ -95,9 +95,11 @@ autonomous agent.
 4. Annotated git tag at the release merge commit.
 5. GitHub Release published with full notes mirroring the CHANGELOG section.
 
-Tag creation, tag push, and GitHub Release publication are done locally by
-James using the `gh` CLI. Web sessions cannot push tag refs (sandbox blocks
-the push) and don't have release-creation tools.
+Tag creation, tag push, and GitHub Release publication are done on the
+maintainer's machine by local Claude using the `gh` CLI, after James merges
+the release PR (delegated 2026-06-11; previously James ran these by hand —
+the merge of the release PR is the go-ahead). Web sessions cannot push tag
+refs (sandbox blocks the push) and don't have release-creation tools.
 
 ## The hybrid Claude pattern
 
@@ -112,7 +114,7 @@ This repo uses two Claude surfaces:
   machine). Used for everything else — implementation, tests, PR drafting,
   smoke tests against the real library, release prep. Has direct access to
   the real Calibre library, real `config.json`, real
-  `~/.calibre-toolkit/audit.log`. Can push tags.
+  `~/.calibre-toolkit/audit.log`. Can push tags and publish Releases.
 
 The handoff between them is **one document per version**, not one per item.
 At the start of a v1.x cycle, James pastes a kickoff prompt into local Claude
