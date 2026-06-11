@@ -67,7 +67,7 @@ autonomous agent.
 - Feature branches: `feat/v1.x-<short-slug>`
 - Chore branches: `chore/v1.x-<short-slug>`
 - Release branches: `chore/v1.x-release`
-- One PR per ROADMAP item.
+- One PR per roadmap item.
 - PR bodies are substantive for non-trivial work — multi-paragraph, naming
   the touch points, the reasoning, and the verification done. One-line
   bodies are correct for chore PRs.
@@ -147,10 +147,12 @@ local Claude reads it when a workflow question comes up mid-cycle.
 - `calibre_toolkit/services/` — external service clients (`lc_catalog.py`,
   `book_description.py`)
 - `calibre_toolkit/coherence.py` — cross-step coherence checks (new in v1.4)
-- `calibre_toolkit/ai.py` — AI client and per-step prompt assembly
+- `calibre_toolkit/ai/` — AI client (`_client.py`), prompt loading
+  (`_prompts.py`), and per-step prompt assembly/parsing (since v1.9)
 - `calibre_toolkit/usage.py` — token telemetry and cost estimation
 - `rules/` — externalized prompts and shared definitions
 - `tests/` — hermetic test suite
-- `ROADMAP.md` — item backlog and parking lot
+- `docs/planning/roadmap.md` — the forward roadmap (NOW/NEXT + LATER)
+- `ROADMAP.md` — historical record of the v1.1–v1.5 arc; not a forward plan
 - `CHANGELOG.md` — what shipped, per version
 - `docs/planning/` — per-version planning charters

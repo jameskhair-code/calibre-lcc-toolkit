@@ -1,5 +1,11 @@
 # Roadmap
 
+> **Historical record — superseded 2026-06-11 (post-v1.9 re-audit).**
+> This file documents the v1.1–v1.5 arc (items 1–22) and is no longer
+> maintained as a forward plan. The "Beyond v1.5" parking lot below was
+> consolidated into the two-layer forward roadmap at
+> `docs/planning/roadmap.md`. New ideas go to `docs/planning/inbox.md`.
+
 22 items in dependency order, targeting v1.5. Each item is a separate PR. When
 implementation begins, a GitHub Issue is created from the item's prose with the
 corresponding milestone attached.
@@ -598,6 +604,9 @@ session. *Actual: redundant with what the left panel already provides.*
 ---
 
 ## Beyond v1.5 — future-work parking lot
+
+> *Superseded — consolidated into `docs/planning/roadmap.md` at the
+> post-v1.9 re-audit. Preserved below for historical context only.*
 
 Captured here to avoid losing context. Promote to a numbered v2.x
 milestone item when ready to scope.
