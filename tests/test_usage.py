@@ -138,14 +138,19 @@ class TestPricing:
         assert table.output_per_million == 15.00
 
     def test_resolves_opus_prefix(self):
-        table = _resolve_price_table("claude-opus-4-7")
+        # Opus 4.5+ bills at $5/MTok; the bare claude-opus-4 prefix keeps
+        # the old $15 rate for 4.0/4.1-era IDs.
+        table = _resolve_price_table("claude-opus-4-8")
         assert table is not None
-        assert table.input_per_million == 15.00
+        assert table.input_per_million == 5.00
+        legacy = _resolve_price_table("claude-opus-4-20250514")
+        assert legacy is not None
+        assert legacy.input_per_million == 15.00
 
     def test_resolves_haiku_prefix(self):
         table = _resolve_price_table("claude-haiku-4-5-20251001")
         assert table is not None
-        assert table.input_per_million == 0.80
+        assert table.input_per_million == 1.00
 
     def test_unknown_model_returns_none(self):
         assert _resolve_price_table("gpt-4") is None
@@ -205,9 +210,9 @@ class TestUsageAggregate:
         agg = UsageAggregate()
         # 1M Sonnet input → $3.00
         agg.record(TokenUsage(input_tokens=1_000_000), "claude-sonnet-4-6")
-        # 1M Haiku input → $0.80
+        # 1M Haiku input → $1.00
         agg.record(TokenUsage(input_tokens=1_000_000), "claude-haiku-4-5")
-        assert agg.cost_estimate_usd() == pytest.approx(3.80)
+        assert agg.cost_estimate_usd() == pytest.approx(4.00)
 
     def test_cost_estimate_none_when_every_model_unpriced(self):
         agg = UsageAggregate()

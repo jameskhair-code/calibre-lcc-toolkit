@@ -117,10 +117,11 @@ def parse_usage(raw_usage: Any) -> TokenUsage:
 
 # ── Pricing ──────────────────────────────────────────────────────────────────
 #
-# USD per million tokens. Anthropic's public list prices as of January 2026
-# for the Claude 4.x family. Sources: anthropic.com/pricing. Keyed by model
-# family prefix so a new minor version (claude-sonnet-4-7, 4-8) inherits
-# pricing until a deliberate update.
+# USD per million tokens. Anthropic's public list prices, verified against
+# platform.claude.com/docs/en/about-claude/pricing on 2026-06-10. Keyed by
+# model family prefix, longest match wins — so the per-version Opus 4.5+
+# entries take precedence over the bare "claude-opus-4" fallback, which
+# keeps the old $15/$75 rates for Opus 4.0/4.1-era IDs.
 #
 # When the model is unknown we return None and the summary omits the
 # dollar estimate — token counts are still shown so the user can plug
@@ -134,7 +135,20 @@ class _PriceTable:
     cache_write_per_million: float
 
 
+_OPUS_45_PLUS = _PriceTable(
+    input_per_million=5.00,
+    output_per_million=25.00,
+    cache_read_per_million=0.50,
+    cache_write_per_million=6.25,
+)
+
 _PRICES: dict[str, _PriceTable] = {
+    "claude-opus-4-8": _OPUS_45_PLUS,
+    "claude-opus-4-7": _OPUS_45_PLUS,
+    "claude-opus-4-6": _OPUS_45_PLUS,
+    "claude-opus-4-5": _OPUS_45_PLUS,
+    # Opus 4.0/4.1 (deprecated) — dated IDs like claude-opus-4-20250514
+    # fall through to this prefix.
     "claude-opus-4": _PriceTable(
         input_per_million=15.00,
         output_per_million=75.00,
@@ -148,12 +162,13 @@ _PRICES: dict[str, _PriceTable] = {
         cache_write_per_million=3.75,
     ),
     "claude-haiku-4": _PriceTable(
-        input_per_million=0.80,
-        output_per_million=4.00,
-        cache_read_per_million=0.08,
-        cache_write_per_million=1.00,
+        input_per_million=1.00,
+        output_per_million=5.00,
+        cache_read_per_million=0.10,
+        cache_write_per_million=1.25,
     ),
-    # 3.x legacy support — older but still callable.
+    # 3.x legacy — retired models, kept so replaying old usage logs
+    # still produces a dollar estimate.
     "claude-3-5-sonnet": _PriceTable(
         input_per_million=3.00,
         output_per_million=15.00,
