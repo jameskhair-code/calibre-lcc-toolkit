@@ -62,7 +62,7 @@ T-CAP-09: Titles in ALL CAPS should be converted to title case
 T-CAP-10: Titles in all lowercase should be converted to title case
            (e.g. "the remains of the day" → "The Remains of the Day"),
            UNLESS the author intentionally uses lowercase as a stylistic choice
-           (e.g. bell hooks — author name, not title).
+           (e.g. "milk and honey" by Rupi Kaur is published lowercase — keep it).
 
 
 ---
@@ -231,7 +231,7 @@ T-SUB-06: Use a colon (not em-dash, not semicolon) to separate title and
 
 T-SUB-07: OMNIBUS / ANTHOLOGY TITLES WITH SLASH-SEPARATED WORKS — do NOT
            strip any of the individual work titles. When a title lists multiple
-           collected works separated by " / " (or " / "), every slash-separated
+           collected works separated by " / " (or "/" without spaces), every slash-separated
            segment is part of the real title and must be kept intact.
            This applies especially to Library of America (LOA) volumes and
            similar collected-works editions.
@@ -286,7 +286,7 @@ T-SER-02: Series identifiers in parentheses or brackets containing a series
            RIGHT: "Sons of the Lion (The Omega War Book 11)" → "Sons of the Lion"
            WRONG: "Age of Ash (Kithamar Trilogy #1)" → "Age of Ash, Volume 1"
            RIGHT: "Age of Ash (Kithamar Trilogy #1)" → "Age of Ash"
-           WRONG: "Eon (The Way Book 1)" → "Eon"  [leaving unchanged is also wrong]
+           WRONG: "Eon (The Way Book 1)" → "Eon (The Way Book 1)"  (left unchanged)
            RIGHT: "Eon (The Way Book 1)" → "Eon"
            NOTE: leaving a series parenthetical unchanged is NOT correct —
            it must always be removed, even if the series name is short.
@@ -415,6 +415,12 @@ A-ORD-05: Preserve name suffixes: Jr., Sr., II, III, IV.
 ## SECTION A-MUL — Author: Multiple Authors
 ---
 
+NOTE — output shape: the rules in this section describe how to parse the
+stored author field, which may be a single string. In the JSON output,
+each element of the "authors" array is exactly one person — never join
+multiple people with "&" inside one element. The only "&" permitted
+inside an element is within a single corporate name (A-ROL-11 / A-SPE-07).
+
 A-MUL-01: When multiple authors are present, separate them with " & "
            (ampersand with a space on each side).
 
@@ -443,9 +449,9 @@ A-MUL-03: Do NOT use "&" inside a single person's name.
 A-MUL-04: Each individual author's name is still formatted First Last
            after the separators are normalized.
 
-A-MUL-05: If there are more than three authors and the field contains
-           "et al.", flag with "low" confidence — do not attempt to
-           expand "et al." and do not remove it without confirmation.
+A-MUL-05: If the field contains "et al.", flag with "low" confidence —
+           do not attempt to expand "et al." and do not remove it
+           without confirmation.
 
 
 ---
@@ -603,7 +609,7 @@ A-CLN-07: If the author field contains an email address or URL, remove it.
 ---
 
 GEN-01: When no change is needed, return the original value unchanged and
-        set confidence to "high". Note: "No changes needed."
+        set confidence to "high". Note: "Already correctly formatted."
 
 GEN-02: When a rule clearly and unambiguously applies, use "high" confidence.
 
@@ -622,12 +628,14 @@ GEN-06: Treat each book independently. Do not infer corrections for one book
         based on patterns in other books in the same batch.
 
 GEN-07: The "notes" field should briefly explain what was changed and why,
-        or confirm "No changes needed." Keep notes concise — one sentence
-        when only one type of change was made; a brief semicolon-separated
-        list when multiple distinct changes were applied.
-        EXAMPLE (one change):  "Removed marketing suffix."
-        EXAMPLE (several):     "Removed marketing suffix; inverted author
-                                name to First Last; stripped honorific."
+        citing the rule ID applied, or confirm "Already correctly
+        formatted." Keep notes concise — one sentence when only one type
+        of change was made; a brief semicolon-separated list when multiple
+        distinct changes were applied.
+        EXAMPLE (one change):  "Removed marketing suffix per T-AWD-04."
+        EXAMPLE (several):     "Removed marketing suffix per T-AWD-04;
+                                inverted author name to First Last per
+                                A-ORD-01; stripped honorific per A-ROL-07."
 
 GEN-08: Return results in the same order as the input. Do not reorder books.
 

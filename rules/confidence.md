@@ -66,6 +66,8 @@ onto the concrete evidence types available to that step:
   - rules/tags.md      SECTION CONF — LCC signal strength and Form-tag clarity.
   - rules/tags_cleanup.md (no explicit CONF section — operations are
                           structural and either apply or do not).
+  - rules/author_title.md (no explicit CONF section — author/title
+                          confidence guidance lives inline in GEN-02..GEN-05).
 
 When the step rules conflict with this file, this file wins on the meaning
 of the tier; the step rules win on which evidence maps to which tier.
