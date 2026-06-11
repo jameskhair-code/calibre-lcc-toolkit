@@ -35,7 +35,7 @@ _log = get_logger(__name__)
 # the latest model is a one-line edit when a new generation ships.
 _ALIAS_MAP: dict[str, str] = {
     "fast":   "claude-haiku-4-5-20251001",
-    "latest": "claude-opus-4-7",
+    "latest": "claude-opus-4-8",
     "legacy": "claude-sonnet-4-6",
 }
 
@@ -50,8 +50,12 @@ _DEPRECATED_ALIASES: dict[str, str] = {}
 # (so anyone who pinned a specific ID for reproducibility keeps working)
 # but logs a one-time warning so the user knows it's time to switch.
 _DEPRECATED_MODELS: dict[str, str] = {
-    # Add entries here as Anthropic retires model IDs. Example shape:
-    #   "claude-sonnet-3-5": "claude-sonnet-4-6",
+    # Per Anthropic's deprecation table as of 2026-06-10.
+    "claude-opus-4-1": "claude-opus-4-8",            # retires 2026-08-05
+    "claude-opus-4-1-20250805": "claude-opus-4-8",   # retires 2026-08-05
+    "claude-opus-4-20250514": "claude-opus-4-8",     # retires 2026-06-15
+    "claude-sonnet-4-20250514": "claude-sonnet-4-6", # retires 2026-06-15
+    "claude-3-haiku-20240307": "claude-haiku-4-5",   # retired 2026-04-19
 }
 
 
