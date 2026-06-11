@@ -86,5 +86,10 @@
   "review": {
     "_comment": "Shared interactive-review settings. apply_confirm_threshold: when the user picks 'apply all' on a batch larger than this, ask one extra time before writing. Set to a very large number to disable.",
     "apply_confirm_threshold": 20
+  },
+
+  "usage": {
+    "_comment": "Budget guardrail. Before a step's AI phase begins, the projected batch cost (from usage history, or a static estimate when history is thin) is compared against confirm_above_usd: above it, the run asks 'N books ≈ $X — proceed?' before any AI call. At or below it, no prompt. Dry-runs make real AI calls, so the gate fires on them too. Raise to a very large number to disable.",
+    "confirm_above_usd": 1.0
   }
 }

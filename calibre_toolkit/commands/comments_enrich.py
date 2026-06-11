@@ -30,6 +30,7 @@ from time import monotonic
 from ._common import (
     app, console, DEFAULT_CONFIG_PATH,
     _load_config, _make_db, _make_ai, _apply_confirm_threshold,
+    _confirm_above_usd, budget_guardrail,
 )
 from ..coherence import check_comments_coherence
 from ..logging_config import audit_log
@@ -132,6 +133,7 @@ def comments_enrich(
         mqg_manual_column=mqg_manual_column,
         lcc_summary_column=lcc_summary_column,
         apply_confirm_threshold=_apply_confirm_threshold(cfg),
+        confirm_above_usd=_confirm_above_usd(cfg),
     )
 
 
@@ -192,6 +194,7 @@ def run_comments_enrichment(
     mqg_manual_column: str | None = None,
     lcc_summary_column: str | None = None,
     apply_confirm_threshold: int = 20,
+    confirm_above_usd: float = 1.0,
     book_ids: list[int] | None = None,
 ) -> None:
     """Full MQG-04 Comments enrichment flow for a Calibre search string.
@@ -249,6 +252,11 @@ def run_comments_enrichment(
     if lcc_summary_column:
         with console.status("[cyan]Reading LCC summaries for context…"):
             lcc_summary_map = db.get_custom_column_batch([b.id for b in books], lcc_summary_column)
+
+    budget_guardrail(
+        usage_step="comments", n_books=len(books), model=ai.model,
+        threshold=confirm_above_usd,
+    )
 
     # ── 4. AI generation ───────────────────────────────────────────────────────
     total_batches = (len(books) + batch_size - 1) // batch_size

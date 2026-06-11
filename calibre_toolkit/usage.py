@@ -342,12 +342,15 @@ def log_usage(usage: TokenUsage, model: str, step: str = "") -> None:
         _log.warning("usage log write failed (%s): %s", path, e)
 
 
-def replay_usage_log(path: Path | None = None) -> UsageAggregate:
+def replay_usage_log(
+    path: Path | None = None, step: str | None = None,
+) -> UsageAggregate:
     """Reconstruct an aggregate from the on-disk JSONL log.
 
-    Used by the TUI to display cumulative cost across all sessions.
-    Unparseable lines are skipped — corrupted writes from a crash
-    should not prevent valid history from being read.
+    Used by the TUI to display cumulative cost across all sessions, and by
+    the budget-guardrail projection (filtered to one step). Unparseable
+    lines are skipped — corrupted writes from a crash should not prevent
+    valid history from being read.
     """
     aggregate = UsageAggregate()
     p = path or _usage_path()
@@ -362,6 +365,8 @@ def replay_usage_log(path: Path | None = None) -> UsageAggregate:
                 try:
                     record = json.loads(line)
                 except json.JSONDecodeError:
+                    continue
+                if step is not None and str(record.get("step", "") or "") != step:
                     continue
                 usage = TokenUsage(
                     input_tokens=int(record.get("input_tokens", 0) or 0),
@@ -378,3 +383,76 @@ def replay_usage_log(path: Path | None = None) -> UsageAggregate:
     except OSError as e:
         _log.warning("usage log read failed (%s): %s", p, e)
     return aggregate
+
+
+# ── Budget-guardrail projection (v1.10 item 4) ───────────────────────────────
+#
+# Before a step's AI phase begins, the commands project the batch cost and
+# prompt above usage.confirm_above_usd. The projection is the simplest honest
+# one: per-book cost from this step's usage history when the sample is large
+# enough, else a static conservative estimate. The basis is labelled in the
+# prompt line so the operator knows which one they're looking at.
+
+
+@dataclass(frozen=True)
+class CostProjection:
+    estimated_usd: float
+    basis: str  # human label, e.g. "usage history, 156 calls" / "static estimate"
+
+
+_GUARDRAIL_MIN_CALLS = 10
+
+# The usage log records per-call tokens but not per-call book counts, so
+# history is converted to per-book figures assuming each step's default
+# batch size. Runs with overridden batch sizes skew this slightly; the
+# projection is an estimate, not a bill.
+_ASSUMED_HISTORY_BATCH: dict[str, int] = {
+    "title_author": 10,
+    "lcc": 10,
+    "comments": 5,
+    "tags": 20,
+}
+
+# Conservative static fallbacks: ~2x the per-book averages measured from
+# real-library history at the 2026-06-10 price refresh (PR #74). Field
+# order: input, output, cache write, cache read.
+_STATIC_PER_BOOK: dict[str, TokenUsage] = {
+    "title_author": TokenUsage(100, 150, 250, 1500),
+    "lcc":          TokenUsage(250, 200, 1300, 400),
+    "comments":     TokenUsage(350, 1100, 2500, 600),
+    "tags":         TokenUsage(150, 80, 120, 250),
+}
+_STATIC_DEFAULT_PER_BOOK = TokenUsage(350, 1100, 2500, 600)
+
+
+def project_step_cost(
+    step: str, n_books: int, model: str, path: Path | None = None,
+) -> CostProjection | None:
+    """Project the cost of running `step` over `n_books` at `model`'s prices.
+
+    Returns None when the model is unpriced — no dollar estimate exists
+    anywhere in the toolkit for such models, so the guardrail cannot fire.
+    History tokens are priced at the *requested* model regardless of which
+    model produced them (same token-shape assumption as the v1.10 campaign
+    cost table).
+    """
+    if _resolve_price_table(model) is None:
+        return None
+
+    agg = replay_usage_log(path, step=step)
+    assumed_batch = _ASSUMED_HISTORY_BATCH.get(step)
+    if assumed_batch and agg.call_count >= _GUARDRAIL_MIN_CALLS:
+        total_cost = cost_estimate_usd(agg.total, model) or 0.0
+        per_book = total_cost / (agg.call_count * assumed_batch)
+        return CostProjection(
+            estimated_usd=per_book * n_books,
+            basis=f"usage history, {agg.call_count} calls",
+        )
+
+    per_book = cost_estimate_usd(
+        _STATIC_PER_BOOK.get(step, _STATIC_DEFAULT_PER_BOOK), model,
+    ) or 0.0
+    return CostProjection(
+        estimated_usd=per_book * n_books,
+        basis="static estimate, no usage history",
+    )
