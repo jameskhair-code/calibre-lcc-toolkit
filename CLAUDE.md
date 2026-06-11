@@ -29,7 +29,9 @@ autonomous agent.
 
 - He brings strategic direction and review judgement.
 - You propose, draft, implement, and verify.
-- He decides what merges, what's risky, what's worth shipping.
+- He decides what's risky and what's worth shipping. Routine low-risk merges
+  are delegated (see Branch and PR conventions); the release-PR merge is
+  always his.
 - You write code that's reviewed; he doesn't write code that's reviewed by you.
 - When unsure, ask before doing — especially anything irreversible (tags,
   releases, force-pushes, mass deletions, secrets).
@@ -68,6 +70,15 @@ autonomous agent.
 - Chore branches: `chore/v1.x-<short-slug>`
 - Release branches: `chore/v1.x-release`
 - One PR per roadmap item.
+- Merge autonomy is risk-tiered (delegated 2026-06-11, generalising the
+  v1.8/v1.9 charter convention): chore/docs PRs and S-sized low-blast code
+  items — local Claude merges once CI is green and the item's verification
+  (suite + any required real-library smoke) is done, and deletes the source
+  branch. M+ items, behaviour changes, and anything touching prompts,
+  authorship handling, or Calibre write paths get an explicit review (James
+  or a web-session architect review) before merge. Release PRs are always
+  merged by James — that merge is the cycle sign-off. When unsure which
+  tier applies, pause and ask.
 - PR bodies are substantive for non-trivial work — multi-paragraph, naming
   the touch points, the reasoning, and the verification done. One-line
   bodies are correct for chore PRs.

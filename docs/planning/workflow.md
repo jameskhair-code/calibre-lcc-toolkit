@@ -24,11 +24,16 @@ updates happen here too if scope shifted.
 
 ### 3. Implement (local Claude, in Cursor)
 Run the cycle item by item. One PR per item. Smoke-test every user-visible
-change against the real Calibre library before merge. Pause after each merge
-for review and explicit go-ahead before the next item. L-sized or high-risk
-items get a two-phase pause: investigate/measure → report → wait for go-ahead
-→ implement. The cycle closes with a release chore: version bump, CHANGELOG,
-annotated tag, GitHub Release.
+change against the real Calibre library before merge. Merge autonomy is
+risk-tiered (since 2026-06-11): chore/docs PRs and S-sized low-blast items
+merge on green CI + completed verification, source branch deleted after
+merge; M+ items, behaviour changes, and anything touching prompts or
+Calibre write paths pause for an explicit review (James or a web-session
+architect review) before merge; L-sized or high-risk items get a two-phase
+pause: investigate/measure → report → wait for go-ahead → implement.
+Release PRs are always James's merge — it is the cycle sign-off and the
+go-ahead for the (delegated) tag + Release. The cycle closes with that
+release chore: version bump, CHANGELOG, annotated tag, GitHub Release.
 
 ### 4. Capture findings (ad-hoc, any time)
 During implementation or any real use, things noticed — bugs, rough edges,
@@ -95,5 +100,8 @@ Learned in practice, durable across cycles:
   explicit when manual testing wasn't done.
 - **Start sessions clean.** `git checkout main && git pull` before any kickoff,
   so work branches off current main and plans read accurate state.
-- **Pause at the right gates.** One pause per PR by default; a two-phase pause
-  for L-sized or high-risk items so the decision lands before code, not after.
+- **Pause at the right gates.** Merge autonomy is tiered — small/low-risk
+  merges on green, M+ pauses for a review, L gets the two-phase pause — so
+  the decision lands before code, not after. The v1.10 dry-run guardrail
+  correction (PR #76) is the standing example of why the review tier exists:
+  green CI and a passing smoke don't catch a design-premise error.
