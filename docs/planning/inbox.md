@@ -48,7 +48,12 @@ the A-Z vision became the LATER layer's destination).*
   `audit_log` because it runs in worker threads, `db.py:259`). Consequence:
   applied-vs-clean is not reconstructable from the audit log (only
   complete-vs-declined, via flag count vs batch size), and clean-titles
-  changes carry no per-field trail the way lcc-enrich does. Open question to
-  verify: whether `audit-confidence` / `regrade` for clean-titles depend on
-  value-write entries — if so, the step may be un-calibratable / un-regradable
-  as-is. Surfaced while reconstructing run 1's split for the campaign log.
+  changes carry no per-field trail the way lcc-enrich does. Surfaced while
+  reconstructing run 1's split for the campaign log.
+  **Resolved (2026-06-13):** confirmed — clean-titles is un-calibratable via
+  `audit-confidence` (no confidence-bearing entries, only completion flags)
+  and excluded from `regrade` (`regrade.py:46` STEPS = lcc/comments/tags
+  only; documented v1.8 known limitation, CHANGELOG). So the charter's
+  "audit-confidence after each step's first wave" ritual is a **no-op** for
+  clean-titles, not a blocker. Findings **A + C together = clean-titles is
+  under-instrumented vs the other four steps → v1.11 agenda item.**
